@@ -15,6 +15,18 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
     return null;
   }
 
+  if (data.screen === "home") {
+    return "/(app)/home";
+  }
+
+  if (data.screen === "friends") {
+    return "/(app)/friends";
+  }
+
+  if (data.screen === "profile") {
+    return "/(app)/profile";
+  }
+
   if (data.screen === "match" && typeof data.matchId === "string") {
     return `/match/${data.matchId}`;
   }
@@ -48,10 +60,17 @@ export const registerForPushNotificationsAsync = async () => {
   }
 
   try {
+    const projectId =
+      process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    if (!projectId) {
+      return null;
+    }
+
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId:
-        Constants.expoConfig?.extra?.eas?.projectId ??
-        Constants.easConfig?.projectId,
+      projectId,
     });
     return token.data;
   } catch {
