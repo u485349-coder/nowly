@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nowly Docs | Don't grow apart</title>
+    <meta
+      name="description"
+      content="Documentation for Nowly, the spontaneous social coordination app for live hangouts, overlap matching, and low-pressure group plans."
+    />
+    <meta name="theme-color" content="#0B1020" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon.png" />
+    <link rel="shortcut icon" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./favicon.png" />
+    <style>
+      :root {
+        --bg-top: #111827;
+        --bg-mid: #0b1020;
+        --bg-bottom: #020617;
+        --card: rgba(17, 24, 39, 0.58);
+        --card-border: rgba(148, 163, 184, 0.12);
+        --text: #f8fafc;
+        --muted: rgba(226, 232, 240, 0.72);
+        --muted-strong: rgba(226, 232, 240, 0.92);
+        --violet: #a855f7;
+        --indigo: #6366f1;
+        --cyan: #22d3ee;
+        --shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+        --radius-xl: 32px;
+        --radius-lg: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(168, 85, 247, 0.18), transparent 24%),
+          radial-gradient(circle at 68% 74%, rgba(34, 211, 238, 0.12), transparent 20%),
+          linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bottom) 100%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 88px;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-mark {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 28px rgba(2, 6, 23, 0.34);
+      }
+
+      .brand-copy strong {
+        display: block;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-copy span {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+
+      .nav-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .repo-link {
+        padding: 12px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.55);
+        color: var(--muted-strong);
+        font-size: 0.92rem;
+      }
+
+      .repo-link.active {
+        border-color: rgba(99, 102, 241, 0.28);
+        background: rgba(79, 70, 229, 0.18);
+        color: #f8fafc;
+      }
+
+      .panel {
+        position: relative;
+        overflow: hidden;
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--card-border);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.86));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 12% 8%, rgba(168, 85, 247, 0.16), transparent 22%),
+          radial-gradient(circle at 82% 84%, rgba(34, 211, 238, 0.12), transparent 24%);
+        pointer-events: none;
+      }
+
+      .section {
+        margin-top: 24px;
+        padding: 28px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .hero-copy {
+        padding: 38px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, 0.14);
+        border: 1px solid rgba(99, 102, 241, 0.18);
+        color: rgba(224, 231, 255, 0.92);
+        font-size: 0.84rem;
+        letter-spacing: 0.02em;
+      }
+
+      h1 {
+        margin: 18px 0 14px;
+        font-size: clamp(2.6rem, 5vw, 4.4rem);
+        line-height: 0.96;
+        letter-spacing: -0.06em;
+      }
+
+      h1 em {
+        font-style: normal;
+        background: linear-gradient(135deg, #f8fafc 10%, #c4b5fd 52%, #67e8f9 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: clamp(1.8rem, 3vw, 2.8rem);
+        letter-spacing: -0.05em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .hero-copy p {
+        max-width: 34rem;
+        font-size: 1.02rem;
+      }
+
+      .hero-side {
+        padding: 28px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .mini-card {
+        padding: 20px;
+        border-radius: var(--radius-lg);
+        background: rgba(15, 23, 42, 0.46);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .mini-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .feature {
+        padding: 22px;
+        border-radius: var(--radius-lg);
+        background: rgba(15, 23, 42, 0.44);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .feature strong {
+        display: block;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .feature p {
+        margin-top: 10px;
+      }
+
+      .doc-list,
+      .step-list {
+        margin: 14px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.72;
+      }
+
+      .doc-list li + li,
+      .step-list li + li {
+        margin-top: 8px;
+      }
+
+      .step-list {
+        counter-reset: docs;
+        list-style: none;
+        padding-left: 0;
+      }
+
+      .step-list li {
+        position: relative;
+        padding-left: 48px;
+        min-height: 32px;
+      }
+
+      .step-list li::before {
+        counter-increment: docs;
+        content: counter(docs);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        color: #020617;
+        background: linear-gradient(135deg, #f8fafc, #bae6fd);
+      }
+
+      .footer {
+        margin-top: 28px;
+        padding: 22px 4px 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 960px) {
+        .hero,
+        .grid.two {
+          grid-template-columns: 1fr;
+        }
+
+        .nav,
+        .footer {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          width: min(100% - 24px, 1120px);
+          padding-top: 16px;
+        }
+
+        .hero-copy,
+        .hero-side,
+        .section {
+          padding: 22px;
+        }
+
+        h1 {
+          font-size: 2.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="nav">
+        <a class="brand" href="./index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="markGrad" x1="18" y1="14" x2="78" y2="86" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#A855F7"/>
+                  <stop offset="0.58" stop-color="#6366F1"/>
+                  <stop offset="1" stop-color="#22D3EE"/>
+                </linearGradient>
+                <linearGradient id="markOverlap" x1="42.4" y1="29.3" x2="55.9" y2="46.4" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#6366F1" stop-opacity="0.18"/>
+                  <stop offset="0.58" stop-color="#6366F1" stop-opacity="0.24"/>
+                  <stop offset="1" stop-color="#22D3EE" stop-opacity="0.4"/>
+                </linearGradient>
+                <linearGradient id="markMonogram" x1="36.4" y1="49.8" x2="59.8" y2="64.6" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#F8FAFC" stop-opacity="0.24"/>
+                  <stop offset="0.54" stop-color="#C4B5FD" stop-opacity="0.18"/>
+                  <stop offset="1" stop-color="#22D3EE" stop-opacity="0.28"/>
+                </linearGradient>
+                <clipPath id="markClip">
+                  <circle cx="40.3" cy="37.8" r="12.3"/>
+                </clipPath>
+              </defs>
+              <path d="M48 11.5C31.7 11.5 18.8 23.8 18.8 39.5C18.8 50.2 25.1 59.8 32.7 68.1C38.5 74.4 44 80.2 46.7 83.3C47.4 84.1 48.6 84.1 49.3 83.3C52 80.2 57.5 74.4 63.3 68.1C70.9 59.8 77.2 50.2 77.2 39.5C77.2 23.8 64.3 11.5 48 11.5Z" fill="url(#markGrad)"/>
+              <ellipse cx="34" cy="21.2" rx="10.8" ry="7.6" fill="#FFFFFF" fill-opacity="0.08"/>
+              <circle cx="40.3" cy="37.8" r="12.3" fill="#1D1142" fill-opacity="0.94"/>
+              <circle cx="55.7" cy="37.8" r="12.3" fill="#2B3170" fill-opacity="0.82"/>
+              <circle cx="55.7" cy="37.8" r="12.3" fill="url(#markOverlap)" clip-path="url(#markClip)"/>
+              <path d="M36.6 50.5V64.2L59.4 50.7V64.2" stroke="url(#markMonogram)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="48" cy="37.7" r="3.05" fill="#F8FAFC"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>Nowly</strong>
+            <span>Don't grow apart</span>
+          </span>
+        </a>
+        <div class="nav-actions">
+          <a class="repo-link" href="./index.html">Home</a>
+          <a class="repo-link active" href="./documentation.html">Documentation</a>
+          <a class="repo-link" href="https://github.com/u485349-coder/nowly">View GitHub Repo</a>
+        </div>
+      </nav>
+
+      <section class="hero">
+        <div class="panel hero-copy">
+          <div class="eyebrow">Nowly Documentation</div>
+          <h1>How Nowly turns <em>free time overlap</em> into real hangouts.</h1>
+          <p>
+            Nowly is not a calendar tool and not an event planner. It is a live social coordination system built to
+            help friends discover shared openings, act on them quickly, and keep real-world momentum alive.
+          </p>
+        </div>
+        <div class="panel hero-side">
+          <div class="mini-card">
+            <strong>What the product is for</strong>
+            <p>Spot when your people are actually free, send a low-pressure prompt, and turn a moment into a real link-up.</p>
+          </div>
+          <div class="mini-card">
+            <strong>What the product avoids</strong>
+            <p>Heavy scheduling, complex event setup, planning theater, and productivity-app energy.</p>
+          </div>
+          <div class="mini-card">
+            <strong>Core stack</strong>
+            <p>Expo mobile, Express API, PostgreSQL, Prisma, Socket.io, Twilio-ready OTP, push notifications, Railway hosting.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Quick start</h2>
+        <p>
+          The ideal Nowly flow is fast. The product should feel like a live social radar, not a multi-step planner.
+        </p>
+        <ol class="step-list">
+          <li>Join with your phone number, add your name and city, then pull in your real crew through contacts or invites.</li>
+          <li>Set a lightweight availability signal like Free now, Free later, or Down this weekend.</li>
+          <li>Add optional context such as radius, vibe, or mood so matches feel more human without adding friction.</li>
+          <li>Wait for overlap notifications or open the app to see who is free nearby right now.</li>
+          <li>Send a low-pressure prompt like quick bite, coffee run, or pull up for a bit.</li>
+          <li>Use the thread for live coordination, then confirm whether the hang happened so the app gets smarter over time.</li>
+        </ol>
+      </section>
+
+      <section class="panel section">
+        <h2>Core product features</h2>
+        <div class="grid two">
+          <article class="feature">
+            <strong>Onboarding and graph building</strong>
+            <ul class="doc-list">
+              <li>Phone-first signup keeps entry simple and mobile-native.</li>
+              <li>Contacts and deep-link invites help create friend density early.</li>
+              <li>Optional Discord linking helps reduce cold-start friction.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Availability signals</strong>
+            <ul class="doc-list">
+              <li>Users set states like Free now, Free later, Busy, or Down this weekend.</li>
+              <li>Signals support optional vibe, radius, energy, and intent inputs.</li>
+              <li>Every signal expires automatically so the app stays fresh and real-time.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Overlap matching engine</strong>
+            <ul class="doc-list">
+              <li>The backend checks friend overlap continuously and ranks the strongest opportunities.</li>
+              <li>Time, proximity, responsiveness, and lightweight social signals influence match quality.</li>
+              <li>Matches are meant to feel timely, not random.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Low-pressure proposals</strong>
+            <ul class="doc-list">
+              <li>Prompts are casual by design: quick bite, coffee run, walking nearby, 10 min only.</li>
+              <li>Response flows stay lightweight so people do not feel trapped in a full RSVP commitment.</li>
+              <li>This lowers anxiety and makes real hangs more likely to happen.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Micro-group coordination</strong>
+            <ul class="doc-list">
+              <li>Users can ask Who's free tonight? and pull a small group together quickly.</li>
+              <li>Threads support chat, reactions, ETA, and location sharing for real-time motion.</li>
+              <li>The system is optimized for fast social coordination, not long planning chains.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Recap and rhythm</strong>
+            <ul class="doc-list">
+              <li>After the hangout window, Nowly asks if the hang happened.</li>
+              <li>That signal powers streaks, recaps, responsiveness scores, and rhythm cues.</li>
+              <li>The app gets smarter about who links up, when they link up, and what tends to convert.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>How people use it well</h2>
+        <div class="grid two">
+          <article class="feature">
+            <strong>Best practices for users</strong>
+            <ul class="doc-list">
+              <li>Keep signals honest and lightweight instead of trying to plan the whole day.</li>
+              <li>Use casual activity language so invites feel easy to say yes to.</li>
+              <li>Invite the same real-world cluster first: one friend group, campus, or neighborhood.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Best practices for growth</strong>
+            <ul class="doc-list">
+              <li>Nowly gets stronger as local friend density increases.</li>
+              <li>The highest-leverage loop is invite, overlap, proposal, hangout, recap, repeat.</li>
+              <li>Winning one tight social pocket matters more than broad empty reach.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Backend and deployment snapshot</h2>
+        <div class="grid two">
+          <article class="feature">
+            <strong>Production-minded backend</strong>
+            <ul class="doc-list">
+              <li>Node.js + Express API with Prisma on PostgreSQL.</li>
+              <li>Socket.io powers live thread behavior.</li>
+              <li>Twilio Verify handles phone OTP when configured.</li>
+              <li>Push notifications support overlap alerts, proposals, and group movement.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Hosting model</strong>
+            <ul class="doc-list">
+              <li>Deploy the backend on Railway with a Postgres service in the same project.</li>
+              <li>Deploy the website on Vercel from the <code>docs</code> folder.</li>
+              <li>Point the Expo mobile app to the live backend URL once the API is healthy.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Nowly docs: live social radar for real-life hangouts.</span>
+        <a href="https://github.com/u485349-coder/nowly">github.com/u485349-coder/nowly</a>
+      </footer>
+    </main>
+  </body>
+</html>
