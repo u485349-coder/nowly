@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import Svg, { Circle, ClipPath, Defs, Ellipse, LinearGradient as SvgGradient, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, LinearGradient as SvgGradient, Path, Stop } from "react-native-svg";
 import { nowlyColors } from "../../constants/theme";
 import { NOWLY_SLOGAN } from "../../lib/branding";
 
@@ -18,19 +18,11 @@ const Icon = ({ size = 72, monochrome = false, mini = false }: { size?: number; 
         <Stop offset="0.58" stopColor={monochrome ? "#E3EBFA" : "#6366F1"} />
         <Stop offset="1" stopColor={monochrome ? "#FFFFFF" : "#22D3EE"} />
       </SvgGradient>
-      <SvgGradient id="nowly-monogram" x1={mini ? "36.8" : "36.4"} y1={mini ? "50.9" : "49.8"} x2={mini ? "59.1" : "59.8"} y2={mini ? "63.6" : "64.6"} gradientUnits="userSpaceOnUse">
-        <Stop offset="0" stopColor={monochrome ? "rgba(255,255,255,0.24)" : "rgba(248,250,252,0.24)"} />
-        <Stop offset="0.54" stopColor={monochrome ? "rgba(255,255,255,0.18)" : "rgba(196,181,253,0.18)"} />
-        <Stop offset="1" stopColor={monochrome ? "rgba(255,255,255,0.28)" : "rgba(34,211,238,0.28)"} />
+      <SvgGradient id="nowly-n-glow" x1={mini ? "38.8" : "38.4"} y1={mini ? "30.2" : "29.9"} x2={mini ? "56.9" : "57.6"} y2={mini ? "45.6" : "46.2"} gradientUnits="userSpaceOnUse">
+        <Stop offset="0" stopColor={monochrome ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.28)"} />
+        <Stop offset="0.5" stopColor={monochrome ? "rgba(255,255,255,0.04)" : "rgba(99,102,241,0.08)"} />
+        <Stop offset="1" stopColor={monochrome ? "rgba(255,255,255,0.08)" : "rgba(34,211,238,0.3)"} />
       </SvgGradient>
-      <SvgGradient id="nowly-overlap" x1={mini ? "42.6" : "42.4"} y1={mini ? "29.8" : "29.3"} x2={mini ? "55.6" : "55.9"} y2={mini ? "45.6" : "46.4"} gradientUnits="userSpaceOnUse">
-        <Stop offset="0" stopColor={monochrome ? "rgba(255,255,255,0.12)" : "rgba(99,102,241,0.18)"} />
-        <Stop offset="0.58" stopColor={monochrome ? "rgba(255,255,255,0.16)" : "rgba(99,102,241,0.24)"} />
-        <Stop offset="1" stopColor={monochrome ? "rgba(255,255,255,0.24)" : "rgba(34,211,238,0.4)"} />
-      </SvgGradient>
-      <ClipPath id={mini ? "nowly-overlap-clip-mini" : "nowly-overlap-clip"}>
-        <Circle cx={mini ? 40.5 : 40.3} cy="37.8" r={mini ? 11.9 : 12.3} />
-      </ClipPath>
     </Defs>
     <Path
       d={mini
@@ -39,23 +31,29 @@ const Icon = ({ size = 72, monochrome = false, mini = false }: { size?: number; 
       fill="url(#nowly-grad)"
     />
     <Ellipse cx={mini ? 34.1 : 34} cy={mini ? 21.4 : 21.2} rx={mini ? 10.2 : 10.8} ry={mini ? 7.2 : 7.6} fill="rgba(255,255,255,0.08)" />
-    <Circle cx={mini ? 40.5 : 40.3} cy="37.8" r={mini ? 11.9 : 12.3} fill={monochrome ? "rgba(29,17,66,0.82)" : "#1D1142"} opacity="0.94" />
-    <Circle cx={mini ? 55.5 : 55.7} cy="37.8" r={mini ? 11.9 : 12.3} fill={monochrome ? "rgba(43,49,112,0.64)" : "#2B3170"} opacity="0.82" />
-    <Circle
-      cx={mini ? 55.5 : 55.7}
-      cy="37.8"
-      r={mini ? 11.9 : 12.3}
-      fill="url(#nowly-overlap)"
-      clipPath={`url(#${mini ? "nowly-overlap-clip-mini" : "nowly-overlap-clip"})`}
+    {!monochrome ? (
+      <>
+        <Circle cx={mini ? 38.8 : 38.4} cy={mini ? 30.2 : 29.9} r={mini ? 3.2 : 3.5} fill="rgba(96,165,250,0.16)" />
+        <Circle cx={mini ? 38.8 : 38.4} cy={mini ? 45.6 : 46.2} r={mini ? 3.2 : 3.5} fill="rgba(96,165,250,0.16)" />
+        <Circle cx={mini ? 56.9 : 57.6} cy={mini ? 30.2 : 29.9} r={mini ? 3.2 : 3.5} fill="rgba(34,211,238,0.18)" />
+        <Circle cx={mini ? 56.9 : 57.6} cy={mini ? 45.6 : 46.2} r={mini ? 3.2 : 3.5} fill="rgba(34,211,238,0.18)" />
+      </>
+    ) : null}
+    <Path
+      d={mini ? "M38.8 30.2V45.6L56.9 30.2V45.6" : "M38.4 29.9V46.2L57.6 29.9V46.2"}
+      stroke="url(#nowly-n-glow)"
+      strokeWidth={mini ? 7.4 : 8.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      opacity={monochrome ? 0.32 : 1}
     />
     <Path
-      d={mini ? "M37.1 51.4V63.2L58.8 51.6V63.2" : "M36.6 50.5V64.2L59.4 50.7V64.2"}
-      stroke="url(#nowly-monogram)"
-      strokeWidth={mini ? 3.7 : 4.2}
+      d={mini ? "M38.8 30.2V45.6L56.9 30.2V45.6" : "M38.4 29.9V46.2L57.6 29.9V46.2"}
+      stroke={monochrome ? "rgba(11,16,32,0.56)" : "#F8FAFC"}
+      strokeWidth={mini ? 4.1 : 4.6}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <Circle cx="48" cy="37.7" r="3.05" fill={monochrome ? "#FFFFFF" : "#F8FAFC"} />
   </Svg>
 );
 

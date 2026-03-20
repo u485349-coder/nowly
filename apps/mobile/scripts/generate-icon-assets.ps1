@@ -175,129 +175,69 @@ function Draw-Symbol {
     $Graphics.Restore($clipState)
   }
 
-  $leftInnerColor = if ($Monochrome) { [System.Drawing.Color]::Transparent } else { New-ColorFromHex "#1D1142" 240 }
-  $rightInnerColor = if ($Monochrome) { [System.Drawing.Color]::Transparent } else { New-ColorFromHex "#2B3170" 209 }
-  $leftInnerBrush = New-Object System.Drawing.SolidBrush $leftInnerColor
-  $rightInnerBrush = New-Object System.Drawing.SolidBrush $rightInnerColor
-
-  if ($Monochrome) {
-    $Graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
-    $leftInnerBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
-    $rightInnerBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
-  }
-
-  $signalRadius = $(if ($isMinimal) { 11.9 } else { 12.3 }) * $unit
-  $signalCenterY = 37.8 * $unit
-  $leftCenterX = $(if ($isMinimal) { 40.5 } else { 40.3 }) * $unit
-  $rightCenterX = $(if ($isMinimal) { 55.5 } else { 55.7 }) * $unit
-  $Graphics.FillEllipse(
-    $leftInnerBrush,
-    $leftCenterX - $signalRadius,
-    $signalCenterY - $signalRadius,
-    $signalRadius * 2,
-    $signalRadius * 2
-  )
-  $Graphics.FillEllipse(
-    $rightInnerBrush,
-    $rightCenterX - $signalRadius,
-    $signalCenterY - $signalRadius,
-    $signalRadius * 2,
-    $signalRadius * 2
-  )
-
-  if ($Monochrome) {
-    $Graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
-  }
-
-  $nodeCenterX = 48.0 * $unit
-  $nodeCenterY = 37.7 * $unit
+  $nLeftX = $(if ($isMinimal) { 38.8 } else { 38.4 }) * $unit
+  $nRightX = $(if ($isMinimal) { 56.9 } else { 57.6 }) * $unit
+  $nTopY = $(if ($isMinimal) { 30.2 } else { 29.9 }) * $unit
+  $nBottomY = $(if ($isMinimal) { 45.6 } else { 46.2 }) * $unit
+  $glowRadius = $(if ($isMinimal) { 3.2 } else { 3.5 }) * $unit
 
   if (-not $Monochrome) {
-    $overlapRectX = $(if ($isMinimal) { 42.6 } else { 42.4 }) * $unit
-    $overlapRectY = $(if ($isMinimal) { 29.8 } else { 29.3 }) * $unit
-    $overlapRectWidth = $(if ($isMinimal) { 13.0 } else { 13.5 }) * $unit
-    $overlapRectHeight = $(if ($isMinimal) { 15.8 } else { 17.1 }) * $unit
-    $overlapBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-      ([System.Drawing.RectangleF]::new($overlapRectX, $overlapRectY, $overlapRectWidth, $overlapRectHeight)),
-      (New-ColorFromHex "#6366F1" $(if ($isMinimal) { 41 } else { 46 })),
-      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 87 } else { 102 })),
-      35
-    )
-    $overlapBlend = New-Object System.Drawing.Drawing2D.ColorBlend
-    $overlapBlend.Colors = [System.Drawing.Color[]]@(
-      (New-ColorFromHex "#6366F1" $(if ($isMinimal) { 41 } else { 46 })),
-      (New-ColorFromHex "#6366F1" $(if ($isMinimal) { 54 } else { 61 })),
-      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 87 } else { 102 }))
-    )
-    $overlapBlend.Positions = [single[]]@(0.0, 0.58, 1.0)
-    $overlapBrush.InterpolationColors = $overlapBlend
-    $leftOverlapPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $leftOverlapPath.AddEllipse($leftCenterX - $signalRadius, $signalCenterY - $signalRadius, $signalRadius * 2, $signalRadius * 2)
-    $clipState = $Graphics.Save()
-    $Graphics.SetClip($leftOverlapPath)
-    $Graphics.FillEllipse(
-      $overlapBrush,
-      $rightCenterX - $signalRadius,
-      $signalCenterY - $signalRadius,
-      $signalRadius * 2,
-      $signalRadius * 2
-    )
-    $Graphics.Restore($clipState)
+    $leftGlowBrush = New-Object System.Drawing.SolidBrush (New-ColorFromHex "#60A5FA" $(if ($isMinimal) { 36 } else { 41 }))
+    $rightGlowBrush = New-Object System.Drawing.SolidBrush (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 41 } else { 46 }))
+    foreach ($point in @(
+      @{ X = $nLeftX; Y = $nTopY; Brush = $leftGlowBrush },
+      @{ X = $nLeftX; Y = $nBottomY; Brush = $leftGlowBrush },
+      @{ X = $nRightX; Y = $nTopY; Brush = $rightGlowBrush },
+      @{ X = $nRightX; Y = $nBottomY; Brush = $rightGlowBrush }
+    )) {
+      $Graphics.FillEllipse(
+        $point.Brush,
+        $point.X - $glowRadius,
+        $point.Y - $glowRadius,
+        $glowRadius * 2,
+        $glowRadius * 2
+      )
+    }
   }
 
-  $monogramPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-  if ($isMinimal) {
-    $monogramPath.AddLine(37.1 * $unit, 51.4 * $unit, 37.1 * $unit, 63.2 * $unit)
-    $monogramPath.AddLine(37.1 * $unit, 63.2 * $unit, 58.8 * $unit, 51.6 * $unit)
-    $monogramPath.AddLine(58.8 * $unit, 51.6 * $unit, 58.8 * $unit, 63.2 * $unit)
-  } else {
-    $monogramPath.AddLine(36.6 * $unit, 50.5 * $unit, 36.6 * $unit, 64.2 * $unit)
-    $monogramPath.AddLine(36.6 * $unit, 64.2 * $unit, 59.4 * $unit, 50.7 * $unit)
-    $monogramPath.AddLine(59.4 * $unit, 50.7 * $unit, 59.4 * $unit, 64.2 * $unit)
-  }
+  $nPath = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $nPath.AddLine($nLeftX, $nTopY, $nLeftX, $nBottomY)
+  $nPath.AddLine($nLeftX, $nBottomY, $nRightX, $nTopY)
+  $nPath.AddLine($nRightX, $nTopY, $nRightX, $nBottomY)
 
-  $monogramClip = $Graphics.Save()
+  $nClip = $Graphics.Save()
   $Graphics.SetClip($pinPath)
+
   if ($Monochrome) {
-    $monogramPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(52, 255, 255, 255)), ($(if ($isMinimal) { 3.2 } else { 3.6 }) * $unit)
+    $glowPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(32, 255, 255, 255)), ($(if ($isMinimal) { 7.4 } else { 8.2 }) * $unit)
+    $mainPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(143, 11, 16, 32)), ($(if ($isMinimal) { 4.1 } else { 4.6 }) * $unit)
   } else {
-    $monogramBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-      ([System.Drawing.RectangleF]::new(
-        ($(if ($isMinimal) { 36.8 } else { 36.4 }) * $unit),
-        ($(if ($isMinimal) { 50.9 } else { 49.8 }) * $unit),
-        ($(if ($isMinimal) { 22.3 } else { 23.4 }) * $unit),
-        ($(if ($isMinimal) { 12.7 } else { 14.8 }) * $unit)
-      )),
-      (New-ColorFromHex "#F8FAFC" $(if ($isMinimal) { 51 } else { 61 })),
-      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 56 } else { 71 })),
+    $nGlowBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+      ([System.Drawing.RectangleF]::new($nLeftX, $nTopY, $nRightX - $nLeftX, $nBottomY - $nTopY)),
+      (New-ColorFromHex "#60A5FA" $(if ($isMinimal) { 61 } else { 71 })),
+      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 66 } else { 77 })),
       35
     )
-    $monogramBlend = New-Object System.Drawing.Drawing2D.ColorBlend
-    $monogramBlend.Colors = [System.Drawing.Color[]]@(
-      (New-ColorFromHex "#F8FAFC" $(if ($isMinimal) { 51 } else { 61 })),
-      (New-ColorFromHex "#C4B5FD" $(if ($isMinimal) { 36 } else { 46 })),
-      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 56 } else { 71 }))
+    $nGlowBlend = New-Object System.Drawing.Drawing2D.ColorBlend
+    $nGlowBlend.Colors = [System.Drawing.Color[]]@(
+      (New-ColorFromHex "#60A5FA" $(if ($isMinimal) { 61 } else { 71 })),
+      (New-ColorFromHex "#6366F1" 20),
+      (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 66 } else { 77 }))
     )
-    $monogramBlend.Positions = [single[]]@(0.0, 0.54, 1.0)
-    $monogramBrush.InterpolationColors = $monogramBlend
-    $monogramPen = New-Object System.Drawing.Pen $monogramBrush, ($(if ($isMinimal) { 3.7 } else { 4.2 }) * $unit)
+    $nGlowBlend.Positions = [single[]]@(0.0, 0.5, 1.0)
+    $nGlowBrush.InterpolationColors = $nGlowBlend
+    $glowPen = New-Object System.Drawing.Pen $nGlowBrush, ($(if ($isMinimal) { 7.4 } else { 8.2 }) * $unit)
+    $mainPen = New-Object System.Drawing.Pen ((New-ColorFromHex "#F8FAFC")), ($(if ($isMinimal) { 4.1 } else { 4.6 }) * $unit)
   }
-  $monogramPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $monogramPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $monogramPen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-  $Graphics.DrawPath($monogramPen, $monogramPath)
-  $Graphics.Restore($monogramClip)
 
-  $centerColor = if ($Monochrome) { [System.Drawing.Color]::White } else { New-ColorFromHex "#F8FAFC" }
-  $centerBrush = New-Object System.Drawing.SolidBrush $centerColor
-  $dotSize = 6.1 * $unit
-  $Graphics.FillEllipse(
-    $centerBrush,
-    $nodeCenterX - ($dotSize / 2),
-    $nodeCenterY - ($dotSize / 2),
-    $dotSize,
-    $dotSize
-  )
+  foreach ($pen in @($glowPen, $mainPen)) {
+    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    $Graphics.DrawPath($pen, $nPath)
+  }
+
+  $Graphics.Restore($nClip)
 }
 
 function Save-Png {
