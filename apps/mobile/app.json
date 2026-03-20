@@ -41,6 +41,13 @@
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B1020"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b5d10e21-6062-4975-9a40-1b2595e59064"
+      }
+    },
+    "owner": "activez"
   }
 }
