@@ -1,0 +1,50 @@
+import { HangoutIntent, MicroCommitment } from "@nowly/shared";
+
+export type PromptAction = {
+  key: string;
+  label: string;
+  detail: string;
+  activity: string;
+  microType: HangoutIntent;
+  commitmentLevel: MicroCommitment;
+};
+
+export const promptActions: PromptAction[] = [
+  {
+    key: "quick-link",
+    label: "Quick link",
+    detail: "pull up for a bit · 10 min only",
+    activity: "pull up for a bit",
+    microType: "PULL_UP",
+    commitmentLevel: "DROP_IN",
+  },
+  {
+    key: "quick-bite",
+    label: "Quick bite",
+    detail: "clean yes · easy exit window",
+    activity: "grab a quick bite",
+    microType: "QUICK_BITE",
+    commitmentLevel: "QUICK_WINDOW",
+  },
+  {
+    key: "coffee-run",
+    label: "Coffee run",
+    detail: "short reset · low lift",
+    activity: "coffee run",
+    microType: "COFFEE_RUN",
+    commitmentLevel: "QUICK_WINDOW",
+  },
+  {
+    key: "walk-nearby",
+    label: "Walk nearby",
+    detail: "minimal pressure · close by",
+    activity: "walk nearby",
+    microType: "WALK_NEARBY",
+    commitmentLevel: "DROP_IN",
+  },
+];
+
+export const findPromptAction = (promptKey?: string | string[]) => {
+  const key = Array.isArray(promptKey) ? promptKey[0] : promptKey;
+  return promptActions.find((prompt) => prompt.key === key) ?? null;
+};

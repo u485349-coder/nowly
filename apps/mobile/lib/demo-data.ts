@@ -2,8 +2,12 @@ import {
   FriendInsight,
   MobileAvailabilitySignal,
   MobileMatch,
+  MobileRecurringAvailabilityWindow,
+  MobileScheduledOverlap,
 } from "@nowly/shared";
 import {
+  DirectChat,
+  DirectMessage,
   AppFriend,
   AppHangout,
   AppRadar,
@@ -32,6 +36,7 @@ const minaInsight: FriendInsight = {
 
 export const demoUser: AppUser = {
   id: "user-avery",
+  inviteCode: "invite-avery",
   name: "Avery",
   city: "New York",
   photoUrl: null,
@@ -63,6 +68,7 @@ export const demoFriends: AppFriend[] = [
     lastSignal: "FREE_NOW",
     sharedLabel: "You share 2 servers",
     insight: jordanInsight,
+    requestDirection: null,
   },
   {
     id: "user-mina",
@@ -78,6 +84,7 @@ export const demoFriends: AppFriend[] = [
     lastSignal: "FREE_LATER",
     sharedLabel: "You share a server",
     insight: minaInsight,
+    requestDirection: null,
   },
   {
     id: "user-leo",
@@ -91,12 +98,60 @@ export const demoFriends: AppFriend[] = [
     sharedServerCount: 0,
     status: "PENDING",
     lastSignal: "BUSY",
+    requestDirection: "OUTGOING",
+  },
+  {
+    id: "user-sana",
+    friendshipId: "friend-sana",
+    name: "Sana",
+    city: "Williamsburg",
+    photoUrl: null,
+    phone: "+15550000005",
+    responsivenessScore: 0.8,
+    communityTag: "Brooklyn crew",
+    sharedServerCount: 1,
+    status: "PENDING",
+    lastSignal: "FREE_LATER",
+    sharedLabel: "You share a server",
+    requestDirection: "INCOMING",
+  },
+];
+
+export const demoSuggestions: AppFriend[] = [
+  {
+    id: "user-nora",
+    friendshipId: "suggestion-nora",
+    name: "Nora",
+    city: "East Village",
+    photoUrl: null,
+    phone: "+15550000006",
+    responsivenessScore: 0.77,
+    communityTag: "NYU",
+    sharedServerCount: 2,
+    status: "PENDING",
+    sharedLabel: "Same NYU",
+    requestDirection: null,
+  },
+  {
+    id: "user-kai",
+    friendshipId: "suggestion-kai",
+    name: "Kai",
+    city: "Lower East Side",
+    photoUrl: null,
+    phone: "+15550000007",
+    responsivenessScore: 0.71,
+    communityTag: "LES nights",
+    sharedServerCount: 0,
+    status: "PENDING",
+    sharedLabel: "Lower East Side crew",
+    requestDirection: null,
   },
 ];
 
 export const demoSignal: MobileAvailabilitySignal = {
   id: "signal-avery",
   state: "FREE_NOW",
+  label: "Post-class coffee run",
   radiusKm: 8,
   vibe: "COFFEE",
   energyLevel: "MEDIUM",
@@ -106,6 +161,48 @@ export const demoSignal: MobileAvailabilitySignal = {
   expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
   createdAt: new Date().toISOString(),
 };
+
+export const demoRecurringWindows: MobileRecurringAvailabilityWindow[] = [
+  {
+    id: "window-1",
+    recurrence: "WEEKLY",
+    dayOfWeek: 2,
+    dayOfMonth: null,
+    startMinute: 18 * 60,
+    endMinute: 20 * 60,
+    utcOffsetMinutes: 240,
+    label: "Tuesday after class",
+    vibe: "COFFEE",
+    hangoutIntent: "COFFEE_RUN",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "window-2",
+    recurrence: "WEEKLY",
+    dayOfWeek: 5,
+    dayOfMonth: null,
+    startMinute: 19 * 60,
+    endMinute: 22 * 60,
+    utcOffsetMinutes: 240,
+    label: "Friday night window",
+    vibe: "FOOD",
+    hangoutIntent: "QUICK_BITE",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "window-3",
+    recurrence: "MONTHLY",
+    dayOfWeek: null,
+    dayOfMonth: 15,
+    startMinute: 13 * 60,
+    endMinute: 16 * 60,
+    utcOffsetMinutes: 240,
+    label: "Mid-month flex window",
+    vibe: "CHILL",
+    hangoutIntent: "QUICK_CHILL",
+    createdAt: new Date().toISOString(),
+  },
+];
 
 export const demoMatches: MobileMatch[] = [
   {
@@ -171,6 +268,61 @@ export const demoMatches: MobileMatch[] = [
       createdAt: new Date().toISOString(),
     },
     status: "OPEN",
+  },
+];
+
+export const demoScheduledOverlaps: MobileScheduledOverlap[] = [
+  {
+    id: "scheduled-overlap-jordan",
+    score: 0.92,
+    startsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 18 * 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 19.5 * 60 * 60 * 1000).toISOString(),
+    overlapMinutes: 90,
+    matchedUser: demoFriends[0],
+    sourceWindow: demoRecurringWindows[0],
+    matchedWindow: {
+      id: "window-jordan-1",
+      recurrence: "WEEKLY",
+      dayOfWeek: 2,
+      dayOfMonth: null,
+      startMinute: 18 * 60 + 30,
+      endMinute: 20 * 60,
+      utcOffsetMinutes: 240,
+      label: "Jordan's Tuesday window",
+      vibe: "COFFEE",
+      hangoutIntent: "COFFEE_RUN",
+      createdAt: new Date().toISOString(),
+    },
+    label: "Tue · 6:30 PM - 8:00 PM",
+    summary: "Jordan also tends to be down for coffee run during this window.",
+    sharedVibe: "COFFEE",
+    sharedIntent: "COFFEE_RUN",
+  },
+  {
+    id: "scheduled-overlap-mina",
+    score: 0.81,
+    startsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 19 * 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 21 * 60 * 60 * 1000).toISOString(),
+    overlapMinutes: 120,
+    matchedUser: demoFriends[1],
+    sourceWindow: demoRecurringWindows[1],
+    matchedWindow: {
+      id: "window-mina-1",
+      recurrence: "WEEKLY",
+      dayOfWeek: 5,
+      dayOfMonth: null,
+      startMinute: 18 * 60,
+      endMinute: 21 * 60,
+      utcOffsetMinutes: 240,
+      label: "Mina's Friday flex",
+      vibe: "FOOD",
+      hangoutIntent: "QUICK_BITE",
+      createdAt: new Date().toISOString(),
+    },
+    label: "Fri · 7:00 PM - 9:00 PM",
+    summary: "Mina overlaps on food energy here. You two usually click tonight.",
+    sharedVibe: "FOOD",
+    sharedIntent: "QUICK_BITE",
   },
 ];
 
@@ -288,6 +440,63 @@ export const demoThreads: Record<string, ThreadMessage[]> = {
       text: "Who's free tonight?",
       type: "SYSTEM",
       createdAt: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
+    },
+  ],
+};
+
+export const demoDirectChats: DirectChat[] = [
+  {
+    id: "chat-jordan",
+    title: null,
+    isGroup: false,
+    memberCount: 2,
+    participants: [demoFriends[0]],
+    lastMessageText: "Pulling up in ten.",
+    lastMessageAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "chat-group-crew",
+    title: "Friday after class",
+    isGroup: true,
+    memberCount: 3,
+    participants: [demoFriends[0], demoFriends[1]],
+    lastMessageText: "Want to lock Friday after class?",
+    lastMessageAt: new Date(Date.now() - 46 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+export const demoDirectMessages: Record<string, DirectMessage[]> = {
+  "chat-jordan": [
+    {
+      id: "chat-msg-1",
+      chatId: "chat-jordan",
+      senderId: demoFriends[0].id,
+      senderName: demoFriends[0].name,
+      text: "Pulling up in ten.",
+      type: "TEXT",
+      createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "chat-msg-2",
+      chatId: "chat-jordan",
+      senderId: demoUser.id,
+      senderName: demoUser.name,
+      text: "Perfect. Meet outside the spot.",
+      type: "TEXT",
+      createdAt: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
+    },
+  ],
+  "chat-mina": [
+    {
+      id: "chat-msg-3",
+      chatId: "chat-mina",
+      senderId: demoUser.id,
+      senderName: demoUser.name,
+      text: "Want to lock Friday after class?",
+      type: "TEXT",
+      createdAt: new Date(Date.now() - 46 * 60 * 1000).toISOString(),
     },
   ],
 };

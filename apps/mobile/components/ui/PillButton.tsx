@@ -6,6 +6,7 @@ type Props = {
   onPress: () => void;
   variant?: "primary" | "secondary" | "ghost";
   leftSlot?: ReactNode;
+  disabled?: boolean;
 };
 
 export const PillButton = ({
@@ -13,6 +14,7 @@ export const PillButton = ({
   onPress,
   variant = "primary",
   leftSlot,
+  disabled = false,
 }: Props) => {
   const styleByVariant = {
     primary: "bg-cloud",
@@ -28,8 +30,9 @@ export const PillButton = ({
 
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
-      className={`flex-row items-center justify-center gap-2 rounded-full px-4 py-3 ${styleByVariant}`}
+      className={`flex-row items-center justify-center gap-2 rounded-full px-4 py-3 ${styleByVariant} ${disabled ? "opacity-45" : ""}`}
     >
       {leftSlot}
       <Text className={`font-display text-[15px] ${textByVariant}`}>{label}</Text>

@@ -3,6 +3,8 @@ import {
   FriendInsight,
   MobileHangout,
   MobileMatch,
+  MobileRecurringAvailabilityWindow,
+  MobileScheduledOverlap,
   NotificationIntensity,
   MobileUser,
   ParticipantResponse,
@@ -24,6 +26,7 @@ export type AppFriend = MobileUser & {
   lastSignal?: AvailabilityState;
   sharedLabel?: string;
   insight?: FriendInsight;
+  requestDirection?: "INCOMING" | "OUTGOING" | null;
 };
 
 export type AppMatch = MobileMatch & {
@@ -52,6 +55,28 @@ export type ThreadMessage = {
   metadata?: Record<string, unknown>;
 };
 
+export type DirectChat = {
+  id: string;
+  title?: string | null;
+  isGroup: boolean;
+  memberCount: number;
+  participants: MobileUser[];
+  lastMessageText?: string | null;
+  lastMessageAt?: string | null;
+  createdAt: string;
+};
+
+export type DirectMessage = {
+  id: string;
+  chatId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type RecapCard = {
   id: string;
   hangoutId: string;
@@ -63,3 +88,7 @@ export type RecapCard = {
 };
 
 export type AppRadar = SocialRadar;
+
+export type AppRecurringAvailabilityWindow = MobileRecurringAvailabilityWindow;
+
+export type AppScheduledOverlap = MobileScheduledOverlap;

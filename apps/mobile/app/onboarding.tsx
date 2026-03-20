@@ -1,13 +1,14 @@
 import { startTransition, useMemo, useState } from "react";
-import { ScrollView, Share, Text, TextInput, View } from "react-native";
+import { Alert, Image, ScrollView, Share, Text, TextInput, View } from "react-native";
 import { GradientMesh } from "../components/ui/GradientMesh";
 import { GlassCard } from "../components/ui/GlassCard";
 import { PillButton } from "../components/ui/PillButton";
 import { SignalChip } from "../components/ui/SignalChip";
 import { NowlyMark } from "../components/branding/NowlyMark";
 import * as Contacts from "expo-contacts";
+import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { NOWLY_DESCRIPTION, NOWLY_SLOGAN } from "../lib/branding";
@@ -16,6 +17,10 @@ import { useAppStore } from "../store/useAppStore";
 type Stage = "phone" | "otp" | "profile";
 
 export default function OnboardingScreen() {
+  const params = useLocalSearchParams<{ bookingInviteCode?: string | string[] }>();
+  const bookingInviteCode = Array.isArray(params.bookingInviteCode)
+    ? params.bookingInviteCode[0]
+    : params.bookingInviteCode;
   const setSession = useAppStore((state) => state.setSession);
   const finishOnboarding = useAppStore((state) => state.finishOnboarding);
   const token = useAppStore((state) => state.token);
@@ -27,9 +32,11 @@ export default function OnboardingScreen() {
   const [city, setCity] = useState("New York");
   const [communityTag, setCommunityTag] = useState("NYU");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [photoFileName, setPhotoFileName] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [inviteStatus, setInviteStatus] = useState("Build your crew immediately.");
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const stageIndex = useMemo(
     () => ({
@@ -73,6 +80,14 @@ export default function OnboardingScreen() {
     setSession(session.token, session.user);
 
     if ((session.user as { onboardingCompleted?: boolean }).onboardingCompleted) {
+      if (bookingInviteCode) {
+        router.replace({
+          pathname: "/booking/[inviteCode]",
+          params: { inviteCode: bookingInviteCode },
+        });
+        return;
+      }
+
       router.replace("/(app)/home");
       return;
     }
@@ -97,17 +112,105 @@ export default function OnboardingScreen() {
     Linking.openURL(url);
   };
 
-  const handleFinish = async () => {
-    const user = await api.completeOnboarding(token, {
-      name,
-      city,
-      communityTag,
-      photoUrl: photoUrl || null,
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert("Photos permission needed", "Allow photo access so you can add a profile picture.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.45,
+      base64: true,
     });
 
-    finishOnboarding(user);
-    await track(token, "onboarding_completed", { city });
-    router.replace("/(app)/home");
+    if (result.canceled) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    if (!asset?.base64) {
+      Alert.alert("Photo couldn't be added", "Try another image and we'll pull it in.");
+      return;
+    }
+
+    const mimeType = asset.mimeType && asset.mimeType.startsWith("image/")
+      ? asset.mimeType
+      : "image/jpeg";
+
+    setPhotoUrl(`data:${mimeType};base64,${asset.base64}`);
+    setPhotoFileName(asset.fileName ?? "Profile photo");
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoUrl("");
+    setPhotoFileName(null);
+  };
+
+  const handleFinish = async () => {
+    if (isFinishing) {
+      return;
+    }
+
+    const trimmedName = name.trim();
+    const trimmedCity = city.trim();
+    const trimmedCommunityTag = communityTag.trim();
+
+    if (trimmedName.length < 2) {
+      Alert.alert("Add your name", "Use at least 2 characters so your friends know it's you.");
+      return;
+    }
+
+    if (trimmedCity.length < 2) {
+      Alert.alert("Add your city", "Pick the city or area where you usually link up.");
+      return;
+    }
+
+    if (trimmedCommunityTag.length === 1) {
+      Alert.alert("Community tag is too short", "Use at least 2 characters, or leave it blank.");
+      return;
+    }
+
+    if (photoUrl.length > 900_000) {
+      Alert.alert("Photo is too large", "Pick a slightly smaller photo and we'll keep setup moving.");
+      return;
+    }
+
+    setIsFinishing(true);
+
+    try {
+      const user = await api.completeOnboarding(token, {
+        name: trimmedName,
+        city: trimmedCity,
+        communityTag: trimmedCommunityTag || null,
+        photoUrl: photoUrl || null,
+      });
+
+      finishOnboarding(user);
+      if (bookingInviteCode) {
+        router.replace({
+          pathname: "/booking/[inviteCode]",
+          params: { inviteCode: bookingInviteCode },
+        });
+      } else {
+        router.replace("/(app)/home");
+      }
+      void track(token, "onboarding_completed", { city: trimmedCity });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't finish setup right now. Try again in a moment.";
+
+      Alert.alert("Couldn't finish setup", message);
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   return (
@@ -128,7 +231,7 @@ export default function OnboardingScreen() {
           <Text className="font-display text-[38px] leading-[42px] text-cloud">
             {NOWLY_SLOGAN}
           </Text>
-          <Text className="mt-3 font-body text-base leading-6 text-white/68">
+          <Text className="mt-3 font-body text-base leading-6 text-white">
             {NOWLY_DESCRIPTION}
           </Text>
         </View>
@@ -181,7 +284,12 @@ export default function OnboardingScreen() {
 
           {stage === "profile" ? (
             <View className="gap-4">
-              <Text className="font-display text-2xl text-cloud">Who do you hang with?</Text>
+              <View className="gap-2">
+                <Text className="font-display text-2xl text-cloud">Build your account</Text>
+                <Text className="font-body text-sm leading-6 text-white">
+                  Start with your profile, then tell Nowly who you hang with so your crew is ready when you are.
+                </Text>
+              </View>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -203,13 +311,45 @@ export default function OnboardingScreen() {
                 placeholder="Campus / neighborhood (optional)"
                 placeholderTextColor="rgba(248,250,252,0.4)"
               />
-              <TextInput
-                value={photoUrl}
-                onChangeText={setPhotoUrl}
-                className="rounded-3xl border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
-                placeholder="Photo URL (optional)"
-                placeholderTextColor="rgba(248,250,252,0.4)"
-              />
+              <View className="gap-3 rounded-[28px] border border-white/12 bg-white/8 p-4">
+                <View className="flex-row items-center gap-4">
+                  <View className="h-16 w-16 overflow-hidden rounded-full border border-white/14 bg-white/8">
+                    {photoUrl ? (
+                      <Image source={{ uri: photoUrl }} className="h-full w-full" resizeMode="cover" />
+                    ) : (
+                      <View className="h-full w-full items-center justify-center">
+                        <Text className="font-display text-xl text-white/70">
+                          {(name.trim()[0] ?? "N").toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="font-display text-lg text-cloud">Add a profile photo</Text>
+                    <Text className="mt-1 font-body text-sm leading-5 text-white/60">
+                      Optional, but it helps your friends recognize you fast.
+                    </Text>
+                    {photoFileName ? (
+                      <Text className="mt-2 font-body text-xs text-aqua">{photoFileName}</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <PillButton
+                      label={photoUrl ? "Change photo" : "Upload photo"}
+                      variant="secondary"
+                      onPress={handlePickPhoto}
+                    />
+                  </View>
+                  {photoUrl ? (
+                    <View className="flex-1">
+                      <PillButton label="Remove" variant="ghost" onPress={handleRemovePhoto} />
+                    </View>
+                  ) : null}
+                </View>
+              </View>
               <View className="gap-3 rounded-[24px] bg-white/5 p-4">
                 <View className="flex-row items-center justify-between">
                   <View className="max-w-[72%]">
@@ -222,7 +362,7 @@ export default function OnboardingScreen() {
                 </View>
                 <PillButton label="Link Discord" variant="secondary" onPress={handleDiscordLink} />
               </View>
-              <PillButton label="Finish setup" onPress={handleFinish} />
+              <PillButton label={isFinishing ? "Finishing..." : "Finish setup"} onPress={handleFinish} />
             </View>
           ) : null}
         </GlassCard>

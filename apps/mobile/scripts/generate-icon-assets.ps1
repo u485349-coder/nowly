@@ -47,33 +47,10 @@ function New-PinPath {
     [switch]$Minimal
   )
 
-  $unit = $CanvasSize / 96
   $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-  if ($Minimal) {
-    $start = [System.Drawing.PointF]::new(48 * $unit, 11.9 * $unit)
-    $path.StartFigure()
-    $path.AddBezier($start, ([System.Drawing.PointF]::new(32.3 * $unit, 11.9 * $unit)), ([System.Drawing.PointF]::new(19.8 * $unit, 23.9 * $unit)), ([System.Drawing.PointF]::new(19.8 * $unit, 39.1 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(19.8 * $unit, 39.1 * $unit)), ([System.Drawing.PointF]::new(19.8 * $unit, 49.6 * $unit)), ([System.Drawing.PointF]::new(26.0 * $unit, 59.0 * $unit)), ([System.Drawing.PointF]::new(33.3 * $unit, 66.9 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(33.3 * $unit, 66.9 * $unit)), ([System.Drawing.PointF]::new(38.9 * $unit, 73.0 * $unit)), ([System.Drawing.PointF]::new(44.1 * $unit, 78.7 * $unit)), ([System.Drawing.PointF]::new(46.8 * $unit, 81.8 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(46.8 * $unit, 81.8 * $unit)), ([System.Drawing.PointF]::new(47.4 * $unit, 82.6 * $unit)), ([System.Drawing.PointF]::new(48.6 * $unit, 82.6 * $unit)), ([System.Drawing.PointF]::new(49.2 * $unit, 81.8 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(49.2 * $unit, 81.8 * $unit)), ([System.Drawing.PointF]::new(51.9 * $unit, 78.7 * $unit)), ([System.Drawing.PointF]::new(57.1 * $unit, 73.0 * $unit)), ([System.Drawing.PointF]::new(62.7 * $unit, 66.9 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(62.7 * $unit, 66.9 * $unit)), ([System.Drawing.PointF]::new(70.0 * $unit, 59.0 * $unit)), ([System.Drawing.PointF]::new(76.2 * $unit, 49.6 * $unit)), ([System.Drawing.PointF]::new(76.2 * $unit, 39.1 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(76.2 * $unit, 39.1 * $unit)), ([System.Drawing.PointF]::new(76.2 * $unit, 23.9 * $unit)), ([System.Drawing.PointF]::new(63.7 * $unit, 11.9 * $unit)), $start)
-    $path.CloseFigure()
-    return $path
-  } else {
-    $start = [System.Drawing.PointF]::new(48 * $unit, 11.5 * $unit)
-    $path.StartFigure()
-    $path.AddBezier($start, ([System.Drawing.PointF]::new(31.7 * $unit, 11.5 * $unit)), ([System.Drawing.PointF]::new(18.8 * $unit, 23.8 * $unit)), ([System.Drawing.PointF]::new(18.8 * $unit, 39.5 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(18.8 * $unit, 39.5 * $unit)), ([System.Drawing.PointF]::new(18.8 * $unit, 50.2 * $unit)), ([System.Drawing.PointF]::new(25.1 * $unit, 59.8 * $unit)), ([System.Drawing.PointF]::new(32.7 * $unit, 68.1 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(32.7 * $unit, 68.1 * $unit)), ([System.Drawing.PointF]::new(38.5 * $unit, 74.4 * $unit)), ([System.Drawing.PointF]::new(44.0 * $unit, 80.2 * $unit)), ([System.Drawing.PointF]::new(46.7 * $unit, 83.3 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(46.7 * $unit, 83.3 * $unit)), ([System.Drawing.PointF]::new(47.4 * $unit, 84.1 * $unit)), ([System.Drawing.PointF]::new(48.6 * $unit, 84.1 * $unit)), ([System.Drawing.PointF]::new(49.3 * $unit, 83.3 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(49.3 * $unit, 83.3 * $unit)), ([System.Drawing.PointF]::new(52.0 * $unit, 80.2 * $unit)), ([System.Drawing.PointF]::new(57.5 * $unit, 74.4 * $unit)), ([System.Drawing.PointF]::new(63.3 * $unit, 68.1 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(63.3 * $unit, 68.1 * $unit)), ([System.Drawing.PointF]::new(70.9 * $unit, 59.8 * $unit)), ([System.Drawing.PointF]::new(77.2 * $unit, 50.2 * $unit)), ([System.Drawing.PointF]::new(77.2 * $unit, 39.5 * $unit)))
-    $path.AddBezier(([System.Drawing.PointF]::new(77.2 * $unit, 39.5 * $unit)), ([System.Drawing.PointF]::new(77.2 * $unit, 23.8 * $unit)), ([System.Drawing.PointF]::new(64.3 * $unit, 11.5 * $unit)), $start)
-    $path.CloseFigure()
-    return $path
-  }
+  $radius = if ($Minimal) { $CanvasSize * (28.4 / 96) } else { $CanvasSize * (29 / 96) }
+  $path.AddEllipse(($CanvasSize / 2) - $radius, ($CanvasSize / 2) - $radius, $radius * 2, $radius * 2)
+  return $path
 }
 
 function Set-HighQualityDrawing {
@@ -117,23 +94,6 @@ function Draw-Symbol {
     $backgroundBrush.InterpolationColors = $backgroundBlend
     $Graphics.FillPath($backgroundBrush, $backgroundPath)
 
-    $floorGlowBrush = New-Object System.Drawing.SolidBrush (New-ColorFromHex "#3447C8" $(if ($isMinimal) { 28 } else { 46 }))
-    $Graphics.FillEllipse(
-      $floorGlowBrush,
-      $centerX - ($(if ($isMinimal) { 17.2 } else { 18.4 }) * $unit),
-      ($(if ($isMinimal) { 77.0 } else { 76.9 }) * $unit),
-      ($(if ($isMinimal) { 34.4 } else { 36.8 }) * $unit),
-      ($(if ($isMinimal) { 5.2 } else { 5.8 }) * $unit)
-    )
-
-    $floorCoreBrush = New-Object System.Drawing.SolidBrush (New-ColorFromHex "#22D3EE" $(if ($isMinimal) { 44 } else { 68 }))
-    $Graphics.FillEllipse(
-      $floorCoreBrush,
-      $centerX - ($(if ($isMinimal) { 9.9 } else { 10.6 }) * $unit),
-      ($(if ($isMinimal) { 78.05 } else { 78.1 }) * $unit),
-      ($(if ($isMinimal) { 19.8 } else { 21.2 }) * $unit),
-      ($(if ($isMinimal) { 3.1 } else { 3.4 }) * $unit)
-    )
   }
 
   $pinPath = New-PinPath -CanvasSize $CanvasSize -Minimal:$isMinimal
@@ -161,10 +121,10 @@ function Draw-Symbol {
     $clipState = $Graphics.Save()
     $Graphics.SetClip($pinPath)
     $highlightBrush = New-Object System.Drawing.SolidBrush (New-ColorFromHex "#FFFFFF" $(if ($isMinimal) { 12 } else { 18 }))
-    $highlightCenterX = $(if ($isMinimal) { 34.1 } else { 34.0 }) * $unit
-    $highlightCenterY = $(if ($isMinimal) { 21.4 } else { 21.2 }) * $unit
-    $highlightRadiusX = $(if ($isMinimal) { 10.2 } else { 10.8 }) * $unit
-    $highlightRadiusY = $(if ($isMinimal) { 7.2 } else { 7.6 }) * $unit
+    $highlightCenterX = $(if ($isMinimal) { 34.4 } else { 34.5 }) * $unit
+    $highlightCenterY = $(if ($isMinimal) { 24.1 } else { 24.2 }) * $unit
+    $highlightRadiusX = $(if ($isMinimal) { 10.5 } else { 11.2 }) * $unit
+    $highlightRadiusY = $(if ($isMinimal) { 7.4 } else { 8.1 }) * $unit
     $Graphics.FillEllipse(
       $highlightBrush,
       $highlightCenterX - $highlightRadiusX,
@@ -175,10 +135,10 @@ function Draw-Symbol {
     $Graphics.Restore($clipState)
   }
 
-  $nLeftX = $(if ($isMinimal) { 38.8 } else { 38.4 }) * $unit
-  $nRightX = $(if ($isMinimal) { 56.9 } else { 57.6 }) * $unit
-  $nTopY = $(if ($isMinimal) { 30.2 } else { 29.9 }) * $unit
-  $nBottomY = $(if ($isMinimal) { 45.6 } else { 46.2 }) * $unit
+  $nLeftX = $(if ($isMinimal) { 38.7 } else { 38.6 }) * $unit
+  $nRightX = $(if ($isMinimal) { 57.1 } else { 57.4 }) * $unit
+  $nTopY = $(if ($isMinimal) { 39.8 } else { 39.4 }) * $unit
+  $nBottomY = $(if ($isMinimal) { 56.3 } else { 56.6 }) * $unit
   $glowRadius = $(if ($isMinimal) { 3.2 } else { 3.5 }) * $unit
 
   if (-not $Monochrome) {

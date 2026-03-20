@@ -1,12 +1,12 @@
 import { startTransition, useEffect } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
-import { AvailabilityComposer } from "../../features/availability/AvailabilityComposer";
+import { promptActions } from "../../features/prompts/prompt-actions";
 import { api } from "../../lib/api";
-import { track } from "../../lib/analytics";
 import { formatDayTime } from "../../lib/format";
 import {
   availabilityLabel,
@@ -17,36 +17,15 @@ import {
 } from "../../lib/labels";
 import { useAppStore } from "../../store/useAppStore";
 
-const promptActions = [
-  {
-    label: "Pull up",
-    activity: "pull up for a bit",
-    microType: "PULL_UP" as const,
-    commitmentLevel: "DROP_IN" as const,
-  },
-  {
-    label: "Quick bite",
-    activity: "grab a quick bite",
-    microType: "QUICK_BITE" as const,
-    commitmentLevel: "QUICK_WINDOW" as const,
-  },
-  {
-    label: "Walk nearby",
-    activity: "walk nearby",
-    microType: "WALK_NEARBY" as const,
-    commitmentLevel: "DROP_IN" as const,
-  },
-];
-
 export default function HomeScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const matches = useAppStore((state) => state.matches);
   const hangouts = useAppStore((state) => state.hangouts);
   const activeSignal = useAppStore((state) => state.activeSignal);
+  const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const radar = useAppStore((state) => state.radar);
   const setDashboard = useAppStore((state) => state.setDashboard);
-  const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const bootstrapDemo = useAppStore((state) => state.bootstrapDemo);
 
@@ -77,47 +56,36 @@ export default function HomeScreen() {
     };
   }, [bootstrapDemo, setDashboard, token, user]);
 
-  const handleSaveSignal = async (payload: {
-    state: "FREE_NOW" | "FREE_LATER" | "BUSY" | "DOWN_THIS_WEEKEND";
-    radiusKm: number;
-    vibe?: "FOOD" | "GYM" | "CHILL" | "PARTY" | "COFFEE" | "OUTDOORS" | null;
-    energyLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
-    budgetMood?: "LOW_SPEND" | "FLEXIBLE" | "TREAT_MYSELF" | null;
-    socialBattery?: "LOW_KEY" | "OPEN" | "SOCIAL" | null;
-    hangoutIntent?:
-      | "QUICK_BITE"
-      | "COFFEE_RUN"
-      | "WALK_NEARBY"
-      | "STUDY_SPRINT"
-      | "PULL_UP"
-      | "WORKOUT"
-      | "QUICK_CHILL"
-      | null;
-    durationHours?: number;
-  }) => {
-    const signal = await api.setAvailability(token, payload);
-    setActiveSignal(signal);
-    await track(token, "availability_set", payload);
+  const topMatches = matches.slice(0, 3);
+  const nearbyLabel = user?.communityTag || user?.city || "your area";
+  const availabilityHeadline = topMatches.length
+    ? `${topMatches.length} ${topMatches.length === 1 ? "friend is" : "friends are"} free near ${nearbyLabel}.`
+    : `No one is fully lined up near ${nearbyLabel} yet.`;
+
+  const openPromptPicker = (promptKey: string) => {
+    router.push({
+      pathname: "/prompt/[promptKey]",
+      params: { promptKey },
+    });
   };
 
-  const launchPrompt = async (prompt: (typeof promptActions)[number], group = false) => {
-    const participantIds = group
-      ? matches.slice(0, 3).map((match) => match.matchedUser.id)
-      : matches[0]
-        ? [matches[0].matchedUser.id]
-        : [];
-
-    if (!participantIds.length) {
-      return;
-    }
-
+  const launchScheduledSuggestion = async (
+    suggestion: (typeof scheduledOverlaps)[number],
+  ) => {
     const hangout = await api.createHangout(token, {
-      activity: prompt.activity,
-      microType: prompt.microType,
-      commitmentLevel: prompt.commitmentLevel,
+      activity:
+        suggestion.sharedIntent
+          ? suggestion.sharedIntent.replaceAll("_", " ").toLowerCase()
+          : "hang out",
+      microType:
+        suggestion.sharedIntent ??
+        suggestion.sourceWindow.hangoutIntent ??
+        suggestion.matchedWindow.hangoutIntent ??
+        "QUICK_CHILL",
+      commitmentLevel: "QUICK_WINDOW",
       locationName: user?.communityTag || user?.city || "nearby",
-      participantIds,
-      scheduledFor: new Date(Date.now() + 35 * 60 * 1000).toISOString(),
+      participantIds: [suggestion.matchedUser.id],
+      scheduledFor: suggestion.startsAt,
     });
 
     upsertHangout(hangout);
@@ -131,54 +99,48 @@ export default function HomeScreen() {
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingTop: 62,
-          paddingBottom: 120,
+          paddingBottom: 148,
           gap: 18,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-2">
-          <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">Live radar</Text>
-          <Text className="font-display text-[34px] leading-[38px] text-cloud">
-            {user?.name ? `${user.name}, who can you catch without overthinking it?` : "Who can you catch right now?"}
-          </Text>
+        <View className="gap-3">
+          <View className="flex-row items-center justify-between gap-4">
+            <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">
+              Live radar
+            </Text>
+
+            <Pressable
+              onPress={() => router.push("/now-mode")}
+              className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
+            >
+              <MaterialCommunityIcons name="cog-outline" size={20} color="#F8FAFC" />
+            </Pressable>
+          </View>
+          <View className="max-w-[92%]">
+            <Text className="font-display text-[34px] leading-[38px] text-cloud">
+              {user?.name
+                ? `${user.name}, who can you catch without overthinking it?`
+                : "Who can you catch right now?"}
+            </Text>
+          </View>
         </View>
 
         <GlassCard className="p-5">
-          <View className="gap-3">
-            <Text className="font-display text-[28px] leading-[32px] text-cloud">
-              {radar?.rhythm.headline ?? "Your social radar is warming up"}
-            </Text>
-            <Text className="font-body text-sm leading-6 text-white/68">
-              {radar?.rhythm.detail ?? "Set one live signal and Nowly will look for overlap."}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              <View className="rounded-full bg-aqua/20 px-3 py-2">
-                <Text className="font-body text-xs text-cloud">
-                  best window: {radar?.rhythm.bestWindow ?? "tonight"}
-                </Text>
-              </View>
-              <View className="rounded-full bg-white/10 px-3 py-2">
-                <Text className="font-body text-xs text-cloud">
-                  {radar?.localDensity.densityLabel ?? "local crew building"}
-                </Text>
-              </View>
-            </View>
-            <Text className="font-body text-sm text-aqua/80">
-              {radar?.rhythm.livePrompt ?? "Use a low-pressure prompt when the window opens."}
-            </Text>
-          </View>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <View className="gap-3">
+          <View className="gap-4">
             <Text className="font-display text-xl text-cloud">Your live signal</Text>
-            <Text className="font-body text-sm text-white/60">
+            <Text className="font-body text-sm leading-6 text-white/60">
               {activeSignal
-                ? `${availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
+                ? `${activeSignal.label || availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
                 : "No live signal yet. Set one and let Nowly do the overlap work."}
             </Text>
             {activeSignal ? (
               <View className="flex-row flex-wrap gap-2">
+                {activeSignal.label ? (
+                  <View className="rounded-full bg-aqua/20 px-3 py-2">
+                    <Text className="font-body text-xs text-cloud">{activeSignal.label}</Text>
+                  </View>
+                ) : null}
                 <View className="rounded-full bg-white/10 px-3 py-2">
                   <Text className="font-body text-xs text-cloud">
                     {hangoutIntentLabel(activeSignal.hangoutIntent)}
@@ -197,94 +159,119 @@ export default function HomeScreen() {
           </View>
         </GlassCard>
 
-        <AvailabilityComposer activeSignal={activeSignal} onSave={handleSaveSignal} />
+        <GlassCard className="p-5">
+          <View className="gap-4">
+            <View className="self-start rounded-full border border-white/10 bg-white/6 px-4 py-2.5">
+              <Text className="font-body text-xs text-cloud">
+                Best hangout window: {radar?.rhythm.bestWindow ?? "happening now"}
+              </Text>
+            </View>
 
-        <View className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-display text-2xl text-cloud">Low-pressure prompts</Text>
-            <PillButton
-              label="Who's free tonight?"
-              variant="secondary"
-              onPress={() => launchPrompt(promptActions[0], true)}
-            />
-          </View>
-          <Text className="font-body text-sm text-aqua/80">
-            {radar?.suggestionLine ?? "Keep it casual"}
-          </Text>
-          <View className="flex-row flex-wrap gap-3">
-            {promptActions.map((prompt, index) => (
-              <View key={prompt.label} className="w-[48%]">
-                <GlassCard className="p-4">
-                  <Text className="font-display text-lg text-cloud">{prompt.label}</Text>
-                  <Text className="mt-2 font-body text-sm text-white/60">
-                    {index === 0
-                      ? "Lowest pressure. Best when someone is already nearby."
-                      : index === 1
-                        ? "A tighter time window that still feels casual."
-                        : "Easy yes, low cost, minimal commitment."}
-                  </Text>
-                  <View className="mt-4">
-                    <PillButton label="Launch" variant="secondary" onPress={() => launchPrompt(prompt)} />
-                  </View>
-                </GlassCard>
+            <View className="gap-2">
+              <Text className="font-display text-[30px] leading-[34px] text-cloud">
+                {availabilityHeadline}
+              </Text>
+              <Text className="max-w-[92%] font-body text-sm leading-6 text-white/68">
+                {topMatches.length
+                  ? radar?.suggestionLine ??
+                    "Send one low-pressure prompt and turn overlap into an actual hangout."
+                  : radar?.rhythm.detail ??
+                    "Set one live signal or use a prompt to wake the line up."}
+              </Text>
+            </View>
+
+            {topMatches.length ? (
+              <View className="flex-row flex-wrap justify-between gap-y-3">
+                {topMatches.map((match) => (
+                  <Pressable
+                    key={match.id}
+                    onPress={() => router.push(`/match/${match.id}`)}
+                    className={`${topMatches.length === 1 ? "w-full" : "w-[48%]"} rounded-[24px] border border-white/8 bg-white/[0.03] p-4`}
+                  >
+                    <Text className="font-display text-lg text-cloud">{match.matchedUser.name}</Text>
+                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                      {availabilityLabel(match.matchedSignal.state).toLowerCase()} ·{" "}
+                      {match.reason.travelMinutes ?? 15} min away
+                    </Text>
+                    <Text className="mt-1 font-body text-sm leading-6 text-aqua/82">
+                      {match.insightLabel ?? match.reason.momentumLabel ?? "strong short-notice fit"}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
-            ))}
+            ) : (
+              <View className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+                <Text className="font-display text-lg text-cloud">Keep the line warm</Text>
+                <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                  Nobody is live yet, but you can still send a low-pressure prompt to a friend and
+                  let the timing catch up.
+                </Text>
+              </View>
+            )}
+
+            <View className="gap-3">
+              <Text className="font-display text-lg text-cloud">Low-pressure prompts</Text>
+              <View className="gap-2.5">
+                {promptActions.map((prompt) => (
+                  <Pressable
+                    key={prompt.key}
+                    onPress={() => openPromptPicker(prompt.key)}
+                    className="rounded-full border border-white/10 bg-white/6 px-4 py-3.5"
+                  >
+                    <Text className="font-body text-sm text-cloud">
+                      {prompt.label} - {prompt.detail}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           </View>
-        </View>
+        </GlassCard>
 
         <View className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-display text-2xl text-cloud">Live overlaps</Text>
-            <Text className="font-body text-sm text-aqua/80">ranked by real likelihood</Text>
+          <View className="gap-1">
+            <Text className="font-display text-2xl text-cloud">Planned windows</Text>
+            <Text className="font-body text-sm text-aqua/80">
+              recurring overlap slots your crew could actually lock in
+            </Text>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row gap-3">
-              {matches.map((match) => (
-                <Pressable
-                  key={match.id}
-                  onPress={() => router.push(`/match/${match.id}`)}
-                  className="w-72"
-                >
+              {scheduledOverlaps.slice(0, 4).map((suggestion) => (
+                <View key={suggestion.id} className="w-72">
                   <GlassCard className="p-5">
-                    <Text className="font-display text-2xl text-cloud">{match.matchedUser.name}</Text>
-                    <Text className="mt-1 font-body text-sm text-white/60">
-                      {match.reason.overlapMinutes} minutes live, {match.reason.travelMinutes ?? 15} min away
+                    <Text className="font-display text-2xl text-cloud">
+                      {suggestion.matchedUser.name}
                     </Text>
-                    <Text className="mt-2 font-body text-sm text-aqua/80">
-                      {match.insightLabel ?? match.reason.momentumLabel ?? "strong short-notice fit"}
+                    <Text className="mt-1 font-body text-sm text-aqua/80">
+                      {suggestion.label}
                     </Text>
-                    <View className="mt-4 flex-row flex-wrap gap-2">
-                      <View className="rounded-full bg-aqua/20 px-3 py-2">
-                        <Text className="font-body text-xs text-cloud">
-                          {availabilityLabel(match.matchedSignal.state)}
-                        </Text>
-                      </View>
-                      {match.reason.sharedIntent ? (
-                        <View className="rounded-full bg-white/10 px-3 py-2">
-                          <Text className="font-body text-xs text-cloud">
-                            {hangoutIntentLabel(match.reason.sharedIntent)}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {match.reason.sharedVibe ? (
-                        <View className="rounded-full bg-white/10 px-3 py-2">
-                          <Text className="font-body text-xs text-cloud">
-                            vibe: {vibeLabel(match.reason.sharedVibe)}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View className="mt-5">
+                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                      {suggestion.summary}
+                    </Text>
+                    <View className="mt-4">
                       <PillButton
-                        label="Start quick link"
+                        label="Propose this time"
                         variant="secondary"
-                        onPress={() => router.push(`/match/${match.id}`)}
+                        onPress={() => launchScheduledSuggestion(suggestion)}
                       />
                     </View>
                   </GlassCard>
-                </Pressable>
+                </View>
               ))}
+
+              {!scheduledOverlaps.length ? (
+                <View className="w-72">
+                  <GlassCard className="p-5">
+                    <Text className="font-display text-xl text-cloud">Set a few windows</Text>
+                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                      Use the gear in the top-right to add weekly or monthly availability and
+                      Nowly will start surfacing the best future overlap here.
+                    </Text>
+                  </GlassCard>
+                </View>
+              ) : null}
             </View>
           </ScrollView>
         </View>

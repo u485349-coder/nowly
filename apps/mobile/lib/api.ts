@@ -10,18 +10,30 @@ import {
   SocialBattery,
   Vibe,
 } from "@nowly/shared";
-import type { MobileAvailabilitySignal, SocialRadar } from "@nowly/shared";
+import type {
+  MobileAvailabilitySignal,
+  MobileBookingProfile,
+  MobileRecurringAvailabilityWindow,
+  MobileScheduledOverlap,
+  SocialRadar,
+} from "@nowly/shared";
 import {
+  demoDirectChats,
+  demoDirectMessages,
   demoFriends,
   demoHangouts,
   demoMatches,
   demoRadar,
   demoRecaps,
+  demoRecurringWindows,
+  demoScheduledOverlaps,
   demoSignal,
+  demoSuggestions,
   demoThreads,
   demoUser,
 } from "./demo-data";
 import { AppFriend, AppHangout, AppUser, RecapCard, ThreadMessage } from "../types";
+import { DirectChat, DirectMessage } from "../types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
 const demoMode = !API_URL || process.env.EXPO_PUBLIC_DEMO_MODE === "true";
@@ -68,6 +80,7 @@ const normalizeUser = (
     city: user.city ?? "Somewhere nearby",
     communityTag: user.communityTag ?? null,
     photoUrl: user.photoUrl ?? null,
+    inviteCode: user.inviteCode,
     responsivenessScore: user.responsivenessScore ?? 0.72,
     discordUsername: user.discordUsername ?? null,
     sharedServerCount: user.sharedServerCount ?? 0,
@@ -83,6 +96,7 @@ const normalizeFriend = (
   friendship: {
     id: string;
     status: "PENDING" | "ACCEPTED";
+    initiatedBy?: string | null;
     lastSignal?: AppFriend["lastSignal"];
     insight?: AppFriend["insight"];
     userA: {
@@ -116,6 +130,12 @@ const normalizeFriend = (
     status: friendship.status,
     lastSignal: friendship.lastSignal,
     insight: friendship.insight,
+    requestDirection:
+      friendship.status === "PENDING"
+        ? friendship.initiatedBy === currentUserId
+          ? "OUTGOING"
+          : "INCOMING"
+        : null,
     sharedLabel:
       other.sharedServerCount && other.sharedServerCount > 0
         ? `You share ${other.sharedServerCount} server${other.sharedServerCount > 1 ? "s" : ""}`
@@ -174,6 +194,61 @@ const normalizeMessage = (message: {
 }): ThreadMessage => ({
   id: message.id,
   threadId: message.threadId,
+  senderId: message.senderId,
+  senderName: message.sender?.name ?? "Friend",
+  text: message.text,
+  type: message.type,
+  createdAt: message.createdAt,
+});
+
+const normalizeDirectChat = (
+  chat: {
+    id: string;
+    title?: string | null;
+    isGroup?: boolean;
+    memberCount?: number;
+    createdAt: string;
+    lastMessageAt?: string | null;
+    participants?: Array<Partial<AppFriend>> | null;
+    latestMessage?: {
+      text?: string | null;
+      createdAt?: string | null;
+    } | null;
+  },
+): DirectChat => ({
+  id: chat.id,
+  title: chat.title ?? null,
+  isGroup: Boolean(chat.isGroup),
+  memberCount: chat.memberCount ?? ((chat.participants?.length ?? 0) + 1),
+  createdAt: chat.createdAt,
+  lastMessageAt: chat.lastMessageAt ?? chat.latestMessage?.createdAt ?? null,
+  lastMessageText: chat.latestMessage?.text ?? null,
+  participants: (chat.participants ?? []).map((participant, index) =>
+    normalizeUser({
+      id: participant.id ?? `participant-${index}`,
+      phone: participant.phone ?? "+10000000000",
+      name: participant.name ?? "Friend",
+      city: participant.city ?? "Nearby",
+      communityTag: participant.communityTag ?? null,
+      photoUrl: participant.photoUrl ?? null,
+      responsivenessScore: participant.responsivenessScore ?? 0.7,
+      discordUsername: participant.discordUsername ?? null,
+      sharedServerCount: participant.sharedServerCount ?? 0,
+    }),
+  ),
+});
+
+const normalizeDirectMessage = (message: {
+  id: string;
+  threadId: string;
+  senderId: string;
+  text: string;
+  type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
+  createdAt: string;
+  sender?: { name?: string | null } | null;
+}): DirectMessage => ({
+  id: message.id,
+  chatId: message.threadId,
   senderId: message.senderId,
   senderName: message.sender?.name ?? "Friend",
   text: message.text,
@@ -307,15 +382,18 @@ export const api = {
         hangouts: demoHangouts,
         recaps: demoRecaps,
         activeSignal: demoSignal,
+        recurringWindows: demoRecurringWindows,
+        scheduledOverlaps: demoScheduledOverlaps,
         radar: demoRadar,
       };
     }
 
-    const [friends, matches, hangouts, recaps, activeSignal, radar] = await Promise.all([
+    const [friends, matches, hangouts, recaps, activeSignal, recurringWindows, scheduledOverlaps, radar] = await Promise.all([
       request<{
         data: Array<{
           id: string;
           status: "PENDING" | "ACCEPTED";
+          initiatedBy?: string | null;
           lastSignal?: AppFriend["lastSignal"];
           insight?: AppFriend["insight"];
           userA: AppFriend;
@@ -330,6 +408,10 @@ export const api = {
       }),
       request<{ data: RecapCard[] }>("/hangouts/recaps", { token }),
       request<{ data: typeof demoSignal[] }>("/availability/signals", { token }),
+      request<{ data: typeof demoRecurringWindows }>("/availability/recurring", { token }),
+      request<{ data: typeof demoScheduledOverlaps }>("/hangouts/scheduled-overlaps", {
+        token,
+      }),
       request<{ data: SocialRadar }>("/hangouts/radar", { token }),
     ]);
 
@@ -349,13 +431,15 @@ export const api = {
         shareLabel: "Share recap",
       })),
       activeSignal: activeSignal.data[0] ?? null,
+      recurringWindows: recurringWindows.data,
+      scheduledOverlaps: scheduledOverlaps.data,
       radar: radar.data,
     };
   },
 
   async fetchFriendSuggestions(token: string | null): Promise<AppFriend[]> {
     if (demoMode) {
-      return demoFriends.filter((friend) => friend.status === "PENDING");
+      return demoSuggestions;
     }
 
     const response = await request<{
@@ -379,12 +463,160 @@ export const api = {
       ...friend,
       friendshipId: `suggestion-${friend.id}`,
       status: "PENDING",
+      requestDirection: null,
       sharedLabel:
         friend.localLabel ||
         (friend.sharedServerCount && friend.sharedServerCount > 0
           ? `You share ${friend.sharedServerCount} server${friend.sharedServerCount > 1 ? "s" : ""}`
           : undefined),
     }));
+  },
+
+  async fetchFriends(token: string | null, currentUserId: string): Promise<AppFriend[]> {
+    if (demoMode) {
+      return demoFriends;
+    }
+
+    const response = await request<{
+      data: Array<{
+        id: string;
+        status: "PENDING" | "ACCEPTED";
+        initiatedBy?: string | null;
+        lastSignal?: AppFriend["lastSignal"];
+        insight?: AppFriend["insight"];
+        userA: AppFriend;
+        userB: AppFriend;
+      }>;
+    }>("/friends", {
+      token,
+    });
+
+    return response.data.map((friendship) => normalizeFriend(currentUserId, friendship));
+  },
+
+  async fetchDirectChats(token: string | null): Promise<DirectChat[]> {
+    if (demoMode) {
+      return demoDirectChats;
+    }
+
+    const response = await request<{ data: Array<Parameters<typeof normalizeDirectChat>[0]> }>(
+      "/chats",
+      {
+        token,
+      },
+    );
+
+    return response.data.map((chat) => normalizeDirectChat(chat));
+  },
+
+  async openDirectChat(token: string | null, userId: string): Promise<DirectChat> {
+    if (demoMode) {
+      return (
+        demoDirectChats.find(
+          (chat) => !chat.isGroup && chat.participants.some((participant) => participant.id === userId),
+        ) ?? {
+          id: `chat-${userId}`,
+          title: null,
+          isGroup: false,
+          memberCount: 2,
+          participants: [demoFriends.find((friend) => friend.id === userId) ?? demoFriends[0]],
+          createdAt: new Date().toISOString(),
+          lastMessageAt: null,
+          lastMessageText: null,
+        }
+      );
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeDirectChat>[0] }>(
+      "/chats/direct",
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify({ userId }),
+      },
+    );
+
+    return normalizeDirectChat(response.data);
+  },
+
+  async createGroupChat(
+    token: string | null,
+    payload: { title?: string | null; participantIds: string[] },
+  ): Promise<DirectChat> {
+    if (demoMode) {
+      return {
+        id: `chat-group-${Date.now()}`,
+        title: payload.title?.trim() || "New group chat",
+        isGroup: true,
+        memberCount: payload.participantIds.length + 1,
+        participants: demoFriends.filter((friend) => payload.participantIds.includes(friend.id)),
+        createdAt: new Date().toISOString(),
+        lastMessageAt: null,
+        lastMessageText: null,
+      };
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeDirectChat>[0] }>(
+      "/chats/group",
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(payload),
+      },
+    );
+
+    return normalizeDirectChat(response.data);
+  },
+
+  async fetchDirectChat(token: string | null, chatId: string): Promise<DirectChat> {
+    if (demoMode) {
+      return demoDirectChats.find((chat) => chat.id === chatId) ?? demoDirectChats[0];
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeDirectChat>[0] }>(
+      `/chats/${chatId}`,
+      { token },
+    );
+
+    return normalizeDirectChat(response.data);
+  },
+
+  async fetchDirectMessages(token: string | null, chatId: string): Promise<DirectMessage[]> {
+    if (demoMode) {
+      return demoDirectMessages[chatId] ?? [];
+    }
+
+    const response = await request<{ data: Array<Parameters<typeof normalizeDirectMessage>[0]> }>(
+      `/chats/${chatId}/messages`,
+      { token },
+    );
+
+    return response.data.map((message) => normalizeDirectMessage(message));
+  },
+
+  async sendDirectMessage(token: string | null, chatId: string, text: string) {
+    if (demoMode) {
+      return {
+        id: `chat-local-${Date.now()}`,
+        chatId,
+        senderId: demoUser.id,
+        senderName: demoUser.name,
+        text,
+        type: "TEXT" as const,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeDirectMessage>[0] }>(
+      `/chats/${chatId}/messages`,
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify({ text }),
+      },
+    );
+
+    return normalizeDirectMessage(response.data);
   },
 
   async sendInvite(token: string | null, phoneNumbers: string[]) {
@@ -407,22 +639,79 @@ export const api = {
     return response.data;
   },
 
-  async requestFriend(token: string | null, userId: string) {
+  async requestFriend(token: string | null, currentUserId: string, userId: string) {
     if (demoMode) {
-      return { ok: true };
+      return {
+        ...(demoSuggestions.find((friend) => friend.id === userId) ?? demoFriends[0]),
+        friendshipId: `friend-${userId}`,
+        status: "PENDING" as const,
+        requestDirection: "OUTGOING" as const,
+      };
     }
 
-    return request("/friends/request", {
+    const response = await request<{
+      data: {
+        id: string;
+        status: "PENDING" | "ACCEPTED";
+        initiatedBy?: string | null;
+        lastSignal?: AppFriend["lastSignal"];
+        insight?: AppFriend["insight"];
+        userA: AppFriend;
+        userB: AppFriend;
+      };
+    }>("/friends/request", {
       method: "POST",
       token,
       body: JSON.stringify({ userId }),
     });
+
+    return normalizeFriend(
+      currentUserId,
+      response.data,
+    );
+  },
+
+  async respondToFriendRequest(
+    token: string | null,
+    currentUserId: string,
+    friendshipId: string,
+    action: "ACCEPT" | "DECLINE",
+  ) {
+    if (demoMode) {
+      const friend = demoFriends.find((item) => item.friendshipId === friendshipId);
+      if (!friend) {
+        return null;
+      }
+
+      return action === "ACCEPT"
+        ? { ...friend, status: "ACCEPTED" as const, requestDirection: null }
+        : null;
+    }
+
+    const response = await request<{
+      data: {
+        id: string;
+        status: "PENDING" | "ACCEPTED";
+        initiatedBy?: string | null;
+        lastSignal?: AppFriend["lastSignal"];
+        insight?: AppFriend["insight"];
+        userA: AppFriend;
+        userB: AppFriend;
+      };
+    }>(`/friends/${friendshipId}/respond`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({ action }),
+    });
+
+    return action === "DECLINE" ? null : normalizeFriend(currentUserId, response.data);
   },
 
   async setAvailability(
     token: string | null,
     payload: {
       state: string;
+      label?: string | null;
       radiusKm: number;
       vibe?: Vibe | null;
       energyLevel?: EnergyLevel | null;
@@ -448,6 +737,142 @@ export const api = {
       token,
       body: JSON.stringify(payload),
     });
+
+    return response.data;
+  },
+
+  async clearAvailability(token: string | null, signalId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request(`/availability/signals/${signalId}`, {
+      method: "DELETE",
+      token,
+    });
+  },
+
+  async fetchRecurringAvailability(token: string | null) {
+    if (demoMode) {
+      return demoRecurringWindows;
+    }
+
+    const response = await request<{ data: MobileRecurringAvailabilityWindow[] }>(
+      "/availability/recurring",
+      { token },
+    );
+
+    return response.data;
+  },
+
+  async saveRecurringAvailability(
+    token: string | null,
+    windows: Array<{
+      recurrence: "WEEKLY" | "MONTHLY";
+      dayOfWeek?: number | null;
+      dayOfMonth?: number | null;
+      startMinute: number;
+      endMinute: number;
+      utcOffsetMinutes: number;
+      label?: string | null;
+      vibe?: Vibe | null;
+      hangoutIntent?: HangoutIntent | null;
+    }>,
+  ) {
+    if (demoMode) {
+      return windows.map((window, index) => ({
+        id: demoRecurringWindows[index]?.id ?? `window-${Date.now()}-${index}`,
+        createdAt: new Date().toISOString(),
+        ...window,
+      })) as MobileRecurringAvailabilityWindow[];
+    }
+
+    const response = await request<{ data: MobileRecurringAvailabilityWindow[] }>(
+      "/availability/recurring",
+      {
+        method: "PUT",
+        token,
+        body: JSON.stringify({ windows }),
+      },
+    );
+
+    return response.data;
+  },
+
+  async fetchBookingProfile(token: string | null, inviteCode: string) {
+    if (demoMode) {
+      return {
+        host: demoUser,
+        slots: demoScheduledOverlaps.map((overlap) => ({
+          id: overlap.id,
+          startsAt: overlap.startsAt,
+          endsAt: overlap.endsAt,
+          label: overlap.label,
+          summary: overlap.summary,
+          sourceLabel: overlap.sourceWindow.label ?? null,
+          vibe: overlap.sharedVibe ?? null,
+          hangoutIntent: overlap.sharedIntent ?? null,
+          mutualFit: true,
+          overlapMinutes: overlap.overlapMinutes,
+          score: overlap.score,
+        })),
+        viewerHasRecurringSchedule: true,
+      } satisfies MobileBookingProfile;
+    }
+
+    const response = await request<{ data: MobileBookingProfile }>(
+      `/availability/share/${inviteCode}`,
+      {
+        token,
+      },
+    );
+
+    return response.data;
+  },
+
+  async bookSharedAvailability(
+    token: string | null,
+    inviteCode: string,
+    payload: {
+      startsAt: string;
+      endsAt: string;
+      note?: string | null;
+    },
+  ) {
+    if (demoMode) {
+      return localHangout({
+        activity: payload.note?.trim() || "hang out",
+        microType: "QUICK_CHILL",
+        commitmentLevel: "QUICK_WINDOW",
+        locationName: demoUser.communityTag || demoUser.city || "nearby",
+        participantIds: [demoFriends[0]?.id ?? "user-jordan"],
+        scheduledFor: payload.startsAt,
+      });
+    }
+
+    const response = await request<{ data: AppHangout }>(
+      `/availability/share/${inviteCode}/book`,
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(payload),
+      },
+    );
+
+    return normalizeHangout(response.data as Parameters<typeof normalizeHangout>[0]);
+  },
+
+  async fetchScheduledOverlaps(token: string | null) {
+    if (demoMode) {
+      return demoScheduledOverlaps;
+    }
+
+    const response = await request<{ data: MobileScheduledOverlap[] }>(
+      "/hangouts/scheduled-overlaps",
+      {
+        token,
+      },
+    );
 
     return response.data;
   },

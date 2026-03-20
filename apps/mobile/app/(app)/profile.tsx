@@ -1,4 +1,4 @@
-import { ScrollView, Switch, Text, View } from "react-native";
+import { Image, ScrollView, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -6,6 +6,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { SignalChip } from "../../components/ui/SignalChip";
 import { api } from "../../lib/api";
 import { notificationIntensityLabel } from "../../lib/labels";
+import { disconnectSocket } from "../../lib/socket";
 import { useAppStore } from "../../store/useAppStore";
 
 const intensityOptions = ["QUIET", "BALANCED", "LIVE"] as const;
@@ -18,6 +19,7 @@ export default function ProfileScreen() {
   const notificationsEnabled = useAppStore((state) => state.notificationsEnabled);
   const setNotificationsEnabled = useAppStore((state) => state.setNotificationsEnabled);
   const updateUser = useAppStore((state) => state.updateUser);
+  const clearSession = useAppStore((state) => state.clearSession);
 
   const currentIntensity = user?.notificationIntensity ?? "BALANCED";
 
@@ -27,6 +29,12 @@ export default function ProfileScreen() {
     updateUser({
       notificationIntensity: nextUser.notificationIntensity,
     });
+  };
+
+  const handleLogout = () => {
+    disconnectSocket();
+    clearSession();
+    router.replace("/onboarding");
   };
 
   return (
@@ -42,11 +50,29 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <GlassCard className="p-5">
-          <Text className="font-display text-3xl text-cloud">{user?.name ?? "Your profile"}</Text>
-          <Text className="mt-1 font-body text-sm text-white/60">
-            {user?.communityTag || user?.city} ·{" "}
-            {user?.discordUsername ? `@${user.discordUsername}` : "Discord optional"}
-          </Text>
+          <View className="flex-row items-center gap-4">
+            <View className="h-24 w-24 overflow-hidden rounded-full border border-white/12 bg-white/8">
+              {user?.photoUrl ? (
+                <Image source={{ uri: user.photoUrl }} className="h-full w-full" resizeMode="cover" />
+              ) : (
+                <View className="h-full w-full items-center justify-center">
+                  <Text className="font-display text-4xl text-white/70">
+                    {(user?.name?.[0] ?? "N").toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View className="flex-1">
+              <Text className="font-display text-3xl text-cloud">{user?.name ?? "Your profile"}</Text>
+              <Text className="mt-1 font-body text-sm text-white/60">
+                {user?.communityTag || user?.city} · {user?.phone ?? "Phone not set"}
+              </Text>
+              <Text className="mt-1 font-body text-sm text-aqua/80">
+                {user?.discordUsername ? `@${user.discordUsername}` : "Discord optional"}
+              </Text>
+            </View>
+          </View>
 
           <View className="mt-5 flex-row gap-3">
             <View className="flex-1 rounded-[22px] bg-white/6 p-4">
@@ -67,7 +93,8 @@ export default function ProfileScreen() {
         <GlassCard className="p-5">
           <Text className="font-display text-xl text-cloud">Social rhythm</Text>
           <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-            {radar?.rhythm.detail ?? "Nowly works best when your signals stay light and your real-world graph stays dense."}
+            {radar?.rhythm.detail ??
+              "Nowly works best when your signals stay light and your real-world graph stays dense."}
           </Text>
           <Text className="mt-3 font-body text-sm text-aqua/80">
             {radar?.suggestionLine ?? "Keep showing up lightly instead of planning hard."}
@@ -86,11 +113,11 @@ export default function ProfileScreen() {
               value={notificationsEnabled}
               onValueChange={(enabled) => {
                 if (!enabled) {
-                  setIntensity("QUIET");
+                  void setIntensity("QUIET");
                   return;
                 }
 
-                setIntensity(currentIntensity === "QUIET" ? "BALANCED" : currentIntensity);
+                void setIntensity(currentIntensity === "QUIET" ? "BALANCED" : currentIntensity);
               }}
             />
           </View>
@@ -101,7 +128,7 @@ export default function ProfileScreen() {
                 key={option}
                 label={notificationIntensityLabel(option)}
                 active={currentIntensity === option}
-                onPress={() => setIntensity(option)}
+                onPress={() => void setIntensity(option)}
               />
             ))}
           </View>
@@ -123,6 +150,16 @@ export default function ProfileScreen() {
             </GlassCard>
           ))}
         </View>
+
+        <GlassCard className="p-5">
+          <Text className="font-display text-xl text-cloud">Account</Text>
+          <Text className="mt-2 font-body text-sm text-white/60">
+            Sign out if you want to swap numbers or step out of this account cleanly.
+          </Text>
+          <View className="mt-4">
+            <PillButton label="Log out" variant="secondary" onPress={handleLogout} />
+          </View>
+        </GlassCard>
       </ScrollView>
     </GradientMesh>
   );

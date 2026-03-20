@@ -39,6 +39,10 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
     return `/thread/${data.threadId}`;
   }
 
+  if (data.screen === "chat" && typeof data.chatId === "string") {
+    return `/chat/${data.chatId}`;
+  }
+
   if (data.screen === "recap" && typeof data.hangoutId === "string") {
     return `/recap/${data.hangoutId}`;
   }
@@ -47,6 +51,18 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
 };
 
 export const registerForPushNotificationsAsync = async () => {
+  // Expo Go no longer supports remote push notification tokens.
+  // Keep the app usable there and only register push in dev/release builds.
+  const isExpoGo =
+    Boolean(Constants.expoGoConfig) ||
+    Constants.appOwnership === "expo" ||
+    (Constants.executionEnvironment === "storeClient" && Boolean(Constants.expoVersion));
+
+  if (isExpoGo) {
+    console.log("[push] Remote push notifications are unavailable in Expo Go. Use a development or production build.");
+    return null;
+  }
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 

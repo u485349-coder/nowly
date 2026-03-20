@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Text, TextInput, View } from "react-native";
 import {
   AvailabilityState,
   BudgetMood,
@@ -38,6 +38,7 @@ const radiusOptions = [3, 8, 15];
 const energyOptions: EnergyLevel[] = ["LOW", "MEDIUM", "HIGH"];
 const batteryOptions: SocialBattery[] = ["LOW_KEY", "OPEN", "SOCIAL"];
 const budgetOptions: BudgetMood[] = ["LOW_SPEND", "FLEXIBLE", "TREAT_MYSELF"];
+const durationOptions = [1, 2, 3, 6, 12, 24, 48];
 
 export const AvailabilityComposer = ({
   activeSignal,
@@ -52,9 +53,23 @@ export const AvailabilityComposer = ({
     budgetMood?: BudgetMood | null;
     socialBattery?: SocialBattery | null;
     hangoutIntent?: HangoutIntent | null;
+    label?: string | null;
     durationHours?: number;
   }) => void;
 }) => {
+  const estimateDuration = (signal: MobileAvailabilitySignal | null, fallback: number) => {
+    if (!signal) {
+      return fallback;
+    }
+
+    const diff = Math.max(
+      1,
+      Math.round((new Date(signal.expiresAt).getTime() - Date.now()) / (60 * 60 * 1000)),
+    );
+
+    return durationOptions.find((option) => option === diff) ?? diff;
+  };
+
   const initialState =
     stateOptions.find((item) => item.state === activeSignal?.state) ?? stateOptions[0];
   const [state, setState] = useState<AvailabilityState>(initialState.state);
@@ -72,17 +87,39 @@ export const AvailabilityComposer = ({
   const [budgetMood, setBudgetMood] = useState<BudgetMood | null>(
     activeSignal?.budgetMood ?? "LOW_SPEND",
   );
+  const [label, setLabel] = useState(activeSignal?.label ?? "");
+  const [durationHours, setDurationHours] = useState(
+    estimateDuration(activeSignal, initialState.duration),
+  );
 
-  const selectedState = stateOptions.find((item) => item.state === state) ?? stateOptions[0];
+  useEffect(() => {
+    const nextState =
+      stateOptions.find((item) => item.state === activeSignal?.state) ?? stateOptions[0];
+
+    setState(nextState.state);
+    setRadiusKm(activeSignal?.radiusKm ?? 8);
+    setVibe(activeSignal?.vibe ?? "COFFEE");
+    setHangoutIntent(activeSignal?.hangoutIntent ?? "PULL_UP");
+    setEnergyLevel(activeSignal?.energyLevel ?? "MEDIUM");
+    setSocialBattery(activeSignal?.socialBattery ?? "OPEN");
+    setBudgetMood(activeSignal?.budgetMood ?? "LOW_SPEND");
+    setLabel(activeSignal?.label ?? "");
+    setDurationHours(estimateDuration(activeSignal, nextState.duration));
+  }, [activeSignal]);
+
+  const selectedState = useMemo(
+    () => stateOptions.find((item) => item.state === state) ?? stateOptions[0],
+    [state],
+  );
 
   return (
     <GlassCard className="p-5">
       <View className="gap-4">
         <View>
-          <Text className="font-display text-xl text-cloud">Set your now mode</Text>
+          <Text className="font-display text-xl text-cloud">Now mode setup</Text>
           <Text className="mt-1 font-body text-sm text-white/60">
-            The goal is not planning better. It is making it obvious when a casual link can
-            happen.
+            Set the feel once, then come back only when your energy changes or you want a different
+            kind of link.
           </Text>
         </View>
 
@@ -95,6 +132,37 @@ export const AvailabilityComposer = ({
               onPress={() => setState(option.state)}
             />
           ))}
+        </View>
+
+        <View className="gap-2">
+          <Text className="font-display text-base text-cloud">Custom mode name</Text>
+          <Text className="font-body text-sm leading-6 text-white/60">
+            Keep the preset if you want, or name the mode your own way.
+          </Text>
+          <TextInput
+            value={label}
+            onChangeText={setLabel}
+            className="rounded-[22px] border border-white/12 bg-white/6 px-4 py-3 font-body text-cloud"
+            placeholder="After class coffee, Study break, Gym reset..."
+            placeholderTextColor="rgba(248,250,252,0.35)"
+          />
+        </View>
+
+        <View className="gap-2">
+          <Text className="font-display text-base text-cloud">Go live for</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {durationOptions.map((hours) => (
+              <SignalChip
+                key={hours}
+                label={`${hours}h`}
+                active={durationHours === hours}
+                onPress={() => setDurationHours(hours)}
+              />
+            ))}
+          </View>
+          <Text className="font-body text-sm text-aqua/80">
+            {selectedState.label} is just the preset mood. The timer is fully up to you.
+          </Text>
         </View>
 
         <View className="gap-2">
@@ -182,17 +250,18 @@ export const AvailabilityComposer = ({
         </View>
 
         <PillButton
-          label={`Go live for ${selectedState.duration}h`}
+          label={`Go live for ${durationHours}h`}
           onPress={() =>
             onSave({
               state,
+              label: label.trim() || null,
               radiusKm,
               vibe,
               energyLevel,
               budgetMood,
               socialBattery,
               hangoutIntent,
-              durationHours: selectedState.duration,
+              durationHours,
             })
           }
         />
