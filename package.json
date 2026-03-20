@@ -1,0 +1,28 @@
+{
+  "name": "nowly",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm --workspace @nowly/mobile run start",
+    "dev:server": "npm --workspace @nowly/server run dev",
+    "dev": "npm run dev:server",
+    "build:server": "npm --workspace @nowly/server run prisma:generate && npm --workspace @nowly/server run build",
+    "start:server": "npm --workspace @nowly/server run start",
+    "db:generate": "npm --workspace @nowly/server run prisma:generate",
+    "db:migrate": "npm --workspace @nowly/server run prisma:migrate",
+    "db:migrate:deploy": "npm --workspace @nowly/server run prisma:migrate:deploy",
+    "db:seed": "npm --workspace @nowly/server run prisma:seed"
+  },
+  "devDependencies": {
+    "expo-constants": "~17.1.8",
+    "react-native-screens": "~4.11.1"
+  },
+  "overrides": {
+    "expo-constants": "~17.1.8",
+    "react-native-screens": "~4.11.1"
+  }
+}

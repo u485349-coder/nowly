@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AvailabilityState {
+  FREE_NOW
+  FREE_LATER
+  BUSY
+  DOWN_THIS_WEEKEND
+}
+
+enum Vibe {
+  FOOD
+  GYM
+  CHILL
+  PARTY
+  COFFEE
+  OUTDOORS
+}
+
+enum EnergyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BudgetMood {
+  LOW_SPEND
+  FLEXIBLE
+  TREAT_MYSELF
+}
+
+enum SocialBattery {
+  LOW_KEY
+  OPEN
+  SOCIAL
+}
+
+enum HangoutIntent {
+  QUICK_BITE
+  COFFEE_RUN
+  WALK_NEARBY
+  STUDY_SPRINT
+  PULL_UP
+  WORKOUT
+  QUICK_CHILL
+}
+
+enum MicroCommitment {
+  DROP_IN
+  QUICK_WINDOW
+  OPEN_ENDED
+}
+
+enum MicroResponse {
+  PULLING_UP
+  TEN_MIN_ONLY
+  MAYBE_LATER
+  PASS
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum HangoutStatus {
+  PROPOSED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum ParticipantResponse {
+  PENDING
+  ACCEPTED
+  SUGGESTED_CHANGE
+  DECLINED
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+  ETA
+  LOCATION
+  POLL
+  REACTION
+}
+
+enum NotificationType {
+  OVERLAP_FOUND
+  PROPOSAL_RECEIVED
+  PROPOSAL_ACCEPTED
+  GROUP_UPDATE
+  ETA_UPDATE
+  RECAP_READY
+  REMINDER
+  INVITE_NUDGE
+  WEEKLY_SUMMARY
+}
+
+enum NotificationPriority {
+  HIGH
+  LOW
+}
+
+enum NotificationIntensity {
+  QUIET
+  BALANCED
+  LIVE
+}
+
+enum InviteChannel {
+  SMS
+  DISCORD
+  LINK
+}
+
+enum DiscordPresence {
+  ONLINE
+  IDLE
+  DND
+  OFFLINE
+  UNKNOWN
+}
+
+enum MatchStatus {
+  OPEN
+  DISMISSED
+  CONVERTED
+  EXPIRED
+}
+
+model User {
+  id                  String                    @id @default(cuid())
+  phone               String                    @unique
+  name                String?
+  photoUrl            String?
+  city                String?
+  communityTag        String?
+  lat                 Float?
+  lng                 Float?
+  responsivenessScore Float                     @default(0.55)
+  onboardingCompleted Boolean                   @default(false)
+  inviteCode          String                    @unique @default(cuid())
+  discordId           String?                   @unique
+  discordUsername     String?
+  discordAvatar       String?
+  discordPresence     DiscordPresence?
+  sharedServerCount   Int                       @default(0)
+  notificationIntensity NotificationIntensity   @default(BALANCED)
+  inactiveSince       DateTime?
+  referredById        String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  referredBy          User?                     @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals           User[]                    @relation("UserReferrals")
+  otpCodes            OtpCode[]
+  deviceTokens        DeviceToken[]
+  availabilitySignals AvailabilitySignal[]
+  friendshipsA        Friendship[]              @relation("FriendshipUserA")
+  friendshipsB        Friendship[]              @relation("FriendshipUserB")
+  hangoutsCreated     Hangout[]                 @relation("HangoutCreator")
+  hangoutParticipants HangoutParticipant[]
+  messages            Message[]
+  analyticsEvents     AnalyticsEvent[]
+  notificationLogs    NotificationLog[]
+  sentInvitations     Invitation[]              @relation("InvitationSender")
+  joinedInvitations   Invitation[]              @relation("InvitationJoinedUser")
+  overlapMatches      OverlapMatch[]            @relation("OverlapMatchUser")
+  matchedInOverlaps   OverlapMatch[]            @relation("OverlapMatchMatchedUser")
+  discordConnections  DiscordServerConnection[]
+  recapMemories       RecapMemory[]             @relation("RecapOwner")
+}
+
+model OtpCode {
+  id         String   @id @default(cuid())
+  phone      String
+  code       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  userId     String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([phone, expiresAt])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, active])
+}
+
+model AvailabilitySignal {
+  id            String            @id @default(cuid())
+  userId        String
+  state         AvailabilityState
+  radiusKm      Int               @default(8)
+  vibe          Vibe?
+  energyLevel   EnergyLevel?
+  budgetMood    BudgetMood?
+  socialBattery SocialBattery?
+  hangoutIntent HangoutIntent?
+  expiresAt     DateTime
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  user          User              @relation(fields: [userId], references: [id])
+  sourceMatches OverlapMatch[]    @relation("OverlapSignal")
+  targetMatches OverlapMatch[]    @relation("MatchedOverlapSignal")
+
+  @@index([userId, isActive, expiresAt])
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  userAId     String
+  userBId     String
+  status      FriendshipStatus @default(PENDING)
+  initiatedBy String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  userA       User             @relation("FriendshipUserA", fields: [userAId], references: [id])
+  userB       User             @relation("FriendshipUserB", fields: [userBId], references: [id])
+
+  @@unique([userAId, userBId])
+  @@index([userAId, status])
+  @@index([userBId, status])
+}
+
+model Hangout {
+  id           String               @id @default(cuid())
+  creatorId    String
+  status       HangoutStatus        @default(PROPOSED)
+  activity     String
+  microType    HangoutIntent?
+  commitmentLevel MicroCommitment   @default(DROP_IN)
+  locationName String
+  locationLat  Float?
+  locationLng  Float?
+  scheduledFor DateTime
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  creator      User                 @relation("HangoutCreator", fields: [creatorId], references: [id])
+  participants HangoutParticipant[]
+  thread       HangoutThread?
+  recapMemory  RecapMemory?
+
+  @@index([creatorId, status])
+  @@index([scheduledFor])
+}
+
+model HangoutThread {
+  id            String    @id @default(cuid())
+  hangoutId     String    @unique
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  hangout       Hangout   @relation(fields: [hangoutId], references: [id])
+  messages      Message[]
+}
+
+model HangoutParticipant {
+  hangoutId      String
+  userId         String
+  responseStatus ParticipantResponse @default(PENDING)
+  microResponse  MicroResponse?
+  respondedAt    DateTime?
+  etaMinutes     Int?
+  lastSharedLat  Float?
+  lastSharedLng  Float?
+  joinedAt       DateTime            @default(now())
+  hangout        Hangout             @relation(fields: [hangoutId], references: [id])
+  user           User                @relation(fields: [userId], references: [id])
+
+  @@id([hangoutId, userId])
+  @@index([userId, responseStatus])
+}
+
+model Message {
+  id        String       @id @default(cuid())
+  threadId  String
+  senderId  String
+  text      String
+  type      MessageType  @default(TEXT)
+  metadata  Json?
+  createdAt DateTime     @default(now())
+  thread    HangoutThread @relation(fields: [threadId], references: [id])
+  sender    User         @relation(fields: [senderId], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  event     String
+  payload   Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([event, createdAt])
+}
+
+model NotificationLog {
+  id        String               @id @default(cuid())
+  userId    String
+  type      NotificationType
+  priority  NotificationPriority
+  dedupeKey String
+  payload   Json?
+  sentAt    DateTime             @default(now())
+  user      User                 @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type, dedupeKey])
+  @@index([userId, sentAt])
+}
+
+model Invitation {
+  id            String        @id @default(cuid())
+  inviterId     String
+  joinedUserId  String?
+  inviteePhone  String?
+  channel       InviteChannel
+  deepLinkToken String        @unique @default(cuid())
+  context       Json?
+  createdAt     DateTime      @default(now())
+  redeemedAt    DateTime?
+  inviter       User          @relation("InvitationSender", fields: [inviterId], references: [id])
+  joinedUser    User?         @relation("InvitationJoinedUser", fields: [joinedUserId], references: [id])
+}
+
+model DiscordServerConnection {
+  id        String   @id @default(cuid())
+  userId    String
+  serverId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, serverId])
+  @@index([serverId])
+}
+
+model OverlapMatch {
+  id              String             @id @default(cuid())
+  userId          String
+  matchedUserId   String
+  signalId        String
+  matchedSignalId String
+  score           Float
+  reason          Json
+  status          MatchStatus        @default(OPEN)
+  notifiedAt      DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation("OverlapMatchUser", fields: [userId], references: [id])
+  matchedUser     User               @relation("OverlapMatchMatchedUser", fields: [matchedUserId], references: [id])
+  signal          AvailabilitySignal @relation("OverlapSignal", fields: [signalId], references: [id])
+  matchedSignal   AvailabilitySignal @relation("MatchedOverlapSignal", fields: [matchedSignalId], references: [id])
+
+  @@unique([userId, matchedUserId, signalId, matchedSignalId])
+  @@index([userId, status, expiresAt])
+}
+
+model RecapMemory {
+  id           String   @id @default(cuid())
+  hangoutId    String   @unique
+  ownerId      String
+  title        String
+  summary      String
+  photoDropUrl String?
+  streakCount  Int      @default(1)
+  sharePayload Json?
+  createdAt    DateTime @default(now())
+  hangout      Hangout  @relation(fields: [hangoutId], references: [id])
+  owner        User     @relation("RecapOwner", fields: [ownerId], references: [id])
+}
