@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nowly | Don't grow apart</title>
+    <meta
+      name="description"
+      content="Nowly is a spontaneous social coordination app that helps friends discover overlapping free time and turn it into real hangouts fast."
+    />
+    <meta name="theme-color" content="#0B1020" />
+    <style>
+      :root {
+        --bg-top: #111827;
+        --bg-mid: #0b1020;
+        --bg-bottom: #020617;
+        --card: rgba(17, 24, 39, 0.58);
+        --card-border: rgba(148, 163, 184, 0.12);
+        --text: #f8fafc;
+        --muted: rgba(226, 232, 240, 0.72);
+        --muted-strong: rgba(226, 232, 240, 0.9);
+        --violet: #a855f7;
+        --indigo: #6366f1;
+        --cyan: #22d3ee;
+        --aqua: #38bdf8;
+        --shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+        --radius-xl: 32px;
+        --radius-lg: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(168, 85, 247, 0.18), transparent 24%),
+          radial-gradient(circle at 68% 74%, rgba(34, 211, 238, 0.12), transparent 20%),
+          linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bottom) 100%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 88px;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 40px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-mark {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 28px rgba(2, 6, 23, 0.34);
+      }
+
+      .brand-copy strong {
+        display: block;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-copy span {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+
+      .repo-link {
+        padding: 12px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.55);
+        color: var(--muted-strong);
+        font-size: 0.92rem;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .panel {
+        position: relative;
+        overflow: hidden;
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--card-border);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.86));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 12% 8%, rgba(168, 85, 247, 0.16), transparent 22%),
+          radial-gradient(circle at 82% 84%, rgba(34, 211, 238, 0.12), transparent 24%);
+        pointer-events: none;
+      }
+
+      .hero-copy {
+        padding: 42px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, 0.14);
+        border: 1px solid rgba(99, 102, 241, 0.18);
+        color: rgba(224, 231, 255, 0.92);
+        font-size: 0.84rem;
+        letter-spacing: 0.02em;
+      }
+
+      .hero h1 {
+        margin: 18px 0 14px;
+        font-size: clamp(2.8rem, 6vw, 5.2rem);
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+      }
+
+      .hero h1 em {
+        font-style: normal;
+        background: linear-gradient(135deg, #f8fafc 10%, #c4b5fd 52%, #67e8f9 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 30rem;
+        font-size: 1.06rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 26px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .button-primary {
+        color: #020617;
+        background: linear-gradient(135deg, #f8fafc, #bae6fd);
+      }
+
+      .button-secondary {
+        color: var(--muted-strong);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.44);
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .stat {
+        padding: 14px 16px;
+        border-radius: 20px;
+        background: rgba(15, 23, 42, 0.44);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1.1rem;
+        letter-spacing: -0.04em;
+      }
+
+      .stat span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .hero-visual {
+        padding: 26px;
+        min-height: 640px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .phone {
+        position: relative;
+        width: min(100%, 420px);
+        aspect-ratio: 0.56;
+        border-radius: 38px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        background:
+          radial-gradient(circle at 16% 12%, rgba(168, 85, 247, 0.18), transparent 22%),
+          radial-gradient(circle at 76% 76%, rgba(34, 211, 238, 0.16), transparent 24%),
+          linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(2, 6, 23, 0.96));
+        box-shadow: 0 28px 80px rgba(2, 6, 23, 0.52);
+        overflow: hidden;
+      }
+
+      .notch {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 128px;
+        height: 26px;
+        border-radius: 999px;
+        background: rgba(2, 6, 23, 0.84);
+        border: 1px solid rgba(148, 163, 184, 0.08);
+      }
+
+      .screen {
+        position: absolute;
+        inset: 0;
+        padding: 34px 24px 24px;
+      }
+
+      .screen-card {
+        position: absolute;
+        border-radius: 28px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(15, 23, 42, 0.58);
+        backdrop-filter: blur(14px);
+      }
+
+      .screen-card.main {
+        inset: 112px 22px 170px;
+        padding: 22px;
+      }
+
+      .screen-card.notice {
+        right: 18px;
+        bottom: 28px;
+        width: 250px;
+        padding: 16px;
+      }
+
+      .screen-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        color: var(--muted-strong);
+        background: rgba(17, 24, 39, 0.54);
+      }
+
+      .screen-card h3 {
+        margin: 14px 0 8px;
+        font-size: 1.55rem;
+        line-height: 1.05;
+        letter-spacing: -0.05em;
+      }
+
+      .screen-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .bubble-row {
+        display: flex;
+        gap: 10px;
+        margin: 18px 0 22px;
+      }
+
+      .bubble {
+        flex: 1;
+        min-height: 88px;
+        padding: 14px;
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(17, 24, 39, 0.5);
+      }
+
+      .bubble strong {
+        display: block;
+        font-size: 0.94rem;
+      }
+
+      .bubble span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.4;
+      }
+
+      .notice-line {
+        font-size: 0.82rem;
+        color: rgba(186, 230, 253, 0.92);
+        margin-bottom: 8px;
+      }
+
+      .notice strong {
+        display: block;
+        font-size: 1rem;
+        line-height: 1.35;
+      }
+
+      .notice small {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .section {
+        margin-top: 28px;
+        padding: 28px;
+      }
+
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: clamp(1.9rem, 3vw, 3rem);
+        letter-spacing: -0.05em;
+      }
+
+      .section p.lead {
+        margin: 0;
+        max-width: 42rem;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .feature {
+        padding: 20px;
+        border-radius: var(--radius-lg);
+        background: rgba(15, 23, 42, 0.44);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .feature strong {
+        display: block;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .feature p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .footer {
+        margin-top: 28px;
+        padding: 22px 4px 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 960px) {
+        .hero {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-visual {
+          min-height: auto;
+        }
+
+        .grid.three,
+        .grid.two,
+        .hero-stats {
+          grid-template-columns: 1fr;
+        }
+
+        .footer,
+        .nav {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          width: min(100% - 24px, 1120px);
+          padding-top: 16px;
+        }
+
+        .hero-copy,
+        .section {
+          padding: 22px;
+        }
+
+        .hero h1 {
+          font-size: 2.7rem;
+        }
+
+        .screen-card.main {
+          inset: 96px 16px 164px;
+        }
+
+        .screen-card.notice {
+          left: 16px;
+          right: 16px;
+          width: auto;
+        }
+
+        .bubble-row {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="nav">
+        <a class="brand" href="https://github.com/u485349-coder/nowly">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="markGrad" x1="18" y1="14" x2="78" y2="86" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#A855F7"/>
+                  <stop offset="0.58" stop-color="#6366F1"/>
+                  <stop offset="1" stop-color="#22D3EE"/>
+                </linearGradient>
+                <linearGradient id="markOverlap" x1="42.4" y1="29.3" x2="55.9" y2="46.4" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#6366F1" stop-opacity="0.18"/>
+                  <stop offset="0.58" stop-color="#6366F1" stop-opacity="0.24"/>
+                  <stop offset="1" stop-color="#22D3EE" stop-opacity="0.4"/>
+                </linearGradient>
+                <linearGradient id="markMonogram" x1="36.4" y1="49.8" x2="59.8" y2="64.6" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#F8FAFC" stop-opacity="0.24"/>
+                  <stop offset="0.54" stop-color="#C4B5FD" stop-opacity="0.18"/>
+                  <stop offset="1" stop-color="#22D3EE" stop-opacity="0.28"/>
+                </linearGradient>
+                <clipPath id="markClip">
+                  <circle cx="40.3" cy="37.8" r="12.3"/>
+                </clipPath>
+              </defs>
+              <path d="M48 11.5C31.7 11.5 18.8 23.8 18.8 39.5C18.8 50.2 25.1 59.8 32.7 68.1C38.5 74.4 44 80.2 46.7 83.3C47.4 84.1 48.6 84.1 49.3 83.3C52 80.2 57.5 74.4 63.3 68.1C70.9 59.8 77.2 50.2 77.2 39.5C77.2 23.8 64.3 11.5 48 11.5Z" fill="url(#markGrad)"/>
+              <ellipse cx="34" cy="21.2" rx="10.8" ry="7.6" fill="#FFFFFF" fill-opacity="0.08"/>
+              <circle cx="40.3" cy="37.8" r="12.3" fill="#1D1142" fill-opacity="0.94"/>
+              <circle cx="55.7" cy="37.8" r="12.3" fill="#2B3170" fill-opacity="0.82"/>
+              <circle cx="55.7" cy="37.8" r="12.3" fill="url(#markOverlap)" clip-path="url(#markClip)"/>
+              <path d="M36.6 50.5V64.2L59.4 50.7V64.2" stroke="url(#markMonogram)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="48" cy="37.7" r="3.05" fill="#F8FAFC"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>Nowly</strong>
+            <span>Don't grow apart</span>
+          </span>
+        </a>
+        <a class="repo-link" href="https://github.com/u485349-coder/nowly">View GitHub Repo</a>
+      </nav>
+
+      <section class="hero">
+        <div class="panel hero-copy">
+          <div class="eyebrow">Live social radar for spontaneous hangouts</div>
+          <h1>Catch the moment your crew is <em>actually free.</em></h1>
+          <p>
+            Nowly helps friends spot overlapping free time, turn it into a real plan fast, and keep
+            the social rhythm alive without turning life into a calendar.
+          </p>
+          <div class="actions">
+            <a class="button button-primary" href="https://github.com/u485349-coder/nowly">Open the repo</a>
+            <a class="button button-secondary" href="https://railway.app/">Deploy the backend</a>
+          </div>
+          <div class="hero-stats">
+            <div class="stat">
+              <strong>Free now</strong>
+              <span>Lightweight signals instead of heavy planning.</span>
+            </div>
+            <div class="stat">
+              <strong>Overlap found</strong>
+              <span>Live matching between nearby friends.</span>
+            </div>
+            <div class="stat">
+              <strong>Pull up fast</strong>
+              <span>Low-pressure hangout prompts that convert.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel hero-visual">
+          <div class="phone" aria-hidden="true">
+            <div class="notch"></div>
+            <div class="screen">
+              <div class="screen-card main">
+                <span class="screen-pill">Best hangout window happening now</span>
+                <h3>3 friends are free near downtown.</h3>
+                <p>Send one low-pressure prompt and turn overlap into an actual hangout.</p>
+                <div class="bubble-row">
+                  <div class="bubble">
+                    <strong>Jordan</strong>
+                    <span>Free now • quick bite • 0.8 mi away</span>
+                  </div>
+                  <div class="bubble">
+                    <strong>Mina</strong>
+                    <span>Open later • chill • responsive tonight</span>
+                  </div>
+                </div>
+                <span class="screen-pill">Quick link • pull up for a bit • 10 min only</span>
+              </div>
+              <div class="screen-card notice">
+                <div class="notice-line">Overlap detected</div>
+                <strong>You and Jay are both free after class.</strong>
+                <small>Nowly keeps the moment alive before it fades into “we should hang soon.”</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Built for spontaneity, not scheduling theater.</h2>
+        <p class="lead">
+          The point of Nowly is simple: reduce the friction between “anyone free?” and actually linking up.
+          No bloated event flow. No planning burden. Just live availability, smart overlap, and fast social motion.
+        </p>
+        <div class="grid three">
+          <article class="feature">
+            <strong>Signal availability</strong>
+            <p>Free now, free later, busy, down this weekend. Add a vibe and radius, then let it expire on its own.</p>
+          </article>
+          <article class="feature">
+            <strong>Detect overlap</strong>
+            <p>Nowly watches for friend overlap using time, distance, responsiveness, and lightweight social context.</p>
+          </article>
+          <article class="feature">
+            <strong>Turn it into a hangout</strong>
+            <p>Send a quick proposal, start a group thread, share ETA, and keep the social loop moving.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Why it feels different</h2>
+        <p class="lead">
+          Nowly is designed to feel alive. It favors low input, notification-timed momentum, and real-world friend density
+          over heavy profiles or long planning rituals.
+        </p>
+        <div class="grid two">
+          <article class="feature">
+            <strong>Low-pressure by default</strong>
+            <p>Quick bite, coffee run, walking nearby, pull up for a bit. The product lowers the social burden instead of adding it.</p>
+          </article>
+          <article class="feature">
+            <strong>Network effects that matter</strong>
+            <p>Import your people, invite your crew, and make one campus or neighborhood feel dense before you scale wider.</p>
+          </article>
+          <article class="feature">
+            <strong>Social rhythm, not isolated events</strong>
+            <p>Nowly reinforces momentum with recaps, streaks, overlap nudges, and signs that your people are active right now.</p>
+          </article>
+          <article class="feature">
+            <strong>Real backend, real-time core</strong>
+            <p>Expo mobile app, Express API, Prisma/Postgres, Socket.io threads, Twilio-ready OTP, and Railway-friendly deployment.</p>
+          </article>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Nowly is a spontaneous social coordination app for real-life hangouts.</span>
+        <a href="https://github.com/u485349-coder/nowly">github.com/u485349-coder/nowly</a>
+      </footer>
+    </main>
+  </body>
+</html>
