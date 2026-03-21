@@ -1,8 +1,15 @@
 import Constants from "expo-constants";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-if (Platform.OS !== "web") {
+let notificationHandlerConfigured = false;
+
+const ensureNotificationHandlerConfigured = async () => {
+  if (Platform.OS === "web" || notificationHandlerConfigured) {
+    return null;
+  }
+
+  const Notifications = await import("expo-notifications");
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldPlaySound: true,
@@ -11,7 +18,10 @@ if (Platform.OS !== "web") {
       shouldShowList: true,
     }),
   });
-}
+
+  notificationHandlerConfigured = true;
+  return Notifications;
+};
 
 export const notificationPathFromData = (data?: Record<string, unknown>) => {
   if (!data?.screen) {
@@ -55,6 +65,12 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
 
 export const registerForPushNotificationsAsync = async () => {
   if (Platform.OS === "web") {
+    return null;
+  }
+
+  const Notifications = await ensureNotificationHandlerConfigured();
+
+  if (!Notifications) {
     return null;
   }
 

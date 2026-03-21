@@ -1,15 +1,10 @@
 import "../global.css";
 
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-google-fonts/space-grotesk";
-import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { Platform, Text, View } from "react-native";
 import { api } from "../lib/api";
-import {
-  notificationPathFromData,
-  registerForPushNotificationsAsync,
-} from "../lib/notifications";
 import { useAppStore } from "../store/useAppStore";
 
 export default function RootLayout() {
@@ -40,7 +35,10 @@ export default function RootLayout() {
 
     let cancelled = false;
 
-    registerForPushNotificationsAsync().then((pushToken) => {
+    void (async () => {
+      const { registerForPushNotificationsAsync } = await import("../lib/notifications");
+      const pushToken = await registerForPushNotificationsAsync();
+
       if (!pushToken || cancelled) {
         return;
       }
@@ -48,7 +46,7 @@ export default function RootLayout() {
       api.registerPushToken(token, pushToken).catch((error) => {
         console.log("[push:error]", error);
       });
-    });
+    })();
 
     return () => {
       cancelled = true;
@@ -60,20 +58,35 @@ export default function RootLayout() {
       return;
     }
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const path = notificationPathFromData(
-          response.notification.request.content.data as Record<string, unknown>,
-        );
+    let active = true;
+    let subscription: { remove: () => void } | null = null;
 
-        if (path) {
-          router.push(path as never);
-        }
-      },
-    );
+    void (async () => {
+      const [{ notificationPathFromData }, Notifications] = await Promise.all([
+        import("../lib/notifications"),
+        import("expo-notifications"),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      subscription = Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          const path = notificationPathFromData(
+            response.notification.request.content.data as Record<string, unknown>,
+          );
+
+          if (path) {
+            router.push(path as never);
+          }
+        },
+      );
+    })();
 
     return () => {
-      subscription.remove();
+      active = false;
+      subscription?.remove();
     };
   }, [router]);
 
