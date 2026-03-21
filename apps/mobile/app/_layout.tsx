@@ -4,7 +4,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-go
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, Text, View } from "react-native";
 import { api } from "../lib/api";
 import {
   notificationPathFromData,
@@ -78,7 +78,25 @@ export default function RootLayout() {
   }, [router]);
 
   if (!fontsLoaded) {
-    return null;
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#0B1020",
+        }}
+      >
+        <Text
+          style={{
+            color: "#F8FAFC",
+            fontSize: 16,
+          }}
+        >
+          Loading Nowly...
+        </Text>
+      </View>
+    );
   }
 
   return (

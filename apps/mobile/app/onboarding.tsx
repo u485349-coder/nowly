@@ -5,8 +5,6 @@ import { GlassCard } from "../components/ui/GlassCard";
 import { PillButton } from "../components/ui/PillButton";
 import { SignalChip } from "../components/ui/SignalChip";
 import { NowlyMark } from "../components/branding/NowlyMark";
-import * as Contacts from "expo-contacts";
-import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "../lib/api";
@@ -67,6 +65,7 @@ export default function OnboardingScreen() {
       return;
     }
 
+    const Contacts = await import("expo-contacts");
     const permission = await Contacts.requestPermissionsAsync();
     if (permission.status !== "granted") {
       return;
@@ -146,6 +145,7 @@ export default function OnboardingScreen() {
   };
 
   const handlePickPhoto = async () => {
+    const ImagePicker = await import("expo-image-picker");
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
