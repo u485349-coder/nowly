@@ -14,6 +14,7 @@ export default function RecapScreen() {
   const hangouts = useAppStore((state) => state.hangouts);
   const recaps = useAppStore((state) => state.recaps);
   const addRecap = useAppStore((state) => state.addRecap);
+  const setHangoutStatus = useAppStore((state) => state.setHangoutStatus);
 
   const hangout = hangouts.find((item) => item.id === hangoutId);
   const recap = recaps.find((item) => item.hangoutId === hangoutId);
@@ -21,6 +22,7 @@ export default function RecapScreen() {
   const handleConfirm = async () => {
     const created = await api.createRecap(token, hangoutId);
     addRecap(created);
+    setHangoutStatus(hangoutId, "COMPLETED");
   };
 
   return (
@@ -57,7 +59,10 @@ export default function RecapScreen() {
             The recap becomes social proof, a memory card, and a retention nudge all at once.
           </Text>
           <View className="mt-5 flex-row gap-3">
-            <PillButton label="Yes, we hung" onPress={handleConfirm} />
+            <PillButton
+              label={recap ? "Refresh recap" : "Yes, we hung"}
+              onPress={handleConfirm}
+            />
             <PillButton
               label="Share recap"
               variant="secondary"

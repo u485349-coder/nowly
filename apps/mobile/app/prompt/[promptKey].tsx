@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
@@ -26,6 +26,9 @@ export default function PromptPickerScreen() {
   const friends = useAppStore((state) => state.friends);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const prompt = findPromptAction(promptKey);
+  const [customLabel, setCustomLabel] = useState(prompt?.label ?? "");
+  const [customDetail, setCustomDetail] = useState(prompt?.detail ?? "");
+  const [customActivity, setCustomActivity] = useState(prompt?.activity ?? "");
 
   const recipients = useMemo<PromptRecipient[]>(() => {
     const seen = new Set<string>();
@@ -84,6 +87,12 @@ export default function PromptPickerScreen() {
     }
   }, [recipients, selectedRecipientId]);
 
+  useEffect(() => {
+    setCustomLabel(prompt?.label ?? "");
+    setCustomDetail(prompt?.detail ?? "");
+    setCustomActivity(prompt?.activity ?? "");
+  }, [prompt?.activity, prompt?.detail, prompt?.label]);
+
   const selectedRecipient = recipients.find((recipient) => recipient.id === selectedRecipientId) ?? null;
 
   const handleSendPrompt = async () => {
@@ -91,9 +100,11 @@ export default function PromptPickerScreen() {
       return;
     }
 
+    const nextActivity = customActivity.trim() || prompt.activity;
+
     try {
       const hangout = await api.createHangout(token, {
-        activity: prompt.activity,
+        activity: nextActivity,
         microType: prompt.microType,
         commitmentLevel: prompt.commitmentLevel,
         locationName: user?.communityTag || user?.city || "nearby",
@@ -159,11 +170,52 @@ export default function PromptPickerScreen() {
         <GlassCard className="p-5">
           <View className="gap-3">
             <View className="self-start rounded-full border border-white/10 bg-white/6 px-4 py-2.5">
-              <Text className="font-body text-xs text-cloud">{prompt.label}</Text>
+              <Text className="font-body text-xs text-cloud">
+                {customLabel.trim() || prompt.label}
+              </Text>
             </View>
-            <Text className="font-body text-base leading-7 text-cloud">{prompt.detail}</Text>
+            <Text className="font-body text-base leading-7 text-cloud">
+              {customDetail.trim() || prompt.detail}
+            </Text>
             <Text className="font-body text-sm leading-6 text-white/60">
               This will open a real proposal thread, not just send a vague ping.
+            </Text>
+          </View>
+        </GlassCard>
+
+        <GlassCard className="p-5">
+          <View className="gap-3">
+            <Text className="font-display text-xl text-cloud">Make it yours</Text>
+            <Text className="font-body text-sm leading-6 text-white/60">
+              Keep the preset if it already works, or tweak the wording before you send it.
+            </Text>
+
+            <TextInput
+              value={customLabel}
+              onChangeText={setCustomLabel}
+              placeholder={prompt.label}
+              placeholderTextColor="rgba(248,250,252,0.4)"
+              className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+            />
+
+            <TextInput
+              value={customDetail}
+              onChangeText={setCustomDetail}
+              placeholder={prompt.detail}
+              placeholderTextColor="rgba(248,250,252,0.4)"
+              className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+            />
+
+            <TextInput
+              value={customActivity}
+              onChangeText={setCustomActivity}
+              placeholder={prompt.activity}
+              placeholderTextColor="rgba(248,250,252,0.4)"
+              className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+            />
+
+            <Text className="font-body text-sm leading-6 text-aqua/80">
+              The final plan line becomes: {customActivity.trim() || prompt.activity}
             </Text>
           </View>
         </GlassCard>

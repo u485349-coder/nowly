@@ -1,4 +1,5 @@
 import { Share, ScrollView, Text, View } from "react-native";
+import { useEffect } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -40,12 +41,21 @@ export default function ProposalScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const hangouts = useAppStore((state) => state.hangouts);
+  const recaps = useAppStore((state) => state.recaps);
   const updateHangoutResponse = useAppStore((state) => state.updateHangoutResponse);
 
   const hangout = hangouts.find((item) => item.id === hangoutId);
+  const recap = recaps.find((item) => item.hangoutId === hangoutId);
+  const isCompleted = hangout?.status === "COMPLETED";
+
+  useEffect(() => {
+    if (hangout && isCompleted) {
+      router.replace(`/recap/${hangout.id}`);
+    }
+  }, [hangout, isCompleted]);
 
   const handleRespond = async (action: (typeof responseActions)[number]) => {
-    if (!hangout || !user) {
+    if (!hangout || !user || isCompleted) {
       return;
     }
 
@@ -66,6 +76,16 @@ export default function ProposalScreen() {
     );
   }
 
+  if (isCompleted) {
+    return (
+      <GradientMesh>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="font-body text-base text-white/60">Opening recap...</Text>
+        </View>
+      </GradientMesh>
+    );
+  }
+
   return (
     <GradientMesh>
       <ScrollView
@@ -79,12 +99,21 @@ export default function ProposalScreen() {
         showsVerticalScrollIndicator={false}
       >
         <GlassCard className="p-6">
-          <Text className="font-display text-[34px] leading-[38px] text-cloud">
-            {hangout.activity}
-          </Text>
-          <Text className="mt-3 font-body text-base leading-6 text-white/60">
-            {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
-          </Text>
+          <View className="flex-row items-start justify-between gap-4">
+            <View className="max-w-[76%]">
+              <Text className="font-display text-[34px] leading-[38px] text-cloud">
+                {hangout.activity}
+              </Text>
+              <Text className="mt-3 font-body text-base leading-6 text-white/60">
+                {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
+              </Text>
+            </View>
+            <View className="rounded-full bg-white/10 px-3 py-2">
+              <Text className="font-body text-xs uppercase tracking-[1px] text-aqua">
+                {hangout.status}
+              </Text>
+            </View>
+          </View>
 
           <View className="mt-4 flex-row flex-wrap gap-2">
             <View className="rounded-full bg-aqua/20 px-3 py-2">
@@ -100,7 +129,8 @@ export default function ProposalScreen() {
           </View>
 
           <Text className="mt-4 font-body text-sm leading-6 text-aqua/80">
-            Keep it light. This is meant to feel easy to join, easy to exit, and fast to turn into a real link.
+            Keep it light. This is meant to feel easy to join, easy to exit, and fast to turn
+            into a real link.
           </Text>
         </GlassCard>
 

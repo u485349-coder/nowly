@@ -77,6 +77,7 @@ type AppState = {
   updateUser: (payload: Partial<AppUser>) => void;
   upsertHangout: (hangout: AppHangout) => void;
   setThreadMessages: (threadId: string, messages: ThreadMessage[]) => void;
+  clearThreadMessages: (threadId: string) => void;
   appendMessage: (threadId: string, message: ThreadMessage) => void;
   setDirectChats: (chats: DirectChat[]) => void;
   upsertDirectChat: (chat: DirectChat) => void;
@@ -88,6 +89,7 @@ type AppState = {
     responseStatus: ParticipantResponse,
     microResponse?: MicroResponse | null,
   ) => void;
+  setHangoutStatus: (hangoutId: string, status: AppHangout["status"]) => void;
   addRecap: (recap: RecapCard) => void;
   moveSuggestionToFriends: (friend: AppFriend) => void;
   clearSession: () => void;
@@ -133,16 +135,31 @@ export const useAppStore = create<AppState>()(
           notificationsEnabled: enabled,
         })),
       setDashboard: (payload) =>
-        set(() => ({
-          friends: payload.friends,
-          matches: payload.matches,
-          hangouts: payload.hangouts,
-          recaps: payload.recaps,
-          activeSignal: payload.activeSignal,
-          recurringWindows: payload.recurringWindows,
-          scheduledOverlaps: payload.scheduledOverlaps,
-          radar: payload.radar,
-        })),
+        set((state) => {
+          const completedThreadIds = new Set(
+            payload.hangouts
+              .filter((hangout) => hangout.status === "COMPLETED")
+              .map((hangout) => hangout.threadId),
+          );
+
+          const nextThreadMessages = Object.fromEntries(
+            Object.entries(state.threadMessages).filter(
+              ([threadId]) => !completedThreadIds.has(threadId),
+            ),
+          ) as Record<string, ThreadMessage[]>;
+
+          return {
+            friends: payload.friends,
+            matches: payload.matches,
+            hangouts: payload.hangouts,
+            recaps: payload.recaps,
+            activeSignal: payload.activeSignal,
+            recurringWindows: payload.recurringWindows,
+            scheduledOverlaps: payload.scheduledOverlaps,
+            radar: payload.radar,
+            threadMessages: nextThreadMessages,
+          };
+        }),
       setSuggestions: (friends) =>
         set(() => ({
           suggestions: friends,
@@ -195,6 +212,15 @@ export const useAppStore = create<AppState>()(
             [threadId]: messages,
           },
         })),
+      clearThreadMessages: (threadId) =>
+        set((state) => {
+          const nextMessages = { ...state.threadMessages };
+          delete nextMessages[threadId];
+
+          return {
+            threadMessages: nextMessages,
+          };
+        }),
       appendMessage: (threadId, message) =>
         set((state) => ({
           threadMessages: {
@@ -247,6 +273,35 @@ export const useAppStore = create<AppState>()(
               : hangout,
           ),
         })),
+      setHangoutStatus: (hangoutId, status) =>
+        set((state) => {
+          const updatedHangouts = state.hangouts.map((hangout) =>
+            hangout.id === hangoutId
+              ? {
+                  ...hangout,
+                  status,
+                }
+              : hangout,
+          );
+
+          if (status !== "COMPLETED") {
+            return {
+              hangouts: updatedHangouts,
+            };
+          }
+
+          const completedHangout = updatedHangouts.find((hangout) => hangout.id === hangoutId);
+          const nextThreadMessages = { ...state.threadMessages };
+
+          if (completedHangout?.threadId) {
+            delete nextThreadMessages[completedHangout.threadId];
+          }
+
+          return {
+            hangouts: updatedHangouts,
+            threadMessages: nextThreadMessages,
+          };
+        }),
       addRecap: (recap) =>
         set((state) => ({
           recaps: [recap, ...state.recaps.filter((item) => item.id !== recap.id)],

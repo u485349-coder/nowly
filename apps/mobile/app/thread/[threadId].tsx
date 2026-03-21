@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
@@ -41,14 +41,29 @@ export default function ThreadScreen() {
 
   const [text, setText] = useState("");
   const hangout = hangouts.find((item) => item.threadId === threadId);
+  const isCompleted = hangout?.status === "COMPLETED";
 
   useEffect(() => {
+    if (hangout?.id && isCompleted) {
+      router.replace(`/recap/${hangout.id}`);
+    }
+  }, [hangout?.id, isCompleted]);
+
+  useEffect(() => {
+    if (isCompleted) {
+      return;
+    }
+
     api.fetchThreadMessages(token, threadId).then((messages) => {
       setThreadMessages(threadId, messages);
     });
-  }, [setThreadMessages, threadId, token]);
+  }, [isCompleted, setThreadMessages, threadId, token]);
 
   useEffect(() => {
+    if (isCompleted) {
+      return;
+    }
+
     const socket = getSocket(token);
 
     if (!socket) {
@@ -80,7 +95,7 @@ export default function ThreadScreen() {
       socket.off("thread:poll", handleIncoming);
       disconnectSocket();
     };
-  }, [appendMessage, threadId, token]);
+  }, [appendMessage, isCompleted, threadId, token]);
 
   const quickReactions = useMemo(() => ["Fire", "Ramen", "Run", "Coffee"], []);
 
@@ -89,7 +104,7 @@ export default function ThreadScreen() {
   };
 
   const handleSend = () => {
-    if (!text.trim() || !user) {
+    if (!text.trim() || !user || isCompleted) {
       return;
     }
 
@@ -108,12 +123,12 @@ export default function ThreadScreen() {
       });
     }
 
-    track(token, "message_sent", { threadId });
+    void track(token, "message_sent", { threadId });
     setText("");
   };
 
   const handleReaction = (emoji: string) => {
-    if (!user) {
+    if (!user || isCompleted) {
       return;
     }
 
@@ -134,7 +149,7 @@ export default function ThreadScreen() {
   };
 
   const handleEta = () => {
-    if (!hangout) {
+    if (!hangout || isCompleted) {
       return;
     }
 
@@ -157,11 +172,23 @@ export default function ThreadScreen() {
     });
   };
 
+  if (isCompleted && hangout?.id) {
+    return (
+      <GradientMesh>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="font-body text-base text-white/60">Opening recap...</Text>
+        </View>
+      </GradientMesh>
+    );
+  }
+
   return (
     <GradientMesh>
       <View className="flex-1 px-5 pb-8 pt-16">
         <GlassCard className="mb-4 p-5">
-          <Text className="font-display text-2xl text-cloud">{hangout?.activity ?? "Crew thread"}</Text>
+          <Text className="font-display text-2xl text-cloud">
+            {hangout?.activity ?? "Crew thread"}
+          </Text>
           <Text className="mt-1 font-body text-sm text-white/60">
             Quick chat, polls, ETA, and live location belong here.
           </Text>

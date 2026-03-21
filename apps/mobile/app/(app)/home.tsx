@@ -22,6 +22,7 @@ export default function HomeScreen() {
   const user = useAppStore((state) => state.user);
   const matches = useAppStore((state) => state.matches);
   const hangouts = useAppStore((state) => state.hangouts);
+  const recaps = useAppStore((state) => state.recaps);
   const activeSignal = useAppStore((state) => state.activeSignal);
   const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const radar = useAppStore((state) => state.radar);
@@ -57,6 +58,8 @@ export default function HomeScreen() {
   }, [bootstrapDemo, setDashboard, token, user]);
 
   const topMatches = matches.slice(0, 3);
+  const activeHangouts = hangouts.filter((hangout) => hangout.status !== "COMPLETED");
+  const completedHangouts = hangouts.filter((hangout) => hangout.status === "COMPLETED");
   const nearbyLabel = user?.communityTag || user?.city || "your area";
   const availabilityHeadline = topMatches.length
     ? `${topMatches.length} ${topMatches.length === 1 ? "friend is" : "friends are"} free near ${nearbyLabel}.`
@@ -190,7 +193,7 @@ export default function HomeScreen() {
                   >
                     <Text className="font-display text-lg text-cloud">{match.matchedUser.name}</Text>
                     <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                      {availabilityLabel(match.matchedSignal.state).toLowerCase()} ·{" "}
+                      {availabilityLabel(match.matchedSignal.state).toLowerCase()} -{" "}
                       {match.reason.travelMinutes ?? 15} min away
                     </Text>
                     <Text className="mt-1 font-body text-sm leading-6 text-aqua/82">
@@ -278,29 +281,86 @@ export default function HomeScreen() {
 
         <View className="gap-3">
           <Text className="font-display text-2xl text-cloud">Already moving</Text>
-          {hangouts.map((hangout) => (
-            <Pressable key={hangout.id} onPress={() => router.push(`/proposal/${hangout.id}`)}>
-              <GlassCard className="p-5">
-                <View className="flex-row items-start justify-between">
-                  <View className="max-w-[72%]">
-                    <Text className="font-display text-xl text-cloud">{hangout.activity}</Text>
-                    <Text className="mt-1 font-body text-sm text-white/60">
-                      {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
-                    </Text>
-                    <Text className="mt-2 font-body text-sm text-aqua/80">
-                      {hangout.microType ? hangoutIntentLabel(hangout.microType) : "quick link"} ·{" "}
-                      {microCommitmentLabel(hangout.commitmentLevel)}
-                    </Text>
+          {activeHangouts.length ? (
+            activeHangouts.map((hangout) => (
+              <Pressable key={hangout.id} onPress={() => router.push(`/proposal/${hangout.id}`)}>
+                <GlassCard className="p-5">
+                  <View className="flex-row items-start justify-between">
+                    <View className="max-w-[72%]">
+                      <Text className="font-display text-xl text-cloud">{hangout.activity}</Text>
+                      <Text className="mt-1 font-body text-sm text-white/60">
+                        {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
+                      </Text>
+                      <Text className="mt-2 font-body text-sm text-aqua/80">
+                        {hangout.microType ? hangoutIntentLabel(hangout.microType) : "quick link"} -{" "}
+                        {microCommitmentLabel(hangout.commitmentLevel)}
+                      </Text>
+                    </View>
+                    <View className="rounded-full bg-white/10 px-3 py-2">
+                      <Text className="font-body text-xs uppercase tracking-[1px] text-aqua">
+                        {hangout.status}
+                      </Text>
+                    </View>
                   </View>
-                  <View className="rounded-full bg-white/10 px-3 py-2">
-                    <Text className="font-body text-xs uppercase tracking-[1px] text-aqua">
-                      {hangout.status}
+                </GlassCard>
+              </Pressable>
+            ))
+          ) : (
+            <GlassCard className="p-5">
+              <Text className="font-display text-xl text-cloud">Nothing active right now</Text>
+              <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                Once a plan is live or confirmed, it shows up here. Completed hangs move into past
+                hangs below.
+              </Text>
+            </GlassCard>
+          )}
+        </View>
+
+        <View className="gap-3">
+          <Text className="font-display text-2xl text-cloud">Past hangs</Text>
+          {completedHangouts.length ? (
+            completedHangouts.map((hangout) => {
+              const recap = recaps.find((item) => item.hangoutId === hangout.id);
+
+              return (
+                <GlassCard key={hangout.id} className="p-5">
+                  <View className="gap-3">
+                    <View className="flex-row items-start justify-between gap-4">
+                      <View className="max-w-[72%]">
+                        <Text className="font-display text-xl text-cloud">{hangout.activity}</Text>
+                        <Text className="mt-1 font-body text-sm text-white/60">
+                          {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
+                        </Text>
+                      </View>
+                      <View className="rounded-full bg-white/10 px-3 py-2">
+                        <Text className="font-body text-xs uppercase tracking-[1px] text-cloud/72">
+                          Completed
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="font-body text-sm leading-6 text-white/60">
+                      {recap?.summary ??
+                        "This hang is done. It drops out of the live flow and lives here as a recap instead."}
                     </Text>
+                    <View className="flex-row gap-3">
+                      <PillButton
+                        label={recap ? "Open recap" : "Add recap"}
+                        variant="secondary"
+                        onPress={() => router.push(`/recap/${hangout.id}`)}
+                      />
+                    </View>
                   </View>
-                </View>
-              </GlassCard>
-            </Pressable>
-          ))}
+                </GlassCard>
+              );
+            })
+          ) : (
+            <GlassCard className="p-5">
+              <Text className="font-display text-xl text-cloud">No past hangs yet</Text>
+              <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                Completed hangs and their recaps will live here once you start confirming them.
+              </Text>
+            </GlassCard>
+          )}
         </View>
       </ScrollView>
     </GradientMesh>
