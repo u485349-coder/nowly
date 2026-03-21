@@ -7,6 +7,9 @@ export const availabilityStates = [
 
 export type AvailabilityState = (typeof availabilityStates)[number];
 
+export const availabilityRecurrences = ["WEEKLY", "MONTHLY"] as const;
+export type AvailabilityRecurrence = (typeof availabilityRecurrences)[number];
+
 export const vibeOptions = [
   "FOOD",
   "GYM",
@@ -102,6 +105,7 @@ export type MobileUser = {
   communityTag?: string | null;
   photoUrl?: string | null;
   phone: string;
+  inviteCode?: string;
   responsivenessScore: number;
   discordUsername?: string | null;
   sharedServerCount?: number;
@@ -111,6 +115,7 @@ export type MobileUser = {
 export type MobileAvailabilitySignal = {
   id: string;
   state: AvailabilityState;
+  label?: string | null;
   radiusKm: number;
   vibe?: Vibe | null;
   energyLevel?: EnergyLevel | null;
@@ -119,6 +124,55 @@ export type MobileAvailabilitySignal = {
   hangoutIntent?: HangoutIntent | null;
   expiresAt: string;
   createdAt: string;
+};
+
+export type MobileRecurringAvailabilityWindow = {
+  id: string;
+  recurrence: AvailabilityRecurrence;
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  startMinute: number;
+  endMinute: number;
+  utcOffsetMinutes: number;
+  label?: string | null;
+  vibe?: Vibe | null;
+  hangoutIntent?: HangoutIntent | null;
+  createdAt: string;
+};
+
+export type MobileScheduledOverlap = {
+  id: string;
+  score: number;
+  startsAt: string;
+  endsAt: string;
+  overlapMinutes: number;
+  matchedUser: MobileUser;
+  sourceWindow: MobileRecurringAvailabilityWindow;
+  matchedWindow: MobileRecurringAvailabilityWindow;
+  label: string;
+  summary: string;
+  sharedVibe?: Vibe | null;
+  sharedIntent?: HangoutIntent | null;
+};
+
+export type MobileBookableSlot = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  label: string;
+  summary: string;
+  sourceLabel?: string | null;
+  vibe?: Vibe | null;
+  hangoutIntent?: HangoutIntent | null;
+  mutualFit: boolean;
+  overlapMinutes?: number | null;
+  score?: number | null;
+};
+
+export type MobileBookingProfile = {
+  host: MobileUser;
+  slots: MobileBookableSlot[];
+  viewerHasRecurringSchedule: boolean;
 };
 
 export type MobileMatch = {
@@ -191,6 +245,7 @@ export type AnalyticsEventName =
   | "contact_invite_sent"
   | "friend_joined"
   | "availability_set"
+  | "availability_schedule_saved"
   | "overlap_found"
   | "proposal_sent"
   | "proposal_accepted"

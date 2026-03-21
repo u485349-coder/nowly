@@ -15,6 +15,11 @@ type ThreadMessagePayload = {
   text: string;
 };
 
+type DirectChatMessagePayload = {
+  chatId: string;
+  text: string;
+};
+
 type EtaPayload = {
   hangoutId: string;
   etaMinutes: number;
@@ -66,6 +71,19 @@ const canAccessThread = async (threadId: string, userId: string) =>
     select: { id: true }
   });
 
+const canAccessDirectChat = async (chatId: string, userId: string) =>
+  prisma.directThread.findFirst({
+    where: {
+      id: chatId,
+      participants: {
+        some: {
+          userId,
+        },
+      },
+    },
+    select: { id: true },
+  });
+
 export const createSocketServer = (server: HttpServer) => {
   const io = new Server(server, {
     cors: {
@@ -100,6 +118,16 @@ export const createSocketServer = (server: HttpServer) => {
       }
 
       socket.join(threadId);
+    });
+
+    socket.on("chat:join", async ({ chatId }: { chatId: string }) => {
+      const chat = await canAccessDirectChat(chatId, socket.data.userId);
+
+      if (!chat) {
+        return;
+      }
+
+      socket.join(chatId);
     });
 
     socket.on("thread:message", async (payload: ThreadMessagePayload) => {
@@ -156,6 +184,61 @@ export const createSocketServer = (server: HttpServer) => {
             )
         );
       }
+    });
+
+    socket.on("chat:message", async (payload: DirectChatMessagePayload) => {
+      const chatAccess = await canAccessDirectChat(payload.chatId, socket.data.userId);
+      if (!chatAccess) {
+        return;
+      }
+
+      const message = await prisma.directMessage.create({
+        data: {
+          threadId: payload.chatId,
+          senderId: socket.data.userId,
+          text: payload.text,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              photoUrl: true,
+            },
+          },
+        },
+      });
+
+      await prisma.directThread.update({
+        where: { id: payload.chatId },
+        data: { lastMessageAt: new Date() },
+      });
+
+      io.to(payload.chatId).emit("chat:message", message);
+
+      const recipients = await prisma.directThreadParticipant.findMany({
+        where: {
+          threadId: payload.chatId,
+          userId: { not: socket.data.userId },
+        },
+        select: { userId: true },
+      });
+
+      await Promise.all(
+        recipients.map((recipient) =>
+          sendPushToUser({
+            userId: recipient.userId,
+            type: NotificationType.GROUP_UPDATE,
+            dedupeKey: `chat:${payload.chatId}:message:${message.id}`,
+            title: message.sender.name ?? "New message",
+            body: payload.text,
+            data: {
+              screen: "chat",
+              chatId: payload.chatId,
+            },
+          }),
+        ),
+      );
     });
 
     socket.on("thread:reaction", async (payload: ReactionPayload) => {

@@ -120,10 +120,11 @@ friendsRouter.get(
     const suggestions = await prisma.user.findMany({
       where: {
         id: { notIn: [...blockedIds] },
-        sharedServerCount: { gt: 0 }
+        onboardingCompleted: true,
+        name: { not: null },
       },
-      take: 10,
-      orderBy: [{ sharedServerCount: "desc" }, { responsivenessScore: "desc" }],
+      take: 30,
+      orderBy: [{ responsivenessScore: "desc" }, { sharedServerCount: "desc" }],
       select: {
         id: true,
         name: true,

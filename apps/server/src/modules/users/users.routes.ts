@@ -11,7 +11,17 @@ const onboardingSchema = z.object({
   name: z.string().min(2),
   city: z.string().min(2),
   communityTag: z.string().min(2).max(40).optional().nullable(),
-  photoUrl: z.string().url().optional().nullable(),
+  photoUrl: z
+    .string()
+    .max(5_000_000)
+    .refine(
+      (value) =>
+        /^https?:\/\//i.test(value) ||
+        /^data:image\/(?:png|jpe?g|webp|heic|heif);base64,/i.test(value),
+      "Photo must be a remote URL or image data URI",
+    )
+    .optional()
+    .nullable(),
   lat: z.number().optional().nullable(),
   lng: z.number().optional().nullable(),
   referralToken: z.string().optional()

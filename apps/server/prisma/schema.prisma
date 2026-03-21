@@ -14,6 +14,11 @@ enum AvailabilityState {
   DOWN_THIS_WEEKEND
 }
 
+enum AvailabilityRecurrence {
+  WEEKLY
+  MONTHLY
+}
+
 enum Vibe {
   FOOD
   GYM
@@ -171,11 +176,15 @@ model User {
   deviceTokens        DeviceToken[]
   pushReceipts        PushReceipt[]
   availabilitySignals AvailabilitySignal[]
+  recurringWindows    RecurringAvailabilityWindow[]
   friendshipsA        Friendship[]              @relation("FriendshipUserA")
   friendshipsB        Friendship[]              @relation("FriendshipUserB")
   hangoutsCreated     Hangout[]                 @relation("HangoutCreator")
   hangoutParticipants HangoutParticipant[]
   messages            Message[]
+  directThreadMemberships DirectThreadParticipant[]
+  directMessagesSent  DirectMessage[]           @relation("DirectMessageSender")
+  createdDirectThreads DirectThread[]           @relation("DirectThreadCreator")
   analyticsEvents     AnalyticsEvent[]
   notificationLogs    NotificationLog[]
   sentInvitations     Invitation[]              @relation("InvitationSender")
@@ -237,6 +246,7 @@ model AvailabilitySignal {
   id            String            @id @default(cuid())
   userId        String
   state         AvailabilityState
+  label         String?
   radiusKm      Int               @default(8)
   vibe          Vibe?
   energyLevel   EnergyLevel?
@@ -252,6 +262,27 @@ model AvailabilitySignal {
   targetMatches OverlapMatch[]    @relation("MatchedOverlapSignal")
 
   @@index([userId, isActive, expiresAt])
+}
+
+model RecurringAvailabilityWindow {
+  id               String                 @id @default(cuid())
+  userId           String
+  recurrence       AvailabilityRecurrence
+  dayOfWeek        Int?
+  dayOfMonth       Int?
+  startMinute      Int
+  endMinute        Int
+  utcOffsetMinutes Int                    @default(0)
+  label            String?
+  vibe             Vibe?
+  hangoutIntent    HangoutIntent?
+  isActive         Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  user             User                   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, recurrence, dayOfWeek, dayOfMonth, startMinute, endMinute])
+  @@index([userId, isActive, recurrence])
 }
 
 model Friendship {
@@ -302,6 +333,32 @@ model HangoutThread {
   messages      Message[]
 }
 
+model DirectThread {
+  id             String                    @id @default(cuid())
+  participantKey String?                   @unique
+  title          String?
+  creatorId      String?
+  lastMessageAt  DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  creator        User?                     @relation("DirectThreadCreator", fields: [creatorId], references: [id])
+  participants   DirectThreadParticipant[]
+  messages       DirectMessage[]
+
+  @@index([creatorId, createdAt])
+}
+
+model DirectThreadParticipant {
+  threadId  String
+  userId    String
+  joinedAt  DateTime      @default(now())
+  thread    DirectThread  @relation(fields: [threadId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@id([threadId, userId])
+  @@index([userId, joinedAt])
+}
+
 model HangoutParticipant {
   hangoutId      String
   userId         String
@@ -329,6 +386,20 @@ model Message {
   createdAt DateTime     @default(now())
   thread    HangoutThread @relation(fields: [threadId], references: [id])
   sender    User         @relation(fields: [senderId], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
+model DirectMessage {
+  id        String       @id @default(cuid())
+  threadId  String
+  senderId  String
+  text      String
+  type      MessageType  @default(TEXT)
+  metadata  Json?
+  createdAt DateTime     @default(now())
+  thread    DirectThread @relation(fields: [threadId], references: [id])
+  sender    User         @relation("DirectMessageSender", fields: [senderId], references: [id])
 
   @@index([threadId, createdAt])
 }

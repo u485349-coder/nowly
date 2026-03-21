@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../lib/logger.js";
+import { sendScheduledOverlapNudges } from "../matching/scheduled-overlap.service.js";
 import { sendPushToUser, sweepPushReceipts, wasRecentlySent } from "./push.service.js";
 
 const JOB_TIMEZONE = "America/New_York";
@@ -265,12 +266,13 @@ const sendWeeklySummaries = async () => {
 
 export const startNotificationJobs = () => {
   cron.schedule("*/5 * * * *", async () => {
-    try {
-      await sweepPushReceipts();
-      await sendUpcomingHangoutReminders();
-    } catch (error) {
-      logger.error("Push reminder job failed", error);
-    }
+      try {
+        await sweepPushReceipts();
+        await sendUpcomingHangoutReminders();
+        await sendScheduledOverlapNudges();
+      } catch (error) {
+        logger.error("Push reminder job failed", error);
+      }
   });
 
   cron.schedule(

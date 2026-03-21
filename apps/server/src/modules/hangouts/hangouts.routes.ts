@@ -17,6 +17,7 @@ import {
   deriveSocialRadar,
   loadSocialContext,
 } from "../intelligence/social-intelligence.service.js";
+import { getScheduledOverlapsForUser } from "../matching/scheduled-overlap.service.js";
 import { sendPushToUser } from "../notifications/push.service.js";
 
 const createHangoutSchema = z.object({
@@ -162,6 +163,22 @@ hangoutsRouter.get(
 
     response.json({ data: radar });
   })
+);
+
+hangoutsRouter.get(
+  "/scheduled-overlaps",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const suggestions = await getScheduledOverlapsForUser(request.userId!);
+
+    response.json({
+      data: suggestions.map((suggestion) => ({
+        ...suggestion,
+        startsAt: suggestion.startsAt.toISOString(),
+        endsAt: suggestion.endsAt.toISOString(),
+      })),
+    });
+  }),
 );
 
 hangoutsRouter.post(

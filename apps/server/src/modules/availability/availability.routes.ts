@@ -1,17 +1,27 @@
 import {
+  AvailabilityRecurrence,
   AvailabilityState,
   BudgetMood,
+  FriendshipStatus,
   EnergyLevel,
+  MessageType,
   HangoutIntent,
+  MicroCommitment,
+  NotificationType,
+  ParticipantResponse,
   SocialBattery,
   Vibe,
 } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db/prisma.js";
+import { verifyAccessToken } from "../../lib/jwt.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { normalizeFriendPair } from "../../utils/friends.js";
 import { trackEvent } from "../analytics/analytics.service.js";
+import { sendPushToUser } from "../notifications/push.service.js";
+import { getBookableAvailability } from "./booking.service.js";
 
 const durationByState: Record<AvailabilityState, number> = {
   FREE_NOW: 3,
@@ -22,6 +32,7 @@ const durationByState: Record<AvailabilityState, number> = {
 
 const createSignalSchema = z.object({
   state: z.nativeEnum(AvailabilityState),
+  label: z.string().min(2).max(40).nullable().optional(),
   radiusKm: z.number().int().min(1).max(100).default(8),
   vibe: z.nativeEnum(Vibe).nullable().optional(),
   energyLevel: z.nativeEnum(EnergyLevel).nullable().optional(),
@@ -31,7 +42,252 @@ const createSignalSchema = z.object({
   durationHours: z.number().min(1).max(72).optional()
 });
 
+const recurringWindowSchema = z
+  .object({
+    recurrence: z.nativeEnum(AvailabilityRecurrence),
+    dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+    dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+    startMinute: z.number().int().min(0).max(23 * 60 + 59),
+    endMinute: z.number().int().min(1).max(24 * 60),
+    utcOffsetMinutes: z.number().int().min(-14 * 60).max(14 * 60),
+    label: z.string().min(2).max(40).nullable().optional(),
+    vibe: z.nativeEnum(Vibe).nullable().optional(),
+    hangoutIntent: z.nativeEnum(HangoutIntent).nullable().optional()
+  })
+  .superRefine((value, context) => {
+    if (value.endMinute <= value.startMinute) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "End time must be after start time",
+        path: ["endMinute"],
+      });
+    }
+
+    if (value.recurrence === AvailabilityRecurrence.WEEKLY && value.dayOfWeek == null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Weekly windows need a day of week",
+        path: ["dayOfWeek"],
+      });
+    }
+
+    if (value.recurrence === AvailabilityRecurrence.MONTHLY && value.dayOfMonth == null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Monthly windows need a day of month",
+        path: ["dayOfMonth"],
+      });
+    }
+  });
+
+const replaceRecurringSchema = z.object({
+  windows: z.array(recurringWindowSchema).max(24)
+});
+
+const bookingSchema = z.object({
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  note: z.string().trim().min(2).max(80).optional().nullable(),
+});
+
 export const availabilityRouter = Router();
+
+availabilityRouter.get(
+  "/share/:inviteCode",
+  asyncHandler(async (request, response) => {
+    const inviteCode = String(request.params.inviteCode);
+    const authHeader = request.headers.authorization;
+    let viewerId: string | null = null;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const payload = verifyAccessToken(authHeader.replace("Bearer ", ""));
+        viewerId = payload.sub;
+      } catch {
+        viewerId = null;
+      }
+    }
+
+    const booking = await getBookableAvailability(inviteCode, viewerId);
+
+    if (!booking) {
+      response.status(404).json({ error: "Availability link not found" });
+      return;
+    }
+
+    response.json({
+      data: {
+        host: booking.host,
+        viewerHasRecurringSchedule: booking.viewerHasRecurringSchedule,
+        slots: booking.slots.map((slot) => ({
+          ...slot,
+          startsAt: slot.startsAt.toISOString(),
+          endsAt: slot.endsAt.toISOString(),
+        })),
+      },
+    });
+  }),
+);
+
+availabilityRouter.post(
+  "/share/:inviteCode/book",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const inviteCode = String(request.params.inviteCode);
+    const body = bookingSchema.parse(request.body);
+    const booking = await getBookableAvailability(inviteCode, request.userId);
+
+    if (!booking) {
+      response.status(404).json({ error: "Availability link not found" });
+      return;
+    }
+
+    if (booking.host.id === request.userId) {
+      response.status(400).json({ error: "You cannot book your own window." });
+      return;
+    }
+
+    const selectedSlot = booking.slots.find(
+      (slot) =>
+        slot.startsAt.toISOString() === body.startsAt &&
+        slot.endsAt.toISOString() === body.endsAt,
+    );
+
+    if (!selectedSlot) {
+      response.status(400).json({ error: "That slot is no longer available." });
+      return;
+    }
+
+    const [userAId, userBId] = normalizeFriendPair(request.userId!, booking.host.id);
+    const existingFriendship = await prisma.friendship.findUnique({
+      where: {
+        userAId_userBId: {
+          userAId,
+          userBId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (existingFriendship?.status === FriendshipStatus.BLOCKED) {
+      response.status(403).json({ error: "This link is not available to you." });
+      return;
+    }
+
+    if (!existingFriendship) {
+      await prisma.friendship.create({
+        data: {
+          userAId,
+          userBId,
+          status: FriendshipStatus.PENDING,
+          initiatedBy: request.userId!,
+        },
+      });
+    }
+
+    const startsAt = new Date(body.startsAt);
+    const endsAt = new Date(body.endsAt);
+    const hostWindowMinutes = Math.max(
+      15,
+      Math.round((endsAt.getTime() - startsAt.getTime()) / (60 * 1000)),
+    );
+    const activity =
+      body.note?.trim() ||
+      selectedSlot.sourceLabel ||
+      (selectedSlot.hangoutIntent
+        ? selectedSlot.hangoutIntent.replaceAll("_", " ").toLowerCase()
+        : "hang out");
+
+    const hangout = await prisma.hangout.create({
+      data: {
+        creatorId: request.userId!,
+        activity,
+        microType: selectedSlot.hangoutIntent ?? undefined,
+        commitmentLevel:
+          hostWindowMinutes <= 90
+            ? MicroCommitment.QUICK_WINDOW
+            : MicroCommitment.OPEN_ENDED,
+        locationName:
+          booking.host.communityTag || booking.host.city || "nearby",
+        scheduledFor: startsAt,
+        participants: {
+          create: [request.userId!, booking.host.id].map((userId) => ({
+            userId,
+            responseStatus:
+              userId === request.userId
+                ? ParticipantResponse.ACCEPTED
+                : ParticipantResponse.PENDING,
+            respondedAt: userId === request.userId ? new Date() : null,
+          })),
+        },
+        thread: {
+          create: {
+            lastMessageAt: new Date(),
+            messages: {
+              create: {
+                senderId: request.userId!,
+                text: `Booked from availability link: ${activity} on ${startsAt.toISOString()}`,
+                type: MessageType.SYSTEM,
+              },
+            },
+          },
+        },
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                photoUrl: true,
+                responsivenessScore: true,
+              },
+            },
+          },
+        },
+        thread: {
+          include: {
+            messages: {
+              orderBy: { createdAt: "asc" },
+              take: 50,
+            },
+          },
+        },
+      },
+    });
+
+    await trackEvent("proposal_sent", request.userId, {
+      hangoutId: hangout.id,
+      source: "booking_link",
+      slotStartsAt: body.startsAt,
+      mutualFit: selectedSlot.mutualFit,
+    });
+
+    await sendPushToUser({
+      userId: booking.host.id,
+      type: NotificationType.PROPOSAL_RECEIVED,
+      dedupeKey: `booking-link:${hangout.id}:${request.userId}`,
+      title: "Someone picked one of your windows",
+      body: `${hangout.creator.name ?? "A friend"} chose ${selectedSlot.label}.`,
+      data: {
+        screen: "proposal",
+        hangoutId: hangout.id,
+      },
+    });
+
+    response.status(201).json({ data: hangout });
+  }),
+);
 
 availabilityRouter.get(
   "/signals",
@@ -74,6 +330,7 @@ availabilityRouter.post(
       data: {
         userId: request.userId!,
         state: body.state,
+        label: body.label ?? undefined,
         radiusKm: body.radiusKm,
         vibe: body.vibe ?? undefined,
         energyLevel: body.energyLevel ?? undefined,
@@ -86,6 +343,7 @@ availabilityRouter.post(
 
     await trackEvent("availability_set", request.userId, {
       state: body.state,
+      label: body.label,
       radiusKm: body.radiusKm,
       vibe: body.vibe,
       energyLevel: body.energyLevel,
@@ -97,6 +355,78 @@ availabilityRouter.post(
 
     response.status(201).json({ data: signal });
   })
+);
+
+availabilityRouter.get(
+  "/recurring",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const windows = await prisma.recurringAvailabilityWindow.findMany({
+      where: {
+        userId: request.userId,
+        isActive: true,
+      },
+      orderBy: [{ recurrence: "asc" }, { dayOfWeek: "asc" }, { dayOfMonth: "asc" }, { startMinute: "asc" }],
+    });
+
+    response.json({ data: windows });
+  }),
+);
+
+availabilityRouter.put(
+  "/recurring",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const body = replaceRecurringSchema.parse(request.body);
+
+    await prisma.$transaction([
+      prisma.recurringAvailabilityWindow.deleteMany({
+        where: {
+          userId: request.userId,
+        },
+      }),
+      ...(body.windows.length
+        ? [
+            prisma.recurringAvailabilityWindow.createMany({
+              data: body.windows.map((window) => ({
+                userId: request.userId!,
+                recurrence: window.recurrence,
+                dayOfWeek:
+                  window.recurrence === AvailabilityRecurrence.WEEKLY
+                    ? window.dayOfWeek ?? null
+                    : null,
+                dayOfMonth:
+                  window.recurrence === AvailabilityRecurrence.MONTHLY
+                    ? window.dayOfMonth ?? null
+                    : null,
+                startMinute: window.startMinute,
+                endMinute: window.endMinute,
+                utcOffsetMinutes: window.utcOffsetMinutes,
+                label: window.label ?? undefined,
+                vibe: window.vibe ?? undefined,
+                hangoutIntent: window.hangoutIntent ?? undefined,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    const windows = await prisma.recurringAvailabilityWindow.findMany({
+      where: {
+        userId: request.userId,
+        isActive: true,
+      },
+      orderBy: [{ recurrence: "asc" }, { dayOfWeek: "asc" }, { dayOfMonth: "asc" }, { startMinute: "asc" }],
+    });
+
+    await trackEvent("availability_schedule_saved", request.userId, {
+      windowCount: windows.length,
+      monthlyCount: windows.filter((window) => window.recurrence === AvailabilityRecurrence.MONTHLY).length,
+      weeklyCount: windows.filter((window) => window.recurrence === AvailabilityRecurrence.WEEKLY).length,
+    });
+
+    response.json({ data: windows });
+  }),
 );
 
 availabilityRouter.delete(
