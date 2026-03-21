@@ -8,6 +8,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { findPromptAction } from "../../features/prompts/prompt-actions";
 import { api } from "../../lib/api";
 import { availabilityLabel } from "../../lib/labels";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 
 type PromptRecipient = {
@@ -162,6 +163,9 @@ export default function PromptPickerScreen() {
           <Pressable
             onPress={() => router.back()}
             className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
+            style={({ pressed }) =>
+              webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+            }
           >
             <MaterialCommunityIcons name="close" size={20} color="#F8FAFC" />
           </Pressable>
@@ -232,6 +236,7 @@ export default function PromptPickerScreen() {
                   key={recipient.id}
                   onPress={() => setSelectedRecipientId(recipient.id)}
                   className={`rounded-[28px] border p-4 ${selected ? "border-aqua/55 bg-aqua/10" : "border-white/10 bg-white/[0.04]"}`}
+                  style={({ pressed }) => webPressableStyle(pressed)}
                 >
                   <View className="flex-row items-center gap-4">
                     {recipient.photoUrl ? (

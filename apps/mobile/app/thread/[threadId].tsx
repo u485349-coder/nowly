@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
 import { disconnectSocket, getSocket } from "../../lib/socket";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import { ThreadMessage } from "../../types";
 
@@ -212,6 +213,9 @@ export default function ThreadScreen() {
               key={emoji}
               onPress={() => handleReaction(emoji)}
               className="rounded-full bg-white/10 px-4 py-3"
+              style={({ pressed }) =>
+                webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.99 })
+              }
             >
               <Text className="font-body text-sm text-cloud">{emoji}</Text>
             </Pressable>

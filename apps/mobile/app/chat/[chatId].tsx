@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
 import { disconnectSocket, getSocket } from "../../lib/socket";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import { DirectMessage } from "../../types";
 
@@ -190,6 +191,9 @@ export default function DirectChatScreen() {
               <Pressable
                 onPress={() => router.back()}
                 className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
+                style={({ pressed }) =>
+                  webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+                }
               >
                 <Text className="font-display text-base text-cloud">Done</Text>
               </Pressable>
@@ -231,6 +235,9 @@ export default function DirectChatScreen() {
               key={reply}
               onPress={() => void handleSend(reply)}
               className="rounded-full bg-white/10 px-4 py-3"
+              style={({ pressed }) =>
+                webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.99 })
+              }
             >
               <Text className="font-body text-sm text-cloud">{reply}</Text>
             </Pressable>

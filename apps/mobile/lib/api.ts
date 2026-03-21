@@ -10,6 +10,7 @@ import {
   SocialBattery,
   Vibe,
 } from "@nowly/shared";
+import { Platform } from "react-native";
 import type {
   MobileAvailabilitySignal,
   MobileBookingProfile,
@@ -996,6 +997,28 @@ export const api = {
     return normalizeUser(response.data);
   },
 
+  async updateProfile(
+    token: string | null,
+    payload: {
+      photoUrl?: string | null;
+    },
+  ) {
+    if (demoMode) {
+      return normalizeUser({
+        ...demoUser,
+        photoUrl: payload.photoUrl ?? null,
+      });
+    }
+
+    const response = await request<{ data: AppUser }>("/users/me/profile", {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(payload),
+    });
+
+    return normalizeUser(response.data);
+  },
+
   async registerPushToken(token: string | null, pushToken: string) {
     if (demoMode) {
       return { ok: true };
@@ -1029,10 +1052,46 @@ export const api = {
       return "https://discord.com";
     }
 
-    const response = await request<{ data: { url: string } }>("/discord/oauth-url", {
-      token,
-    });
+    const redirectUri =
+      Platform.OS === "web" && typeof window !== "undefined"
+        ? `${window.location.origin}/discord/callback`
+        : undefined;
+
+    const response = await request<{ data: { url: string } }>(
+      `/discord/oauth-url${
+        redirectUri ? `?redirectUri=${encodeURIComponent(redirectUri)}` : ""
+      }`,
+      {
+        token,
+      },
+    );
 
     return response.data.url;
+  },
+
+  async linkDiscord(token: string | null, code: string) {
+    if (demoMode) {
+      return normalizeUser({
+        ...demoUser,
+        discordUsername: "nowly-demo",
+        sharedServerCount: 3,
+      });
+    }
+
+    const redirectUri =
+      Platform.OS === "web" && typeof window !== "undefined"
+        ? `${window.location.origin}/discord/callback`
+        : undefined;
+
+    const response = await request<{ data: { linked: boolean; user: AppUser } }>("/discord/link", {
+      method: "POST",
+      token,
+      body: JSON.stringify({
+        code,
+        redirectUri,
+      }),
+    });
+
+    return normalizeUser(response.data.user);
   },
 };

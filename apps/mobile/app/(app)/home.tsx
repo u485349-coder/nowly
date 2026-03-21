@@ -15,6 +15,7 @@ import {
   microCommitmentLabel,
   vibeLabel,
 } from "../../lib/labels";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 
 export default function HomeScreen() {
@@ -107,27 +108,39 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-3">
-          <View className="flex-row items-center justify-between gap-4">
-            <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">
-              Live radar
-            </Text>
+        <GlassCard className="p-6">
+          <View className="gap-5">
+            <View className="flex-row items-start justify-between gap-4">
+              <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
+                <Text className="font-body text-xs text-cloud/90">
+                  Live social radar for spontaneous hangouts
+                </Text>
+              </View>
 
-            <Pressable
-              onPress={() => router.push("/now-mode")}
-              className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
-            >
-              <MaterialCommunityIcons name="cog-outline" size={20} color="#F8FAFC" />
-            </Pressable>
+              <Pressable
+                onPress={() => router.push("/now-mode")}
+                className="h-11 w-11 items-center justify-center rounded-full border border-white/8 bg-white/[0.045]"
+                style={({ pressed }) =>
+                  webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+                }
+              >
+                <MaterialCommunityIcons name="cog-outline" size={20} color="#F8FAFC" />
+              </Pressable>
+            </View>
+
+            <View className="max-w-[94%] gap-3">
+              <Text className="font-display text-[40px] leading-[42px] text-cloud">
+                {user?.name
+                  ? `${user.name}, who can you catch without overthinking it?`
+                  : "Who can you catch right now?"}
+              </Text>
+              <Text className="font-body text-sm leading-7 text-white/72">
+                {radar?.suggestionLine ??
+                  "Keep signals light, keep the line warm, and let social overlap turn into an actual hangout."}
+              </Text>
+            </View>
           </View>
-          <View className="max-w-[92%]">
-            <Text className="font-display text-[34px] leading-[38px] text-cloud">
-              {user?.name
-                ? `${user.name}, who can you catch without overthinking it?`
-                : "Who can you catch right now?"}
-            </Text>
-          </View>
-        </View>
+        </GlassCard>
 
         <GlassCard className="p-5">
           <View className="gap-4">
@@ -162,19 +175,19 @@ export default function HomeScreen() {
           </View>
         </GlassCard>
 
-        <GlassCard className="p-5">
-          <View className="gap-4">
-            <View className="self-start rounded-full border border-white/10 bg-white/6 px-4 py-2.5">
-              <Text className="font-body text-xs text-cloud">
+        <GlassCard className="p-6">
+          <View className="gap-5">
+            <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
+              <Text className="font-body text-xs text-cloud/90">
                 Best hangout window: {radar?.rhythm.bestWindow ?? "happening now"}
               </Text>
             </View>
 
             <View className="gap-2">
-              <Text className="font-display text-[30px] leading-[34px] text-cloud">
+              <Text className="font-display text-[31px] leading-[35px] text-cloud">
                 {availabilityHeadline}
               </Text>
-              <Text className="max-w-[92%] font-body text-sm leading-6 text-white/68">
+              <Text className="max-w-[92%] font-body text-sm leading-6 text-white/72">
                 {topMatches.length
                   ? radar?.suggestionLine ??
                     "Send one low-pressure prompt and turn overlap into an actual hangout."
@@ -189,10 +202,11 @@ export default function HomeScreen() {
                   <Pressable
                     key={match.id}
                     onPress={() => router.push(`/match/${match.id}`)}
-                    className={`${topMatches.length === 1 ? "w-full" : "w-[48%]"} rounded-[24px] border border-white/8 bg-white/[0.03] p-4`}
+                    className={`${topMatches.length === 1 ? "w-full" : "w-[48%]"} rounded-[24px] border border-white/6 bg-white/[0.035] p-4`}
+                    style={({ pressed }) => webPressableStyle(pressed)}
                   >
                     <Text className="font-display text-lg text-cloud">{match.matchedUser.name}</Text>
-                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                    <Text className="mt-2 font-body text-sm leading-6 text-white/64">
                       {availabilityLabel(match.matchedSignal.state).toLowerCase()} -{" "}
                       {match.reason.travelMinutes ?? 15} min away
                     </Text>
@@ -205,7 +219,7 @@ export default function HomeScreen() {
             ) : (
               <View className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
                 <Text className="font-display text-lg text-cloud">Keep the line warm</Text>
-                <Text className="mt-2 font-body text-sm leading-6 text-white/60">
+                <Text className="mt-2 font-body text-sm leading-6 text-white/66">
                   Nobody is live yet, but you can still send a low-pressure prompt to a friend and
                   let the timing catch up.
                 </Text>
@@ -219,9 +233,12 @@ export default function HomeScreen() {
                   <Pressable
                     key={prompt.key}
                     onPress={() => openPromptPicker(prompt.key)}
-                    className="rounded-full border border-white/10 bg-white/6 px-4 py-3.5"
+                    className="rounded-full border border-white/8 bg-white/[0.045] px-4 py-3.5"
+                    style={({ pressed }) =>
+                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.995 })
+                    }
                   >
-                    <Text className="font-body text-sm text-cloud">
+                    <Text className="font-body text-sm text-cloud/92">
                       {prompt.label} - {prompt.detail}
                     </Text>
                   </Pressable>
@@ -283,7 +300,11 @@ export default function HomeScreen() {
           <Text className="font-display text-2xl text-cloud">Already moving</Text>
           {activeHangouts.length ? (
             activeHangouts.map((hangout) => (
-              <Pressable key={hangout.id} onPress={() => router.push(`/proposal/${hangout.id}`)}>
+              <Pressable
+                key={hangout.id}
+                onPress={() => router.push(`/proposal/${hangout.id}`)}
+                style={({ pressed }) => webPressableStyle(pressed)}
+              >
                 <GlassCard className="p-5">
                   <View className="flex-row items-start justify-between">
                     <View className="max-w-[72%]">

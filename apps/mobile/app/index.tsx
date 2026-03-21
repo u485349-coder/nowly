@@ -18,13 +18,13 @@ export default function IndexScreen() {
   const onboardingComplete = useAppStore((state) => state.onboardingComplete);
   const setIntroSeen = useAppStore((state) => state.setIntroSeen);
 
-  const leftX = useSharedValue(introSeen ? -12 : -48);
-  const rightX = useSharedValue(introSeen ? 12 : 48);
+  const leftX = useSharedValue(introSeen ? -28 : -52);
+  const rightX = useSharedValue(introSeen ? 28 : 52);
   const glowOpacity = useSharedValue(0);
   const pulseScale = useSharedValue(0.7);
   const pulseOpacity = useSharedValue(0);
   const lockupOpacity = useSharedValue(0);
-  const wordmarkY = useSharedValue(16);
+  const wordmarkY = useSharedValue(introSeen ? 10 : 18);
 
   useEffect(() => {
     const duration = introSeen ? 680 : 1280;
@@ -75,28 +75,31 @@ export default function IndexScreen() {
         className="absolute h-44 w-44 rounded-full border border-white/20"
       />
       <View className="items-center">
-        <View className="relative h-28 w-28 items-center justify-center">
+        <View className="relative h-56 w-72 items-center justify-center">
           <Animated.View
             style={[leftStyle]}
-            className="absolute h-20 w-20 rounded-full bg-violet/55"
+            className="absolute h-24 w-24 rounded-full bg-violet/55"
           />
           <Animated.View
             style={[rightStyle]}
-            className="absolute h-20 w-20 rounded-full bg-sky/45"
+            className="absolute h-24 w-24 rounded-full bg-sky/45"
           />
-          <Animated.View style={[lockupStyle]} className="absolute">
-            <NowlyMark variant="icon" size={92} />
+          <Animated.View style={[lockupStyle]} className="absolute items-center">
+            <NowlyMark variant="icon" size={68} />
+            <Text className="mt-5 font-display text-[30px] leading-[32px] text-cloud">
+              Nowly
+            </Text>
+            <Text
+              className="mt-1.5 font-body text-sm text-white/60"
+              style={{
+                marginLeft: -6,
+              }}
+            >
+              {NOWLY_SLOGAN}
+            </Text>
           </Animated.View>
         </View>
 
-        <Animated.View style={[lockupStyle]} className="items-center">
-          <View className="mt-4">
-            <NowlyMark variant="wordmark" />
-          </View>
-          <Text className="mt-3 font-body text-sm text-white/55">
-            {NOWLY_SLOGAN}
-          </Text>
-        </Animated.View>
       </View>
     </View>
   );

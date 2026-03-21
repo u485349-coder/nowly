@@ -18,6 +18,7 @@ import {
 import { formatDayTime } from "../lib/format";
 import { recurringWindowLabel } from "../lib/recurring-availability";
 import { createSmartOpenUrl } from "../lib/smart-links";
+import { webPressableStyle } from "../lib/web-pressable";
 import { useAppStore } from "../store/useAppStore";
 
 export default function NowModeScreen() {
@@ -194,26 +195,33 @@ export default function NowModeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-start justify-between gap-4">
-          <View className="max-w-[82%] gap-2">
-            <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">
-              Availability setup
-            </Text>
-            <Text className="font-display text-[34px] leading-[38px] text-cloud">
-              Set your recurring free windows once, then let Nowly line people up around them.
-            </Text>
-            <Text className="font-body text-sm leading-6 text-white/60">
-              Keep the spontaneous mode if you want it, but this is where the more Calendly-like
-              side of Nowly lives.
-            </Text>
+        <GlassCard className="p-6">
+          <View className="gap-4">
+            <View className="flex-row items-start justify-between gap-4">
+              <View className="max-w-[82%] gap-3">
+                <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
+                  <Text className="font-body text-xs text-cloud/90">Availability setup</Text>
+                </View>
+                <Text className="font-display text-[31px] leading-[35px] text-cloud">
+                  Set your recurring free windows once, then let Nowly line people up around them.
+                </Text>
+                <Text className="font-body text-sm leading-6 text-white/72">
+                  Keep the spontaneous mode if you want it, but this is where the more Calendly-like
+                  side of Nowly lives.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.back()}
+                className="h-11 w-11 items-center justify-center rounded-full border border-white/8 bg-white/[0.045]"
+                style={({ pressed }) =>
+                  webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+                }
+              >
+                <MaterialCommunityIcons name="close" size={20} color="#F8FAFC" />
+              </Pressable>
+            </View>
           </View>
-          <Pressable
-            onPress={() => router.back()}
-            className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
-          >
-            <MaterialCommunityIcons name="close" size={20} color="#F8FAFC" />
-          </Pressable>
-        </View>
+        </GlassCard>
 
         <GlassCard className="p-5">
           <View className="gap-3">

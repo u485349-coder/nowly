@@ -31,6 +31,20 @@ const preferencesSchema = z.object({
   notificationIntensity: z.nativeEnum(NotificationIntensity)
 });
 
+const profileSchema = z.object({
+  photoUrl: z
+    .string()
+    .max(5_000_000)
+    .refine(
+      (value) =>
+        /^https?:\/\//i.test(value) ||
+        /^data:image\/(?:png|jpe?g|webp|heic|heif);base64,/i.test(value),
+      "Photo must be a remote URL or image data URI",
+    )
+    .nullable()
+    .optional(),
+});
+
 export const usersRouter = Router();
 
 usersRouter.put(
@@ -107,6 +121,23 @@ usersRouter.patch(
       where: { id: request.userId },
       data: {
         notificationIntensity: body.notificationIntensity
+      }
+    });
+
+    response.json({ data: user });
+  })
+);
+
+usersRouter.patch(
+  "/me/profile",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const body = profileSchema.parse(request.body);
+
+    const user = await prisma.user.update({
+      where: { id: request.userId },
+      data: {
+        photoUrl: body.photoUrl,
       }
     });
 

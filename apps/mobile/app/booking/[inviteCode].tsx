@@ -11,6 +11,7 @@ import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
 import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
 import { api } from "../../lib/api";
+import { webPressableStyle } from "../../lib/web-pressable";
 
 const readErrorMessage = (error: unknown) => {
   if (!(error instanceof Error)) {
@@ -154,6 +155,7 @@ export default function BookingInviteScreen() {
         className={`rounded-[24px] border p-4 ${
           active ? "border-aqua/80 bg-aqua/10" : "border-white/10 bg-white/5"
         }`}
+        style={({ pressed }) => webPressableStyle(pressed)}
       >
         <View className="gap-3">
           <View className="flex-row items-start justify-between gap-3">
@@ -223,6 +225,9 @@ export default function BookingInviteScreen() {
           <Pressable
             onPress={() => router.back()}
             className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
+            style={({ pressed }) =>
+              webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+            }
           >
             <MaterialCommunityIcons name="close" size={20} color="#F8FAFC" />
           </Pressable>

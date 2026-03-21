@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, {
   Extrapolation,
@@ -8,6 +8,8 @@ import Animated, {
   useAnimatedStyle,
 } from "react-native-reanimated";
 import { nowlyColors } from "../../constants/theme";
+import { webPressableStyle } from "../../lib/web-pressable";
+const isWeb = Platform.OS === "web";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -79,9 +81,10 @@ const MenuItem = ({
         accessibilityRole="button"
         accessibilityLabel={action.accessibilityLabel ?? action.label}
         onPress={() => onActionPress(action)}
-        style={[
+        style={({ pressed }) => [
           styles.actionPressable,
           labelPosition === "right" ? styles.actionPressableRight : null,
+          isWeb ? webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.99 }) : null,
         ]}
       >
         {action.label && labelPosition === "left" ? (

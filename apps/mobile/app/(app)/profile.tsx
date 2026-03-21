@@ -1,10 +1,11 @@
-import { Image, ScrollView, Switch, Text, View } from "react-native";
+import { Alert, Image, ScrollView, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { SignalChip } from "../../components/ui/SignalChip";
 import { api } from "../../lib/api";
+import { pickAvatarImage } from "../../lib/avatar";
 import { notificationIntensityLabel } from "../../lib/labels";
 import { disconnectSocket } from "../../lib/socket";
 import { useAppStore } from "../../store/useAppStore";
@@ -22,6 +23,50 @@ export default function ProfileScreen() {
   const clearSession = useAppStore((state) => state.clearSession);
 
   const currentIntensity = user?.notificationIntensity ?? "BALANCED";
+
+  const handleChangePhoto = async () => {
+    try {
+      const avatar = await pickAvatarImage();
+
+      if (!avatar) {
+        return;
+      }
+
+      const nextUser = await api.updateProfile(token, {
+        photoUrl: avatar.dataUrl,
+      });
+
+      updateUser({
+        photoUrl: nextUser.photoUrl,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't update your photo right now.";
+
+      Alert.alert("Photo update failed", message);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      const nextUser = await api.updateProfile(token, {
+        photoUrl: null,
+      });
+
+      updateUser({
+        photoUrl: nextUser.photoUrl,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't remove your photo right now.";
+
+      Alert.alert("Photo update failed", message);
+    }
+  };
 
   const setIntensity = async (intensity: (typeof intensityOptions)[number]) => {
     setNotificationsEnabled(intensity !== "QUIET");
@@ -64,9 +109,14 @@ export default function ProfileScreen() {
             </View>
 
             <View className="flex-1">
-              <Text className="font-display text-3xl text-cloud">{user?.name ?? "Your profile"}</Text>
-              <Text className="mt-1 font-body text-sm text-white/60">
-                {user?.communityTag || user?.city} · {user?.phone ?? "Phone not set"}
+              <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-3 py-1.5">
+                <Text className="font-body text-[11px] uppercase tracking-[1.5px] text-cloud/88">
+                  Your identity layer
+                </Text>
+              </View>
+              <Text className="mt-2 font-display text-3xl text-cloud">{user?.name ?? "Your profile"}</Text>
+              <Text className="mt-2 font-body text-sm text-white/66">
+                {user?.communityTag || user?.city} - {user?.phone ?? "Phone not set"}
               </Text>
               <Text className="mt-1 font-body text-sm text-aqua/80">
                 {user?.discordUsername ? `@${user.discordUsername}` : "Discord optional"}
@@ -75,17 +125,38 @@ export default function ProfileScreen() {
           </View>
 
           <View className="mt-5 flex-row gap-3">
-            <View className="flex-1 rounded-[22px] bg-white/6 p-4">
+            <View className="flex-1 rounded-[22px] border border-white/6 bg-white/[0.045] p-4">
               <Text className="font-body text-xs uppercase tracking-[1px] text-white/45">
                 Weekly streak
               </Text>
               <Text className="mt-2 font-display text-3xl text-cloud">{user?.streakCount ?? 0}</Text>
             </View>
-            <View className="flex-1 rounded-[22px] bg-white/6 p-4">
+            <View className="flex-1 rounded-[22px] border border-white/6 bg-white/[0.045] p-4">
               <Text className="font-body text-xs uppercase tracking-[1px] text-white/45">
                 Invites sent
               </Text>
               <Text className="mt-2 font-display text-3xl text-cloud">{user?.invitesSent ?? 0}</Text>
+            </View>
+          </View>
+
+          <View className="mt-4 gap-3 rounded-[24px] border border-white/6 bg-white/[0.03] p-4">
+            <Text className="font-display text-lg text-cloud">Profile photo</Text>
+            <Text className="font-body text-sm leading-6 text-white/60">
+              Pick any image you want. Nowly square-crops and downsizes it automatically to fit.
+            </Text>
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <PillButton
+                  label={user?.photoUrl ? "Change photo" : "Upload photo"}
+                  variant="secondary"
+                  onPress={() => void handleChangePhoto()}
+                />
+              </View>
+              {user?.photoUrl ? (
+                <View className="flex-1">
+                  <PillButton label="Remove" variant="ghost" onPress={() => void handleRemovePhoto()} />
+                </View>
+              ) : null}
             </View>
           </View>
         </GlassCard>

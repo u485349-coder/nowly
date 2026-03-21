@@ -6,6 +6,7 @@ import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { api } from "../../lib/api";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 
 export default function NewGroupChatScreen() {
@@ -78,6 +79,9 @@ export default function NewGroupChatScreen() {
           <Pressable
             onPress={() => router.back()}
             className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6"
+            style={({ pressed }) =>
+              webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
+            }
           >
             <MaterialCommunityIcons name="close" size={20} color="#F8FAFC" />
           </Pressable>
@@ -109,6 +113,7 @@ export default function NewGroupChatScreen() {
                 key={friend.id}
                 onPress={() => toggleFriend(friend.id)}
                 className={`rounded-[28px] border p-4 ${selected ? "border-aqua/55 bg-aqua/10" : "border-white/10 bg-white/[0.04]"}`}
+                style={({ pressed }) => webPressableStyle(pressed)}
               >
                 <View className="flex-row items-center gap-4">
                   <View className="h-14 w-14 overflow-hidden rounded-full border border-white/12 bg-white/8">

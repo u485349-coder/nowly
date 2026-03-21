@@ -1,6 +1,7 @@
 (function () {
   const body = document.body;
-  const browserAppUrl = body?.dataset.browserAppUrl || "/app/";
+  const browserAppUrl =
+    body?.dataset.browserAppUrl || "https://nowly-webapp.vercel.app";
   const mobileAppUrl = body?.dataset.mobileAppUrl || "nowly://onboarding";
   const iosStoreUrl =
     body?.dataset.iosStoreUrl || "https://apps.apple.com/us/search?term=Nowly";

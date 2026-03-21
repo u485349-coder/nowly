@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -16,6 +16,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { nowlyColors } from "../../constants/theme";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { FABMenu, type FloatingFabAction } from "./FABMenu";
 import { FABToggle } from "./FABToggle";
 
@@ -23,6 +24,7 @@ type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 const AnimatedIcon = Animated.createAnimatedComponent(MaterialCommunityIcons);
 const AnimatedText = Animated.createAnimatedComponent(Text);
+const isWeb = Platform.OS === "web";
 
 type FloatingNavBarProps = BottomTabBarProps & {
   actions: FloatingFabAction[];
@@ -97,7 +99,10 @@ const FloatingTabItem = memo(
         hitSlop={10}
         onLongPress={onLongPress}
         onPress={onPress}
-        style={styles.tabPressable}
+        style={({ pressed }) => [
+          styles.tabPressable,
+          isWeb ? webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.998 }) : null,
+        ]}
       >
         <AnimatedIcon name={icon} size={21} style={iconStyle} />
         <AnimatedText style={[styles.tabLabel, labelStyle]}>{label}</AnimatedText>
@@ -201,7 +206,7 @@ const FloatingNavBarComponent = ({
         style={[StyleSheet.absoluteFillObject, backdropStyle]}
       >
         <Pressable onPress={() => setOpen(false)} style={StyleSheet.absoluteFillObject}>
-          <BlurView intensity={14} tint="dark" style={StyleSheet.absoluteFillObject} />
+          {!isWeb ? <BlurView intensity={14} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
           <View style={styles.backdropTint} />
         </Pressable>
       </Animated.View>
@@ -230,7 +235,7 @@ const FloatingNavBarComponent = ({
         ]}
       >
         <View style={styles.blurClip}>
-          <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFillObject} />
+          {!isWeb ? <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
           <View style={styles.barTint} />
         </View>
 
@@ -258,7 +263,7 @@ export const FloatingNavBar = memo(FloatingNavBarComponent);
 const styles = StyleSheet.create({
   backdropTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(5,8,19,0.16)",
+    backgroundColor: isWeb ? "rgba(5,8,19,0.08)" : "rgba(5,8,19,0.16)",
   },
   barWrap: {
     position: "absolute",
@@ -267,11 +272,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
-    backgroundColor: "rgba(10,14,30,0.75)",
+    backgroundColor: isWeb ? "rgba(10,14,30,0.88)" : "rgba(10,14,30,0.75)",
     shadowColor: "#020617",
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: isWeb ? 0.08 : 0.18,
+    shadowRadius: isWeb ? 12 : 18,
+    shadowOffset: { width: 0, height: isWeb ? 8 : 12 },
     elevation: 0,
   },
   blurClip: {
@@ -281,7 +286,7 @@ const styles = StyleSheet.create({
   },
   barTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10,14,30,0.42)",
+    backgroundColor: isWeb ? "rgba(10,14,30,0.64)" : "rgba(10,14,30,0.42)",
   },
   navRow: {
     flex: 1,

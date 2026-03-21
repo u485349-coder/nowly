@@ -150,7 +150,16 @@ discordRouter.post(
       });
     });
 
-    response.status(StatusCodes.CREATED).json({ data: { linked: true } });
+    const linkedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: request.userId! }
+    });
+
+    response.status(StatusCodes.CREATED).json({
+      data: {
+        linked: true,
+        user: linkedUser
+      }
+    });
   })
 );
 

@@ -11,7 +11,7 @@ export const nowlyColors = {
 };
 
 export const gradients = {
-  background: ["#050813", "#0B1020", "#151A34"] as const,
+  background: ["#060914", "#0B1020", "#11182B"] as const,
   hero: ["#4F46E5", "#7C3AED", "#22D3EE"] as const,
   card: ["rgba(79,70,229,0.3)", "rgba(34,211,238,0.1)"] as const,
 };

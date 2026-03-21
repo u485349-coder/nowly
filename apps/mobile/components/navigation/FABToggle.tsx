@@ -12,6 +12,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { nowlyColors } from "../../constants/theme";
+import { webPressableStyle } from "../../lib/web-pressable";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -96,7 +97,7 @@ export const FABToggle = ({
           stiffness: 220,
         });
       }}
-      style={[
+      style={({ pressed }) => [
         styles.pressable,
         {
           bottom,
@@ -104,6 +105,7 @@ export const FABToggle = ({
           height: size,
           marginLeft: -(size / 2),
         },
+        webPressableStyle(pressed, { pressedOpacity: 0.96, pressedScale: 0.985 }),
       ]}
     >
       <Animated.View

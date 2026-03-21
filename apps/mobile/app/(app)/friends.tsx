@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { availabilityLabel } from "../../lib/labels";
 import { createSmartOpenUrl } from "../../lib/smart-links";
+import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import { AppFriend, DirectChat } from "../../types";
 
@@ -183,21 +184,21 @@ export default function FriendsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View>
-          <Text className="font-display text-[34px] leading-[38px] text-cloud">
-            Your people on Nowly
-          </Text>
-          <Text className="mt-3 font-body text-base text-white/60">
-            Manage requests, keep private chats going, and build a real local graph.
-          </Text>
-        </View>
-
-        <GlassCard className="p-5">
-          <View className="gap-3">
+        <GlassCard className="p-6">
+          <View className="gap-4">
+            <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
+              <Text className="font-body text-xs text-cloud/90">Private graph for real-life hangs</Text>
+            </View>
+            <Text className="font-display text-[31px] leading-[35px] text-cloud">
+              Your people on Nowly
+            </Text>
+            <Text className="font-body text-sm leading-6 text-white/72">
+              Manage requests, keep private chats going, and build a real local graph.
+            </Text>
             <Text className="font-display text-xl text-cloud">
               {radar?.rhythm.communityLabel ?? "Your local pocket"}
             </Text>
-            <Text className="font-body text-sm text-white/60">
+            <Text className="font-body text-sm text-white/66">
               {(radar?.localDensity.activeNowCount ?? 0).toString()} active now -{" "}
               {(radar?.localDensity.nearbyFriendsCount ?? 0).toString()} nearby in your graph
             </Text>
@@ -233,6 +234,7 @@ export default function FriendsScreen() {
                       params: { chatId: chat.id },
                     })
                   }
+                  style={({ pressed }) => webPressableStyle(pressed)}
                 >
                   <View className="flex-row items-center gap-4">
                     <View className="flex-row">
@@ -396,12 +398,18 @@ export default function FriendsScreen() {
                   <Pressable
                     onPress={() => void handleOpenChat(friend.id)}
                     className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/8"
+                    style={({ pressed }) =>
+                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.97 })
+                    }
                   >
                     <MaterialCommunityIcons name="chat-processing-outline" size={22} color="#F8FAFC" />
                   </Pressable>
                   <Pressable
                     onPress={() => void handleDiscordPing(friend.name)}
                     className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/8"
+                    style={({ pressed }) =>
+                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.97 })
+                    }
                   >
                     <MaterialCommunityIcons name="send-outline" size={20} color="#22D3EE" />
                   </Pressable>
