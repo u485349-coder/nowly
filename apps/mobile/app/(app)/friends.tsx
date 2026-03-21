@@ -8,6 +8,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { availabilityLabel } from "../../lib/labels";
+import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
 import { AppFriend, DirectChat } from "../../types";
 
@@ -129,7 +130,7 @@ export default function FriendsScreen() {
   const handleDiscordPing = async (name: string) => {
     await track(token, "user_reactivated", { via: "discord_ping", friendName: name });
     await Share.share({
-      message: `Anyone free tonight? Let's link on Nowly -> nowly://invite/${name.toLowerCase()}`,
+      message: `Anyone free tonight? Let's link on Nowly -> ${createSmartOpenUrl("/onboarding")}`,
     });
   };
 
@@ -197,7 +198,7 @@ export default function FriendsScreen() {
               {radar?.rhythm.communityLabel ?? "Your local pocket"}
             </Text>
             <Text className="font-body text-sm text-white/60">
-              {(radar?.localDensity.activeNowCount ?? 0).toString()} active now ·{" "}
+              {(radar?.localDensity.activeNowCount ?? 0).toString()} active now -{" "}
               {(radar?.localDensity.nearbyFriendsCount ?? 0).toString()} nearby in your graph
             </Text>
             <Text className="font-body text-sm text-aqua/80">
@@ -271,7 +272,7 @@ export default function FriendsScreen() {
                       </View>
                       <Text className="mt-1 font-body text-sm text-white/60">{chatSubline(chat)}</Text>
                       <Text className="mt-1 font-body text-sm text-aqua/80">
-                        {chat.isGroup ? `${chat.memberCount} people · private group thread` : "1:1 private line"}
+                        {chat.isGroup ? `${chat.memberCount} people - private group thread` : "1:1 private line"}
                       </Text>
                     </View>
                   </View>
@@ -329,7 +330,7 @@ export default function FriendsScreen() {
                     <View>
                       <Text className="font-display text-lg text-cloud">{friend.name}</Text>
                       <Text className="mt-1 font-body text-sm text-white/60">
-                        Request sent · waiting on them
+                        Request sent - waiting on them
                       </Text>
                     </View>
                   </View>
@@ -350,7 +351,7 @@ export default function FriendsScreen() {
               variant="secondary"
               onPress={() =>
                 Share.share({
-                  message: "Anyone free tonight? Let's link on Nowly -> nowly://invite/crew",
+                  message: `Anyone free tonight? Let's link on Nowly -> ${createSmartOpenUrl("/onboarding")}`,
                 })
               }
             />
@@ -364,7 +365,7 @@ export default function FriendsScreen() {
                   <View className="flex-1">
                     <Text className="font-display text-xl text-cloud">{friend.name}</Text>
                     <Text className="mt-1 font-body text-sm text-white/60">
-                      {friend.communityTag || friend.city} · response {Math.round(friend.responsivenessScore * 100)}%
+                      {friend.communityTag || friend.city} - response {Math.round(friend.responsivenessScore * 100)}%
                     </Text>
                     <View className="mt-2 flex-row flex-wrap gap-2">
                       {friend.lastSignal ? (

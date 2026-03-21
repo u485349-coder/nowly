@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
-import * as Linking from "expo-linking";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import type { MobileBookableSlot, MobileBookingProfile } from "@nowly/shared";
@@ -9,6 +8,7 @@ import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { formatTimeRange } from "../../lib/format";
 import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
+import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
 import { api } from "../../lib/api";
 
@@ -98,7 +98,7 @@ export default function BookingInviteScreen() {
       return;
     }
 
-    const link = Linking.createURL(`/booking/${inviteCode}`);
+    const link = createSmartOpenUrl(`/booking/${inviteCode}`);
     await Share.share({
       message: `Pick a time on Nowly that fits what I already opened up: ${link}`,
     });

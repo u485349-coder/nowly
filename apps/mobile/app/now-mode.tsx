@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as Linking from "expo-linking";
 import { GradientMesh } from "../components/ui/GradientMesh";
 import { GlassCard } from "../components/ui/GlassCard";
 import { PillButton } from "../components/ui/PillButton";
@@ -18,6 +17,7 @@ import {
 } from "../lib/labels";
 import { formatDayTime } from "../lib/format";
 import { recurringWindowLabel } from "../lib/recurring-availability";
+import { createSmartOpenUrl } from "../lib/smart-links";
 import { useAppStore } from "../store/useAppStore";
 
 export default function NowModeScreen() {
@@ -32,7 +32,7 @@ export default function NowModeScreen() {
   const setScheduledOverlaps = useAppStore((state) => state.setScheduledOverlaps);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const availabilityShareLink = useMemo(
-    () => (user?.inviteCode ? Linking.createURL(`/booking/${user.inviteCode}`) : null),
+    () => (user?.inviteCode ? createSmartOpenUrl(`/booking/${user.inviteCode}`) : null),
     [user?.inviteCode],
   );
 

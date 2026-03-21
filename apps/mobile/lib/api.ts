@@ -32,6 +32,7 @@ import {
   demoThreads,
   demoUser,
 } from "./demo-data";
+import { createSmartOpenUrl, createSmartOpenUrlForTargets } from "./smart-links";
 import { AppFriend, AppHangout, AppUser, RecapCard, ThreadMessage } from "../types";
 import { DirectChat, DirectMessage } from "../types";
 
@@ -622,8 +623,14 @@ export const api = {
   async sendInvite(token: string | null, phoneNumbers: string[]) {
     if (demoMode) {
       return phoneNumbers.map((phoneNumber) => ({
-        inviteLink: `nowly://invite/${phoneNumber.replace(/\D/g, "")}`,
-        smsTemplate: `Anyone free tonight? Let's link on Nowly -> nowly://invite/${phoneNumber.replace(/\D/g, "")}`,
+        inviteLink: createSmartOpenUrlForTargets(
+          `/onboarding?referralToken=${phoneNumber.replace(/\D/g, "")}`,
+          `/onboarding?referralToken=${phoneNumber.replace(/\D/g, "")}`,
+        ),
+        smsTemplate: `Anyone free tonight? Let's link on Nowly -> ${createSmartOpenUrlForTargets(
+          `/onboarding?referralToken=${phoneNumber.replace(/\D/g, "")}`,
+          `/onboarding?referralToken=${phoneNumber.replace(/\D/g, "")}`,
+        )}`,
       }));
     }
 
@@ -705,6 +712,18 @@ export const api = {
     });
 
     return action === "DECLINE" ? null : normalizeFriend(currentUserId, response.data);
+  },
+
+  async redeemInvite(token: string | null, referralToken: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>("/friends/redeem-invite", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ referralToken }),
+    });
   },
 
   async setAvailability(

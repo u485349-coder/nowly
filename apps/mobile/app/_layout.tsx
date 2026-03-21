@@ -4,6 +4,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-go
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { api } from "../lib/api";
 import {
   notificationPathFromData,
@@ -21,7 +22,19 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (!token || !notificationsEnabled) {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      return;
+    }
+
+    if (token) {
+      window.localStorage.setItem("nowly.browser.session", "1");
+    } else {
+      window.localStorage.removeItem("nowly.browser.session");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !token || !notificationsEnabled) {
       return;
     }
 
@@ -43,6 +56,10 @@ export default function RootLayout() {
   }, [notificationsEnabled, token]);
 
   useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const path = notificationPathFromData(

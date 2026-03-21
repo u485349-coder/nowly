@@ -1,5 +1,5 @@
-import { startTransition, useMemo, useState } from "react";
-import { Alert, Image, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import { Alert, Image, Platform, ScrollView, Share, Text, TextInput, View } from "react-native";
 import { GradientMesh } from "../components/ui/GradientMesh";
 import { GlassCard } from "../components/ui/GlassCard";
 import { PillButton } from "../components/ui/PillButton";
@@ -17,10 +17,16 @@ import { useAppStore } from "../store/useAppStore";
 type Stage = "phone" | "otp" | "profile";
 
 export default function OnboardingScreen() {
-  const params = useLocalSearchParams<{ bookingInviteCode?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    bookingInviteCode?: string | string[];
+    referralToken?: string | string[];
+  }>();
   const bookingInviteCode = Array.isArray(params.bookingInviteCode)
     ? params.bookingInviteCode[0]
     : params.bookingInviteCode;
+  const referralToken = Array.isArray(params.referralToken)
+    ? params.referralToken[0]
+    : params.referralToken;
   const setSession = useAppStore((state) => state.setSession);
   const finishOnboarding = useAppStore((state) => state.finishOnboarding);
   const token = useAppStore((state) => state.token);
@@ -47,7 +53,20 @@ export default function OnboardingScreen() {
     [stage],
   );
 
+  useEffect(() => {
+    if (!token || !referralToken) {
+      return;
+    }
+
+    api.redeemInvite(token, referralToken).catch(() => undefined);
+  }, [referralToken, token]);
+
   const loadContacts = async () => {
+    if (Platform.OS === "web") {
+      setInviteStatus("Contact import stays in the app for now. Use invite cards below in browser.");
+      return;
+    }
+
     const permission = await Contacts.requestPermissionsAsync();
     if (permission.status !== "granted") {
       return;
@@ -79,6 +98,10 @@ export default function OnboardingScreen() {
     const session = await api.verifyOtp(phone, otp || devCode || "111111");
     setSession(session.token, session.user);
 
+    if (referralToken) {
+      await api.redeemInvite(session.token, referralToken).catch(() => undefined);
+    }
+
     if ((session.user as { onboardingCompleted?: boolean }).onboardingCompleted) {
       if (bookingInviteCode) {
         router.replace({
@@ -100,9 +123,19 @@ export default function OnboardingScreen() {
     const invite = invites[0];
 
     if (invite) {
-      await Share.share({
-        message: invite.smsTemplate,
-      });
+      if (Platform.OS === "web" && typeof navigator !== "undefined") {
+        if (navigator.share) {
+          await navigator.share({
+            text: invite.smsTemplate,
+          });
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(invite.smsTemplate);
+        }
+      } else {
+        await Share.share({
+          message: invite.smsTemplate,
+        });
+      }
       setInviteStatus(`Invite ready for ${invitePhone}`);
     }
   };
@@ -189,6 +222,7 @@ export default function OnboardingScreen() {
         city: trimmedCity,
         communityTag: trimmedCommunityTag || null,
         photoUrl: photoUrl || null,
+        referralToken,
       });
 
       finishOnboarding(user);
@@ -370,12 +404,16 @@ export default function OnboardingScreen() {
         {stage === "profile" ? (
           <GlassCard className="p-5">
             <View className="gap-4">
-              <View className="flex-row items-center justify-between">
-                <View>
-                  <Text className="font-display text-xl text-cloud">Invite your people</Text>
-                  <Text className="mt-1 font-body text-sm text-white/60">{inviteStatus}</Text>
-                </View>
-                <PillButton label="Load contacts" variant="secondary" onPress={loadContacts} />
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="font-display text-xl text-cloud">Invite your people</Text>
+                    <Text className="mt-1 font-body text-sm text-white/60">{inviteStatus}</Text>
+                  </View>
+                <PillButton
+                  label={Platform.OS === "web" ? "Invite links" : "Load contacts"}
+                  variant="secondary"
+                  onPress={loadContacts}
+                />
               </View>
 
               <View className="flex-row flex-wrap gap-2">

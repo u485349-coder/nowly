@@ -1,14 +1,17 @@
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export const notificationPathFromData = (data?: Record<string, unknown>) => {
   if (!data?.screen) {
@@ -51,6 +54,10 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
 };
 
 export const registerForPushNotificationsAsync = async () => {
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   // Expo Go no longer supports remote push notification tokens.
   // Keep the app usable there and only register push in dev/release builds.
   const isExpoGo =

@@ -12,6 +12,7 @@ import {
 } from "../../lib/labels";
 import { api } from "../../lib/api";
 import { useAppStore } from "../../store/useAppStore";
+import { createSmartOpenUrl } from "../../lib/smart-links";
 
 const responseActions = [
   {
@@ -184,7 +185,7 @@ export default function ProposalScreen() {
               variant="secondary"
               onPress={() =>
                 Share.share({
-                  message: `Join our Nowly link-up -> nowly://proposal/${hangout.id}`,
+                  message: `Join our Nowly link-up -> ${createSmartOpenUrl(`/proposal/${hangout.id}`)}`,
                 })
               }
             />
