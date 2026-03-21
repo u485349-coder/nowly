@@ -12,7 +12,7 @@ export default function NotFoundScreen() {
           That screen is gone, expired, or was never live in the first place.
         </Text>
         <View className="mt-6">
-          <PillButton label="Back home" onPress={() => router.replace("/(app)/home")} />
+          <PillButton label="Back home" onPress={() => router.replace("/home")} />
         </View>
       </View>
     </GradientMesh>

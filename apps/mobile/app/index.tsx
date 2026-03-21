@@ -39,7 +39,7 @@ export default function IndexScreen() {
 
     const timeout = setTimeout(() => {
       setIntroSeen();
-      router.replace(onboardingComplete ? "/(app)/home" : "/onboarding");
+      router.replace(onboardingComplete ? "/home" : "/onboarding");
     }, introSeen ? 920 : 1700);
 
     return () => clearTimeout(timeout);

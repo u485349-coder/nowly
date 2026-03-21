@@ -13,6 +13,16 @@ import { NOWLY_DESCRIPTION, NOWLY_SLOGAN } from "../lib/branding";
 import { useAppStore } from "../store/useAppStore";
 
 type Stage = "phone" | "otp" | "profile";
+const HOME_ROUTE = "/home";
+
+const showMessage = (title: string, message: string) => {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.alert(`${title}\n\n${message}`);
+    return;
+  }
+
+  Alert.alert(title, message);
+};
 
 export default function OnboardingScreen() {
   const params = useLocalSearchParams<{
@@ -110,7 +120,7 @@ export default function OnboardingScreen() {
         return;
       }
 
-      router.replace("/(app)/home");
+      router.replace(HOME_ROUTE);
       return;
     }
 
@@ -193,31 +203,40 @@ export default function OnboardingScreen() {
     const trimmedName = name.trim();
     const trimmedCity = city.trim();
     const trimmedCommunityTag = communityTag.trim();
+    const latestToken = useAppStore.getState().token;
 
     if (trimmedName.length < 2) {
-      Alert.alert("Add your name", "Use at least 2 characters so your friends know it's you.");
+      showMessage("Add your name", "Use at least 2 characters so your friends know it's you.");
       return;
     }
 
     if (trimmedCity.length < 2) {
-      Alert.alert("Add your city", "Pick the city or area where you usually link up.");
+      showMessage("Add your city", "Pick the city or area where you usually link up.");
       return;
     }
 
     if (trimmedCommunityTag.length === 1) {
-      Alert.alert("Community tag is too short", "Use at least 2 characters, or leave it blank.");
+      showMessage("Community tag is too short", "Use at least 2 characters, or leave it blank.");
       return;
     }
 
     if (photoUrl.length > 900_000) {
-      Alert.alert("Photo is too large", "Pick a slightly smaller photo and we'll keep setup moving.");
+      showMessage("Photo is too large", "Pick a slightly smaller photo and we'll keep setup moving.");
+      return;
+    }
+
+    if (!latestToken) {
+      showMessage(
+        "Session expired",
+        "Your sign-in session dropped before setup finished. Verify your phone again and we’ll keep moving.",
+      );
       return;
     }
 
     setIsFinishing(true);
 
     try {
-      const user = await api.completeOnboarding(token, {
+      const user = await api.completeOnboarding(latestToken, {
         name: trimmedName,
         city: trimmedCity,
         communityTag: trimmedCommunityTag || null,
@@ -232,16 +251,17 @@ export default function OnboardingScreen() {
           params: { inviteCode: bookingInviteCode },
         });
       } else {
-        router.replace("/(app)/home");
+        router.replace(HOME_ROUTE);
       }
-      void track(token, "onboarding_completed", { city: trimmedCity });
+      void track(latestToken, "onboarding_completed", { city: trimmedCity });
     } catch (error) {
       const message =
         error instanceof Error && error.message
           ? error.message
           : "We couldn't finish setup right now. Try again in a moment.";
 
-      Alert.alert("Couldn't finish setup", message);
+      console.error("[onboarding:finish]", error);
+      showMessage("Couldn't finish setup", message);
     } finally {
       setIsFinishing(false);
     }

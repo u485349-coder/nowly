@@ -29,15 +29,15 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
   }
 
   if (data.screen === "home") {
-    return "/(app)/home";
+    return "/home";
   }
 
   if (data.screen === "friends") {
-    return "/(app)/friends";
+    return "/friends";
   }
 
   if (data.screen === "profile") {
-    return "/(app)/profile";
+    return "/profile";
   }
 
   if (data.screen === "match" && typeof data.matchId === "string") {
