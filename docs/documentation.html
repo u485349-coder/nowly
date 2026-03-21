@@ -337,7 +337,7 @@
       }
     </style>
   </head>
-  <body>
+  <body data-browser-app-url="/app/" data-mobile-app-url="nowly://onboarding" data-ios-store-url="https://apps.apple.com/us/search?term=Nowly" data-android-store-url="https://play.google.com/store/apps/details?id=com.nowly.app">
     <main class="shell">
       <nav class="nav">
         <a class="brand" href="./index.html">
@@ -353,6 +353,7 @@
           <a class="repo-link" href="./index.html">Home</a>
           <a class="repo-link active" href="./documentation.html">Documentation</a>
           <a class="repo-link" href="https://github.com/u485349-coder/nowly">View GitHub Repo</a>
+          <a class="repo-link active" data-nowly-open href="/app/">Log in</a>
         </div>
       </nav>
 
@@ -362,13 +363,13 @@
           <h1>How Nowly turns <em>free time overlap</em> into real hangouts.</h1>
           <p>
             Nowly is not a calendar tool and not an event planner. It is a live social coordination system built to
-            help friends discover shared openings, act on them quickly, and keep real-world momentum alive.
+            help friends discover shared openings, act on them quickly, keep private conversation warm, and move between phone and browser without losing momentum.
           </p>
         </div>
         <div class="panel hero-side">
           <div class="mini-card">
             <strong>What the product is for</strong>
-            <p>Spot when your people are actually free, send a low-pressure prompt, and turn a moment into a real link-up.</p>
+            <p>Spot when your people are actually free, share recurring windows, send a low-pressure prompt, and turn a moment into a real link-up.</p>
           </div>
           <div class="mini-card">
             <strong>What the product avoids</strong>
@@ -376,7 +377,7 @@
           </div>
           <div class="mini-card">
             <strong>Core stack</strong>
-            <p>Expo mobile, Express API, PostgreSQL, Prisma, Socket.io, Twilio-ready OTP, push notifications, Railway hosting.</p>
+            <p>Expo app for phone and browser, Express API, PostgreSQL, Prisma, Socket.io, Twilio-ready OTP, push notifications, Railway hosting.</p>
           </div>
         </div>
       </section>
@@ -388,11 +389,12 @@
         </p>
         <ol class="step-list">
           <li>Join with your phone number, add your name and city, then pull in your real crew through contacts or invites.</li>
-          <li>Set a lightweight availability signal like Free now, Free later, or Down this weekend.</li>
-          <li>Add optional context such as radius, vibe, or mood so matches feel more human without adding friction.</li>
+          <li>Set a lightweight availability signal like Free now, Free later, or Down this weekend, or add recurring weekly/monthly windows in Now Mode.</li>
+          <li>Add optional context such as vibe, budget, intent, custom mode names, and live duration so matches feel more human without adding friction.</li>
           <li>Wait for overlap notifications or open the app to see who is free nearby right now.</li>
-          <li>Send a low-pressure prompt like quick bite, coffee run, or pull up for a bit.</li>
-          <li>Use the thread for live coordination, then confirm whether the hang happened so the app gets smarter over time.</li>
+          <li>Send a low-pressure prompt like quick bite, coffee run, pull up for a bit, or write your own custom prompt.</li>
+          <li>Use private chats or group chats to keep the line warm between hangs, and use a hangout thread only when a specific plan is moving.</li>
+          <li>Share a booking link if you want someone to pick from your recurring availability, then confirm the hang happened so the app gets smarter over time.</li>
         </ol>
       </section>
 
@@ -411,24 +413,40 @@
             <strong>Availability signals</strong>
             <ul class="doc-list">
               <li>Users set states like Free now, Free later, Busy, or Down this weekend.</li>
-              <li>Signals support optional vibe, radius, energy, and intent inputs.</li>
+              <li>Signals support optional vibe, radius, energy, intent, custom labels, and live duration inputs.</li>
               <li>Every signal expires automatically so the app stays fresh and real-time.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Recurring availability and booking links</strong>
+            <ul class="doc-list">
+              <li>Users can save weekly and monthly recurring windows with exact start and end times.</li>
+              <li>Those windows generate best-fit mutual overlap suggestions.</li>
+              <li>Users can share a booking link so someone else can pick from the specific availability they chose.</li>
             </ul>
           </article>
           <article class="feature">
             <strong>Overlap matching engine</strong>
             <ul class="doc-list">
               <li>The backend checks friend overlap continuously and ranks the strongest opportunities.</li>
-              <li>Time, proximity, responsiveness, and lightweight social signals influence match quality.</li>
+              <li>Time, proximity, responsiveness, recurring-fit, and lightweight social signals influence match quality.</li>
               <li>Matches are meant to feel timely, not random.</li>
             </ul>
           </article>
           <article class="feature">
             <strong>Low-pressure proposals</strong>
             <ul class="doc-list">
-              <li>Prompts are casual by design: quick bite, coffee run, walking nearby, 10 min only.</li>
+              <li>Prompts are casual by design: quick bite, coffee run, walking nearby, 10 min only, plus custom prompts in the user's own words.</li>
               <li>Response flows stay lightweight so people do not feel trapped in a full RSVP commitment.</li>
               <li>This lowers anxiety and makes real hangs more likely to happen.</li>
+            </ul>
+          </article>
+          <article class="feature">
+            <strong>Private chats and group chats</strong>
+            <ul class="doc-list">
+              <li>Friends can open persistent 1:1 chats with a chat bubble action.</li>
+              <li>Users can create reusable private group chats with multiple friends.</li>
+              <li>These chats are separate from hangout threads so conversation can stay alive even when no plan is active.</li>
             </ul>
           </article>
           <article class="feature">
@@ -443,8 +461,8 @@
             <strong>Recap and rhythm</strong>
             <ul class="doc-list">
               <li>After the hangout window, Nowly asks if the hang happened.</li>
-              <li>That signal powers streaks, recaps, responsiveness scores, and rhythm cues.</li>
-              <li>The app gets smarter about who links up, when they link up, and what tends to convert.</li>
+              <li>Completed hangs move into recap/past-hangs mode instead of staying live.</li>
+              <li>That signal powers recaps, responsiveness scores, and rhythm cues so the app gets smarter about who links up, when they link up, and what tends to convert.</li>
             </ul>
           </article>
         </div>
@@ -489,7 +507,7 @@
             <ul class="doc-list">
               <li>Deploy the backend on Railway with a Postgres service in the same project.</li>
               <li>Deploy the website on Vercel from the <code>docs</code> folder.</li>
-              <li>Point the Expo mobile app to the live backend URL once the API is healthy.</li>
+              <li>Deploy the Expo app as a browser app for web and point both phone and browser to the same live backend URL once the API is healthy.</li>
             </ul>
           </article>
         </div>
@@ -500,5 +518,6 @@
         <a href="https://github.com/u485349-coder/nowly">github.com/u485349-coder/nowly</a>
       </footer>
     </main>
+    <script src="./site.js"></script>
   </body>
 </html>

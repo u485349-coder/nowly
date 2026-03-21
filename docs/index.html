@@ -501,7 +501,7 @@
       }
     </style>
   </head>
-  <body>
+  <body data-browser-app-url="/app/" data-mobile-app-url="nowly://onboarding" data-ios-store-url="https://apps.apple.com/us/search?term=Nowly" data-android-store-url="https://play.google.com/store/apps/details?id=com.nowly.app">
     <main class="shell">
       <nav class="nav">
         <a class="brand" href="https://github.com/u485349-coder/nowly">
@@ -516,6 +516,7 @@
         <div class="nav-actions">
           <a class="repo-link" href="./documentation.html">Documentation</a>
           <a class="repo-link" href="https://github.com/u485349-coder/nowly">View GitHub Repo</a>
+          <a class="button button-primary" data-nowly-open href="/app/">Log in</a>
         </div>
       </nav>
 
@@ -524,25 +525,26 @@
           <div class="eyebrow">Live social radar for spontaneous hangouts</div>
           <h1>Catch the moment your crew is <em>actually free.</em></h1>
           <p>
-            Nowly helps friends spot overlapping free time, turn it into a real plan fast, and keep
-            the social rhythm alive without turning life into a calendar.
+            Nowly helps friends spot overlapping free time, share bookable windows, keep private chats warm,
+            and turn social overlap into a real hangout before the moment slips.
           </p>
           <div class="actions">
-            <a class="button button-primary" href="https://github.com/u485349-coder/nowly">Open the repo</a>
-            <a class="button button-secondary" href="https://railway.app/">Deploy the backend</a>
+            <a class="button button-primary" data-nowly-browser href="/app/">Log in to Nowly in your browser</a>
+            <a class="button button-secondary" data-nowly-mobile href="nowly://onboarding">Get the app</a>
+            <a class="button button-secondary" href="./documentation.html">Read documentation</a>
           </div>
           <div class="hero-stats">
             <div class="stat">
-              <strong>Free now</strong>
+              <strong>Live now</strong>
               <span>Lightweight signals instead of heavy planning.</span>
             </div>
             <div class="stat">
-              <strong>Overlap found</strong>
-              <span>Live matching between nearby friends.</span>
+              <strong>Book a window</strong>
+              <span>Recurring weekly and monthly slots friends can lock in.</span>
             </div>
             <div class="stat">
-              <strong>Pull up fast</strong>
-              <span>Low-pressure hangout prompts that convert.</span>
+              <strong>Keep it warm</strong>
+              <span>Private chats and group chats keep the line moving.</span>
             </div>
           </div>
         </div>
@@ -581,20 +583,21 @@
         <h2>Built for spontaneity, not scheduling theater.</h2>
         <p class="lead">
           The point of Nowly is simple: reduce the friction between "anyone free?" and actually linking up.
-          No bloated event flow. No planning burden. Just live availability, smart overlap, and fast social motion.
+          No bloated event flow. No planning burden. Just live availability, smart overlap, recurring booking links,
+          and fast social motion across phone and browser.
         </p>
         <div class="grid three">
           <article class="feature">
             <strong>Signal availability</strong>
-            <p>Free now, free later, busy, down this weekend. Add a vibe and radius, then let it expire on its own.</p>
+            <p>Free now, free later, busy, down this weekend. Add a vibe, custom mode, and live duration, then let it expire on its own.</p>
           </article>
           <article class="feature">
-            <strong>Detect overlap</strong>
-            <p>Nowly watches for friend overlap using time, distance, responsiveness, and lightweight social context.</p>
+            <strong>Detect overlap and future fit</strong>
+            <p>Nowly watches for live friend overlap and recurring schedule fit using time, distance, responsiveness, and lightweight social context.</p>
           </article>
           <article class="feature">
             <strong>Turn it into a hangout</strong>
-            <p>Send a quick proposal, start a group thread, share ETA, and keep the social loop moving.</p>
+            <p>Send a quick proposal, share a booking link, open a private chat, or spin up a group thread fast.</p>
           </article>
         </div>
       </section>
@@ -608,7 +611,7 @@
         <div class="grid two">
           <article class="feature">
             <strong>Low-pressure by default</strong>
-            <p>Quick bite, coffee run, walking nearby, pull up for a bit. The product lowers the social burden instead of adding it.</p>
+            <p>Quick bite, coffee run, walking nearby, pull up for a bit, or a custom prompt in your own words. The product lowers the social burden instead of adding it.</p>
           </article>
           <article class="feature">
             <strong>Network effects that matter</strong>
@@ -616,24 +619,36 @@
           </article>
           <article class="feature">
             <strong>Social rhythm, not isolated events</strong>
-            <p>Nowly reinforces momentum with recaps, streaks, overlap nudges, and signs that your people are active right now.</p>
+            <p>Nowly reinforces momentum with recaps, recurring availability, overlap nudges, and signs that your people are active right now.</p>
           </article>
           <article class="feature">
-            <strong>Real backend, real-time core</strong>
-            <p>Expo mobile app, Express API, Prisma/Postgres, Socket.io threads, Twilio-ready OTP, and Railway-friendly deployment.</p>
+            <strong>Real app on phone and browser</strong>
+            <p>One Expo Router codebase powers mobile and browser, while the landing site acts like a launcher that can log you in or open Nowly fast.</p>
           </article>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Use Nowly on your phone or in your browser.</h2>
+        <p class="lead">
+          The browser app follows the same core product flow as mobile: phone login, live radar, recurring availability,
+          shareable booking links, private chats, group chats, proposals, and recap loops. The landing page now acts as a clean launcher for both.
+        </p>
+        <div class="actions">
+          <a class="button button-primary" data-nowly-open href="/app/">Log in</a>
+          <a class="button button-secondary" data-nowly-browser href="/app/">Log in to Nowly in your browser</a>
         </div>
       </section>
 
       <section class="panel section">
         <h2>Need the full product rundown?</h2>
         <p class="lead">
-          Read the dedicated documentation page for a clean walkthrough of onboarding, live signals, overlap matching,
-          group coordination, recap loops, and the production-minded backend stack behind Nowly.
+          Read the dedicated documentation page for a clean walkthrough of onboarding, live signals, recurring booking links,
+          private chats, group coordination, browser access, recap loops, and the production-minded backend stack behind Nowly.
         </p>
         <div class="actions">
           <a class="button button-primary" href="./documentation.html">Open documentation</a>
-          <a class="button button-secondary" href="https://github.com/u485349-coder/nowly">Browse the codebase</a>
+          <a class="button button-secondary" data-nowly-browser href="/app/">Open Nowly in browser</a>
         </div>
       </section>
 
@@ -642,6 +657,7 @@
         <a href="https://github.com/u485349-coder/nowly">github.com/u485349-coder/nowly</a>
       </footer>
     </main>
+    <script src="./site.js"></script>
   </body>
 </html>
 

@@ -17,7 +17,11 @@ const envSchema = z.object({
   EXPO_ACCESS_TOKEN: z.string().optional(),
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
-  DISCORD_REDIRECT_URI: z.string().optional()
+  DISCORD_REDIRECT_URI: z.string().optional(),
+  IOS_STORE_URL: z.string().optional(),
+  ANDROID_STORE_URL: z
+    .string()
+    .default("https://play.google.com/store/apps/details?id=com.nowly.app")
 });
 
 export const env = envSchema.parse(process.env);

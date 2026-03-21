@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open Nowly</title>
+    <meta name="theme-color" content="#0B1020" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon.png?v=4" />
+    <style>
+      :root {
+        --bg-top: #111827;
+        --bg-mid: #0b1020;
+        --bg-bottom: #020617;
+        --text: #f8fafc;
+        --muted: rgba(226, 232, 240, 0.72);
+        --card-border: rgba(148, 163, 184, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        color: var(--text);
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(168, 85, 247, 0.18), transparent 24%),
+          radial-gradient(circle at 68% 74%, rgba(34, 211, 238, 0.12), transparent 20%),
+          linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bottom) 100%);
+      }
+
+      .panel {
+        width: min(520px, 100%);
+        border-radius: 32px;
+        border: 1px solid var(--card-border);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.86));
+        box-shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+        backdrop-filter: blur(16px);
+        padding: 32px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand img {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: clamp(2rem, 6vw, 3rem);
+        letter-spacing: -0.06em;
+        line-height: 0.96;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .actions {
+        display: grid;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        text-decoration: none;
+      }
+
+      .button-primary {
+        color: #020617;
+        background: linear-gradient(135deg, #f8fafc, #bae6fd);
+      }
+
+      .button-secondary {
+        color: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.44);
+      }
+
+      .meta {
+        margin-top: 18px;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <div class="brand">
+        <img src="./favicon.png?v=4" alt="" />
+        <div>
+          <strong>Nowly</strong>
+          <div style="color: var(--muted); margin-top: 2px;">Don't grow apart</div>
+        </div>
+      </div>
+
+      <h1>Opening Nowly...</h1>
+      <p id="status">
+        We’ll try the app first. If it’s not installed, we’ll send you to the best next place.
+      </p>
+
+      <div class="actions">
+        <a class="button button-primary" id="open-app" href="nowly://onboarding">Open the app</a>
+        <a class="button button-secondary" id="open-browser" href="/app/">Open in browser</a>
+        <a class="button button-secondary" id="download-app" href="https://play.google.com/store/apps/details?id=com.nowly.app">Get the app</a>
+      </div>
+
+      <div class="meta" id="meta">If nothing happens, use one of the buttons above.</div>
+    </main>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const appUrl = params.get("app") || "nowly://onboarding";
+        const browserUrl = params.get("browser") || "/app/";
+        const iosStoreUrl = params.get("ios") || "https://apps.apple.com/us/search?term=Nowly";
+        const androidStoreUrl =
+          params.get("android") ||
+          "https://play.google.com/store/apps/details?id=com.nowly.app";
+
+        const isAndroid = /Android/i.test(window.navigator.userAgent);
+        const isIos = /iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+        const isMobile = isAndroid || isIos;
+        const fallbackUrl = isAndroid ? androidStoreUrl : isIos ? iosStoreUrl : browserUrl;
+
+        document.getElementById("open-app").setAttribute("href", appUrl);
+        document.getElementById("open-browser").setAttribute("href", browserUrl);
+        document.getElementById("download-app").setAttribute("href", fallbackUrl);
+
+        if (!isMobile) {
+          document.getElementById("status").textContent =
+            "You're on a browser-first device, so we'll open the web app directly.";
+          window.location.replace(browserUrl);
+          return;
+        }
+
+        let redirected = false;
+
+        const fallbackTimer = window.setTimeout(function () {
+          if (redirected) {
+            return;
+          }
+
+          redirected = true;
+          document.getElementById("status").textContent =
+            "The app didn't open, so we're sending you to download Nowly.";
+          window.location.replace(fallbackUrl);
+        }, 1400);
+
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) {
+            redirected = true;
+            window.clearTimeout(fallbackTimer);
+          }
+        });
+
+        window.location.href = appUrl;
+      })();
+    </script>
+  </body>
+</html>

@@ -6,6 +6,7 @@ import { prisma } from "../../db/prisma.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { normalizeFriendPair } from "../../utils/friends.js";
+import { createSmartOpenLinkForTargets } from "../../utils/links.js";
 import { trackEvent } from "../analytics/analytics.service.js";
 import {
   deriveFriendInsight,
@@ -23,6 +24,10 @@ const requestSchema = z.object({
 
 const respondSchema = z.object({
   action: z.enum(["ACCEPT", "DECLINE"])
+});
+
+const redeemInviteSchema = z.object({
+  referralToken: z.string().min(1)
 });
 
 const friendshipInclude = {
@@ -195,8 +200,14 @@ friendsRouter.post(
     response.status(201).json({
       data: invitations.map((invitation) => ({
         ...invitation,
-        inviteLink: `${env.MOBILE_DEEP_LINK_SCHEME}://invite/${invitation.deepLinkToken}`,
-        smsTemplate: `Anyone free tonight? Let's link on Nowly -> ${env.MOBILE_DEEP_LINK_SCHEME}://invite/${invitation.deepLinkToken}`
+        inviteLink: createSmartOpenLinkForTargets(
+          `/onboarding?referralToken=${invitation.deepLinkToken}`,
+          `/onboarding?referralToken=${invitation.deepLinkToken}`,
+        ),
+        smsTemplate: `Anyone free tonight? Let's link on Nowly -> ${createSmartOpenLinkForTargets(
+          `/onboarding?referralToken=${invitation.deepLinkToken}`,
+          `/onboarding?referralToken=${invitation.deepLinkToken}`,
+        )}`
       }))
     });
   })
@@ -226,6 +237,58 @@ friendsRouter.post(
     });
 
     response.status(201).json({ data: friendship });
+  })
+);
+
+friendsRouter.post(
+  "/redeem-invite",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const body = redeemInviteSchema.parse(request.body);
+    const invitation = await prisma.invitation.findUnique({
+      where: { deepLinkToken: body.referralToken }
+    });
+
+    if (!invitation) {
+      response.status(404).json({ error: "Invite not found" });
+      return;
+    }
+
+    if (invitation.inviterId === request.userId) {
+      response.json({ data: { ok: true } });
+      return;
+    }
+
+    if (!invitation.joinedUserId) {
+      await prisma.invitation.update({
+        where: { id: invitation.id },
+        data: {
+          joinedUserId: request.userId!,
+          redeemedAt: new Date()
+        }
+      });
+    }
+
+    const [userAId, userBId] = normalizeFriendPair(invitation.inviterId, request.userId!);
+    await prisma.friendship.upsert({
+      where: {
+        userAId_userBId: {
+          userAId,
+          userBId
+        }
+      },
+      update: {
+        status: "ACCEPTED"
+      },
+      create: {
+        userAId,
+        userBId,
+        status: "ACCEPTED",
+        initiatedBy: invitation.inviterId
+      }
+    });
+
+    response.status(201).json({ data: { ok: true } });
   })
 );
 

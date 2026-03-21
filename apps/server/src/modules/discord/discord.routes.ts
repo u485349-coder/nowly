@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { createSmartOpenLinkForTargets } from "../../utils/links.js";
 
 const redirectSchema = z.object({
   redirectUri: z.string().url().optional()
@@ -180,7 +181,10 @@ discordRouter.post(
       }
     });
 
-    const link = `${env.MOBILE_DEEP_LINK_SCHEME}://invite/${invitation.deepLinkToken}`;
+    const link = createSmartOpenLinkForTargets(
+      `/onboarding?referralToken=${invitation.deepLinkToken}`,
+      `/onboarding?referralToken=${invitation.deepLinkToken}`,
+    );
     response.status(StatusCodes.CREATED).json({
       data: {
         link,
