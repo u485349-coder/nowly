@@ -114,7 +114,7 @@ const FloatingTabItem = memo(
 const FloatingNavBarComponent = ({
   actions,
   descriptors,
-  fabAccentColor = nowlyColors.violet,
+  fabAccentColor = nowlyColors.aqua,
   fabIcon = "plus",
   icons,
   navigation,
@@ -141,8 +141,8 @@ const FloatingNavBarComponent = ({
     opacity: interpolate(menuProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
   }));
 
-  const barBottom = Math.max(24, insets.bottom + 10);
-  const barWidth = Math.min(width - 40, width * 0.8);
+  const barBottom = Math.max(22, insets.bottom + 10);
+  const barWidth = Math.min(width - 28, width >= 768 ? 430 : width * 0.9);
   const barLeft = (width - barWidth) / 2;
   const toggleBottom = barBottom + 18;
   const menuBottom = barBottom + 36;
@@ -267,32 +267,30 @@ const styles = StyleSheet.create({
   },
   barWrap: {
     position: "absolute",
-    height: 58,
-    borderRadius: 40,
+    height: 64,
+    borderRadius: 34,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    backgroundColor: isWeb ? "rgba(10,14,30,0.88)" : "rgba(10,14,30,0.75)",
-    shadowColor: "#020617",
-    shadowOpacity: isWeb ? 0.08 : 0.18,
-    shadowRadius: isWeb ? 12 : 18,
-    shadowOffset: { width: 0, height: isWeb ? 8 : 12 },
+    backgroundColor: isWeb ? "rgba(7,13,26,0.86)" : "rgba(7,13,26,0.72)",
+    shadowColor: nowlyColors.glow,
+    shadowOpacity: isWeb ? 0.08 : 0.14,
+    shadowRadius: isWeb ? 16 : 24,
+    shadowOffset: { width: 0, height: isWeb ? 10 : 14 },
     elevation: 0,
   },
   blurClip: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 40,
+    borderRadius: 34,
     overflow: "hidden",
   },
   barTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: isWeb ? "rgba(10,14,30,0.64)" : "rgba(10,14,30,0.42)",
+    backgroundColor: isWeb ? "rgba(9,16,31,0.68)" : "rgba(9,16,31,0.5)",
   },
   navRow: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   sideGroup: {
     flex: 1,
@@ -301,18 +299,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-evenly",
   },
   centerGap: {
-    width: 92,
+    width: 104,
   },
   tabPressable: {
     minWidth: 56,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    paddingVertical: 8,
+    gap: 4,
+    paddingVertical: 10,
   },
   tabLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
+    fontSize: 10.5,
     includeFontPadding: false,
   },
 });

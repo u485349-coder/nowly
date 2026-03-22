@@ -21,13 +21,13 @@ export default function AppLayout() {
       {
         id: "new-hangout",
         icon: "lightning-bolt",
-        label: "Start hangout",
-        onPress: () => router.push("/friends"),
+        label: "Start a signal",
+        onPress: () => router.push("/prompt/quick-link"),
       },
       {
         id: "now-mode",
         icon: "calendar-clock-outline",
-        label: "Set windows",
+        label: "Find a time",
         onPress: () => router.push("/now-mode"),
       },
       {
@@ -49,8 +49,8 @@ export default function AppLayout() {
         <FloatingNavBar
           {...props}
           actions={fabActions}
-          fabAccentColor={nowlyColors.violet}
-          fabIcon="plus"
+          fabAccentColor={nowlyColors.aqua}
+          fabIcon="lightning-bolt"
           icons={tabIcons}
         />
       )}

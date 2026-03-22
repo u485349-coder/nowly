@@ -1,15 +1,19 @@
+import { useEffect } from "react";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   interpolateColor,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { nowlyColors } from "../../constants/theme";
 import { webPressableStyle } from "../../lib/web-pressable";
@@ -35,24 +39,45 @@ export const FABToggle = ({
   progress,
   icon = "plus",
   accentColor = nowlyColors.violet,
-  size = 70,
+  size = 78,
 }: FABToggleProps) => {
   const pressProgress = useSharedValue(0);
+  const breatheProgress = useSharedValue(0);
+  const orbitProgress = useSharedValue(0);
+
+  useEffect(() => {
+    breatheProgress.value = withRepeat(
+      withTiming(1, {
+        duration: 2200,
+        easing: Easing.inOut(Easing.sin),
+      }),
+      -1,
+      true,
+    );
+    orbitProgress.value = withRepeat(
+      withTiming(1, {
+        duration: 4200,
+        easing: Easing.linear,
+      }),
+      -1,
+      false,
+    );
+  }, [breatheProgress, orbitProgress]);
 
   const haloStyle = useAnimatedStyle(() => ({
-    opacity: 0.16 + progress.value * 0.18,
+    opacity: 0.18 + progress.value * 0.14 + breatheProgress.value * 0.06,
     transform: [
       {
-        scale: interpolate(progress.value, [0, 1], [0.94, 1.12], Extrapolation.CLAMP),
+        scale: interpolate(progress.value + breatheProgress.value * 0.35, [0, 1.35], [0.96, 1.14], Extrapolation.CLAMP),
       },
     ],
   }));
 
   const pulseStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0.06, 0.18], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value + breatheProgress.value * 0.3, [0, 1.3], [0.08, 0.2], Extrapolation.CLAMP),
     transform: [
       {
-        scale: interpolate(progress.value, [0, 1], [0.96, 1.18], Extrapolation.CLAMP),
+        scale: interpolate(progress.value + breatheProgress.value * 0.4, [0, 1.4], [0.98, 1.22], Extrapolation.CLAMP),
       },
     ],
   }));
@@ -62,9 +87,12 @@ export const FABToggle = ({
       {
         scale: interpolate(pressProgress.value, [0, 1], [1, 0.94], Extrapolation.CLAMP),
       },
+      {
+        translateY: interpolate(breatheProgress.value, [0, 1], [0, -1.5], Extrapolation.CLAMP),
+      },
     ],
-    shadowOpacity: 0.24 + progress.value * 0.16,
-    shadowRadius: 16 + progress.value * 7,
+    shadowOpacity: 0.28 + progress.value * 0.16 + breatheProgress.value * 0.04,
+    shadowRadius: 18 + progress.value * 8 + breatheProgress.value * 2,
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
@@ -75,6 +103,18 @@ export const FABToggle = ({
       },
       {
         scale: interpolate(progress.value, [0, 1], [1, 1.04], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  const orbitRingStyle = useAnimatedStyle(() => ({
+    opacity: 0.22 + breatheProgress.value * 0.08,
+    transform: [
+      {
+        rotate: `${orbitProgress.value * 360}deg`,
+      },
+      {
+        scale: interpolate(progress.value, [0, 1], [1, 1.08], Extrapolation.CLAMP),
       },
     ],
   }));
@@ -124,6 +164,20 @@ export const FABToggle = ({
       <Animated.View
         pointerEvents="none"
         style={[
+          styles.orbitRing,
+          orbitRingStyle,
+          {
+            width: size + 28,
+            height: size + 28,
+            borderRadius: (size + 28) / 2,
+          },
+        ]}
+      >
+        <View style={[styles.orbitDot, { backgroundColor: accentColor }]} />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
           styles.halo,
           haloStyle,
           {
@@ -144,7 +198,7 @@ export const FABToggle = ({
         ]}
       >
         <LinearGradient
-          colors={[accentColor, nowlyColors.sky]}
+          colors={["#B5F1FF", accentColor, nowlyColors.sky]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0.05, y: 0.1 }}
           style={[
@@ -180,6 +234,21 @@ const styles = StyleSheet.create({
     position: "absolute",
     borderWidth: 1.5,
   },
+  orbitRing: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  orbitDot: {
+    marginTop: 1,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    shadowColor: "#A5F3FC",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
   button: {
     alignItems: "center",
     justifyContent: "center",
@@ -198,9 +267,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 8,
     left: 10,
-    width: 24,
+    width: 26,
     height: 16,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
 });

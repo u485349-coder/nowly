@@ -1,35 +1,74 @@
-import { startTransition, useEffect } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { startTransition, useEffect, useMemo, useRef } from "react";
+import {
+  Animated,
+  Easing,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
-import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
-import { promptActions } from "../../features/prompts/prompt-actions";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { formatDayTime } from "../../lib/format";
-import {
-  availabilityLabel,
-  budgetLabel,
-  hangoutIntentLabel,
-  microCommitmentLabel,
-  vibeLabel,
-} from "../../lib/labels";
+import { availabilityLabel } from "../../lib/labels";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
+
+const quickPrompts = [
+  { key: "quick-bite", label: "Quick bite", route: "/prompt/quick-bite" },
+  { key: "walk-nearby", label: "Walk nearby", route: "/prompt/walk-nearby" },
+  { key: "study-sprint", label: "Study sprint", route: "/prompt/custom-prompt" },
+  { key: "coffee-run", label: "Coffee run", route: "/prompt/coffee-run" },
+  { key: "custom-nudge", label: "Custom nudge", route: "/prompt/custom-prompt" },
+];
+
+const AvatarChip = ({ name, photoUrl }: { name: string; photoUrl?: string | null }) => (
+  <View style={styles.avatarChip}>
+    {photoUrl ? (
+      <Image source={{ uri: photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+    ) : (
+      <View style={styles.avatarFallback}>
+        <Text style={styles.avatarInitial}>{(name[0] ?? "N").toUpperCase()}</Text>
+      </View>
+    )}
+  </View>
+);
+
+const formatWindowLine = (startsAt?: string | null) => {
+  if (!startsAt) {
+    return "Tonight around 8pm.";
+  }
+
+  const date = new Date(startsAt);
+
+  return `${date.toLocaleDateString([], {
+    weekday: "short",
+  })} around ${date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })}.`;
+};
 
 export default function HomeScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const matches = useAppStore((state) => state.matches);
-  const hangouts = useAppStore((state) => state.hangouts);
-  const recaps = useAppStore((state) => state.recaps);
   const activeSignal = useAppStore((state) => state.activeSignal);
+  const recaps = useAppStore((state) => state.recaps);
   const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const radar = useAppStore((state) => state.radar);
   const setDashboard = useAppStore((state) => state.setDashboard);
-  const upsertHangout = useAppStore((state) => state.upsertHangout);
   const bootstrapDemo = useAppStore((state) => state.bootstrapDemo);
+  const layout = useResponsiveLayout();
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!user) {
@@ -58,332 +97,518 @@ export default function HomeScreen() {
     };
   }, [bootstrapDemo, setDashboard, token, user]);
 
-  const topMatches = matches.slice(0, 3);
-  const activeHangouts = hangouts.filter((hangout) => hangout.status !== "COMPLETED");
-  const completedHangouts = hangouts.filter((hangout) => hangout.status === "COMPLETED");
-  const nearbyLabel = user?.communityTag || user?.city || "your area";
-  const availabilityHeadline = topMatches.length
-    ? `${topMatches.length} ${topMatches.length === 1 ? "friend is" : "friends are"} free near ${nearbyLabel}.`
-    : `No one is fully lined up near ${nearbyLabel} yet.`;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 2400,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
 
-  const openPromptPicker = (promptKey: string) => {
-    router.push({
-      pathname: "/prompt/[promptKey]",
-      params: { promptKey },
-    });
-  };
+    animation.start();
 
-  const launchScheduledSuggestion = async (
-    suggestion: (typeof scheduledOverlaps)[number],
-  ) => {
-    const hangout = await api.createHangout(token, {
-      activity:
-        suggestion.sharedIntent
-          ? suggestion.sharedIntent.replaceAll("_", " ").toLowerCase()
-          : "hang out",
-      microType:
-        suggestion.sharedIntent ??
-        suggestion.sourceWindow.hangoutIntent ??
-        suggestion.matchedWindow.hangoutIntent ??
-        "QUICK_CHILL",
-      commitmentLevel: "QUICK_WINDOW",
-      locationName: user?.communityTag || user?.city || "nearby",
-      participantIds: [suggestion.matchedUser.id],
-      scheduledFor: suggestion.startsAt,
-    });
+    return () => {
+      animation.stop();
+    };
+  }, [pulse]);
 
-    upsertHangout(hangout);
-    router.push(`/proposal/${hangout.id}`);
-  };
+  const warmPeople = useMemo(() => {
+    const seen = new Set<string>();
+
+    return [...matches, ...scheduledOverlaps]
+      .flatMap((item) => {
+        const person = "matchedUser" in item ? item.matchedUser : null;
+
+        if (!person || seen.has(person.id)) {
+          return [];
+        }
+
+        seen.add(person.id);
+        return [person];
+      })
+      .slice(0, 4);
+  }, [matches, scheduledOverlaps]);
+
+  const statusLine = scheduledOverlaps.length
+    ? scheduledOverlaps[0].label
+    : activeSignal
+      ? `Signal live until ${formatDayTime(activeSignal.expiresAt)}`
+      : radar?.rhythm.detail || "No overlap yet.";
+
+  const heroSupport = scheduledOverlaps.length
+    ? scheduledOverlaps[0].summary
+    : matches.length
+      ? `${matches.length} ${matches.length === 1 ? "friend looks" : "friends look"} warm on the line.`
+      : activeSignal
+        ? `Your light signal is up and ${availabilityLabel(activeSignal.state).toLowerCase()} still feels easy.`
+        : radar?.suggestionLine || "Wake the radar up and let timing do the rest.";
+
+  const plannedWindowLine = formatWindowLine(
+    scheduledOverlaps[0]?.startsAt ?? (activeSignal ? activeSignal.expiresAt : null),
+  );
+  const pulseScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 3.8],
+  });
+  const pulseOpacity = pulse.interpolate({
+    inputRange: [0, 0.24, 1],
+    outputRange: [0, 0.36, 0],
+  });
+  const heroHeight = Math.max(layout.height * 0.35, layout.isDesktop ? 360 : 320);
+  const shellStyle = layout.isDesktop
+    ? {
+        flexDirection: "row" as const,
+        alignItems: "flex-start" as const,
+        gap: layout.splitGap,
+      }
+    : undefined;
 
   return (
     <GradientMesh>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
-          paddingBottom: 148,
-          gap: 18,
+          alignItems: "center",
+          paddingBottom: 170,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.isDesktop ? 40 : 58,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <GlassCard className="p-6">
-          <View className="gap-5">
-            <View className="flex-row items-start justify-between gap-4">
-              <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
-                <Text className="font-body text-xs text-cloud/90">
-                  Live social radar for spontaneous hangouts
-                </Text>
+        <View style={[{ width: layout.shellWidth, gap: layout.sectionGap }, shellStyle]}>
+          <View style={{ width: layout.leftColumnWidth, gap: 22 }}>
+            <View style={styles.heroHeader}>
+              <View style={{ gap: 10, maxWidth: layout.isDesktop ? 380 : undefined }}>
+                <Text style={styles.eyebrow}>LIVE RADAR</Text>
+                <Text style={styles.heroTitle}>Who can you catch right now?</Text>
               </View>
 
               <Pressable
-                onPress={() => router.push("/now-mode")}
-                className="h-11 w-11 items-center justify-center rounded-full border border-white/8 bg-white/[0.045]"
-                style={({ pressed }) =>
-                  webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.97 })
-                }
+                onPress={() => router.push("/availability-preferences")}
+                style={({ pressed }) => [
+                  styles.heroUtility,
+                  webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                ]}
               >
-                <MaterialCommunityIcons name="cog-outline" size={20} color="#F8FAFC" />
+                <MaterialCommunityIcons name="cog-outline" size={20} color="#F7FBFF" />
               </Pressable>
             </View>
 
-            <View className="max-w-[94%] gap-3">
-              <Text className="font-display text-[40px] leading-[42px] text-cloud">
-                {user?.name
-                  ? `${user.name}, who can you catch without overthinking it?`
-                  : "Who can you catch right now?"}
-              </Text>
-              <Text className="font-body text-sm leading-7 text-white/72">
-                {radar?.suggestionLine ??
-                  "Keep signals light, keep the line warm, and let social overlap turn into an actual hangout."}
-              </Text>
-            </View>
-          </View>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <View className="gap-4">
-            <Text className="font-display text-xl text-cloud">Your live signal</Text>
-            <Text className="font-body text-sm leading-6 text-white/60">
-              {activeSignal
-                ? `${activeSignal.label || availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
-                : "No live signal yet. Set one and let Nowly do the overlap work."}
-            </Text>
-            {activeSignal ? (
-              <View className="flex-row flex-wrap gap-2">
-                {activeSignal.label ? (
-                  <View className="rounded-full bg-aqua/20 px-3 py-2">
-                    <Text className="font-body text-xs text-cloud">{activeSignal.label}</Text>
-                  </View>
-                ) : null}
-                <View className="rounded-full bg-white/10 px-3 py-2">
-                  <Text className="font-body text-xs text-cloud">
-                    {hangoutIntentLabel(activeSignal.hangoutIntent)}
-                  </Text>
-                </View>
-                <View className="rounded-full bg-white/10 px-3 py-2">
-                  <Text className="font-body text-xs text-cloud">{vibeLabel(activeSignal.vibe)}</Text>
-                </View>
-                <View className="rounded-full bg-white/10 px-3 py-2">
-                  <Text className="font-body text-xs text-cloud">
-                    {budgetLabel(activeSignal.budgetMood)}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <View className="gap-5">
-            <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
-              <Text className="font-body text-xs text-cloud/90">
-                Best hangout window: {radar?.rhythm.bestWindow ?? "happening now"}
-              </Text>
-            </View>
-
-            <View className="gap-2">
-              <Text className="font-display text-[31px] leading-[35px] text-cloud">
-                {availabilityHeadline}
-              </Text>
-              <Text className="max-w-[92%] font-body text-sm leading-6 text-white/72">
-                {topMatches.length
-                  ? radar?.suggestionLine ??
-                    "Send one low-pressure prompt and turn overlap into an actual hangout."
-                  : radar?.rhythm.detail ??
-                    "Set one live signal or use a prompt to wake the line up."}
-              </Text>
-            </View>
-
-            {topMatches.length ? (
-              <View className="flex-row flex-wrap justify-between gap-y-3">
-                {topMatches.map((match) => (
-                  <Pressable
-                    key={match.id}
-                    onPress={() => router.push(`/match/${match.id}`)}
-                    className={`${topMatches.length === 1 ? "w-full" : "w-[48%]"} rounded-[24px] border border-white/6 bg-white/[0.035] p-4`}
-                    style={({ pressed }) => webPressableStyle(pressed)}
-                  >
-                    <Text className="font-display text-lg text-cloud">{match.matchedUser.name}</Text>
-                    <Text className="mt-2 font-body text-sm leading-6 text-white/64">
-                      {availabilityLabel(match.matchedSignal.state).toLowerCase()} -{" "}
-                      {match.reason.travelMinutes ?? 15} min away
-                    </Text>
-                    <Text className="mt-1 font-body text-sm leading-6 text-aqua/82">
-                      {match.insightLabel ?? match.reason.momentumLabel ?? "strong short-notice fit"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : (
-              <View className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
-                <Text className="font-display text-lg text-cloud">Keep the line warm</Text>
-                <Text className="mt-2 font-body text-sm leading-6 text-white/66">
-                  Nobody is live yet, but you can still send a low-pressure prompt to a friend and
-                  let the timing catch up.
-                </Text>
-              </View>
-            )}
-
-            <View className="gap-3">
-              <Text className="font-display text-lg text-cloud">Low-pressure prompts</Text>
-              <View className="gap-2.5">
-                {promptActions.map((prompt) => (
-                  <Pressable
-                    key={prompt.key}
-                    onPress={() => openPromptPicker(prompt.key)}
-                    className="rounded-full border border-white/8 bg-white/[0.045] px-4 py-3.5"
-                    style={({ pressed }) =>
-                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.995 })
-                    }
-                  >
-                    <Text className="font-body text-sm text-cloud/92">
-                      {prompt.label} - {prompt.detail}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </View>
-        </GlassCard>
-
-        <View className="gap-3">
-          <View className="gap-1">
-            <Text className="font-display text-2xl text-cloud">Planned windows</Text>
-            <Text className="font-body text-sm text-aqua/80">
-              recurring overlap slots your crew could actually lock in
-            </Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row gap-3">
-              {scheduledOverlaps.slice(0, 4).map((suggestion) => (
-                <View key={suggestion.id} className="w-72">
-                  <GlassCard className="p-5">
-                    <Text className="font-display text-2xl text-cloud">
-                      {suggestion.matchedUser.name}
-                    </Text>
-                    <Text className="mt-1 font-body text-sm text-aqua/80">
-                      {suggestion.label}
-                    </Text>
-                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                      {suggestion.summary}
-                    </Text>
-                    <View className="mt-4">
-                      <PillButton
-                        label="Propose this time"
-                        variant="secondary"
-                        onPress={() => launchScheduledSuggestion(suggestion)}
-                      />
-                    </View>
-                  </GlassCard>
-                </View>
-              ))}
-
-              {!scheduledOverlaps.length ? (
-                <View className="w-72">
-                  <GlassCard className="p-5">
-                    <Text className="font-display text-xl text-cloud">Set a few windows</Text>
-                    <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                      Use the gear in the top-right to add weekly or monthly availability and
-                      Nowly will start surfacing the best future overlap here.
-                    </Text>
-                  </GlassCard>
-                </View>
-              ) : null}
-            </View>
-          </ScrollView>
-        </View>
-
-        <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">Already moving</Text>
-          {activeHangouts.length ? (
-            activeHangouts.map((hangout) => (
-              <Pressable
-                key={hangout.id}
-                onPress={() => router.push(`/proposal/${hangout.id}`)}
-                style={({ pressed }) => webPressableStyle(pressed)}
+            <View style={[styles.heroShell, { minHeight: heroHeight }]}>
+              <LinearGradient
+                colors={["rgba(10,22,40,0.95)", "rgba(18,54,84,0.84)", "rgba(7,13,25,0.98)"]}
+                start={{ x: 0.08, y: 0.02 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroPanel}
               >
-                <GlassCard className="p-5">
-                  <View className="flex-row items-start justify-between">
-                    <View className="max-w-[72%]">
-                      <Text className="font-display text-xl text-cloud">{hangout.activity}</Text>
-                      <Text className="mt-1 font-body text-sm text-white/60">
-                        {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
-                      </Text>
-                      <Text className="mt-2 font-body text-sm text-aqua/80">
-                        {hangout.microType ? hangoutIntentLabel(hangout.microType) : "quick link"} -{" "}
-                        {microCommitmentLabel(hangout.commitmentLevel)}
-                      </Text>
-                    </View>
-                    <View className="rounded-full bg-white/10 px-3 py-2">
-                      <Text className="font-body text-xs uppercase tracking-[1px] text-aqua">
-                        {hangout.status}
-                      </Text>
-                    </View>
-                  </View>
-                </GlassCard>
-              </Pressable>
-            ))
-          ) : (
-            <GlassCard className="p-5">
-              <Text className="font-display text-xl text-cloud">Nothing active right now</Text>
-              <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                Once a plan is live or confirmed, it shows up here. Completed hangs move into past
-                hangs below.
-              </Text>
-            </GlassCard>
-          )}
-        </View>
+                <View style={styles.heroGlowA} pointerEvents="none" />
+                <View style={styles.heroGlowB} pointerEvents="none" />
 
-        <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">Past hangs</Text>
-          {completedHangouts.length ? (
-            completedHangouts.map((hangout) => {
-              const recap = recaps.find((item) => item.hangoutId === hangout.id);
+                <View style={{ gap: 14 }}>
+                  <Text style={styles.heroPanelTitle}>Who can you catch right now?</Text>
+                  <Text style={styles.heroSupport}>{heroSupport}</Text>
 
-              return (
-                <GlassCard key={hangout.id} className="p-5">
-                  <View className="gap-3">
-                    <View className="flex-row items-start justify-between gap-4">
-                      <View className="max-w-[72%]">
-                        <Text className="font-display text-xl text-cloud">{hangout.activity}</Text>
-                        <Text className="mt-1 font-body text-sm text-white/60">
-                          {hangout.locationName} - {formatDayTime(hangout.scheduledFor)}
-                        </Text>
-                      </View>
-                      <View className="rounded-full bg-white/10 px-3 py-2">
-                        <Text className="font-body text-xs uppercase tracking-[1px] text-cloud/72">
-                          Completed
-                        </Text>
-                      </View>
-                    </View>
-                    <Text className="font-body text-sm leading-6 text-white/60">
-                      {recap?.summary ??
-                        "This hang is done. It drops out of the live flow and lives here as a recap instead."}
-                    </Text>
-                    <View className="flex-row gap-3">
-                      <PillButton
-                        label={recap ? "Open recap" : "Add recap"}
-                        variant="secondary"
-                        onPress={() => router.push(`/recap/${hangout.id}`)}
-                      />
-                    </View>
+                  <View style={styles.heroClusterRow}>
+                    {warmPeople.length ? (
+                      warmPeople.map((person) => (
+                        <AvatarChip key={person.id} name={person.name} photoUrl={person.photoUrl} />
+                      ))
+                    ) : (
+                      <View style={styles.ambientDot} />
+                    )}
                   </View>
-                </GlassCard>
-              );
-            })
-          ) : (
-            <GlassCard className="p-5">
-              <Text className="font-display text-xl text-cloud">No past hangs yet</Text>
-              <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                Completed hangs and their recaps will live here once you start confirming them.
-              </Text>
-            </GlassCard>
-          )}
+                </View>
+
+                <View style={styles.heroActions}>
+                  <PillButton label="Send light signal" onPress={() => router.push("/prompt/quick-link")} />
+                  <Pressable
+                    onPress={() => router.push("/now-mode")}
+                    style={({ pressed }) => [
+                      styles.ghostAction,
+                      webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.985 }),
+                    ]}
+                  >
+                    <Text style={styles.ghostActionText}>View best windows</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.pulseField} pointerEvents="none">
+                  <View style={styles.pulseCore} />
+                  <Animated.View
+                    style={[
+                      styles.pulseRing,
+                      {
+                        opacity: pulseOpacity,
+                        transform: [{ scale: pulseScale }],
+                      },
+                    ]}
+                  />
+                  <Animated.View
+                    style={[
+                      styles.pulseRingSecondary,
+                      {
+                        opacity: pulseOpacity.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 0.28],
+                        }),
+                        transform: [
+                          {
+                            scale: pulse.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [1.1, 4.6],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+          <View style={{ width: layout.rightColumnWidth, gap: layout.sectionGap }}>
+            <View style={styles.statusStrip}>
+              <Text style={styles.statusText}>{statusLine}</Text>
+            </View>
+
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>LOW PRESSURE PROMPTS</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.promptRow}>
+                  {quickPrompts.map((prompt) => (
+                    <Pressable
+                      key={prompt.key}
+                      onPress={() => router.push(prompt.route as never)}
+                      style={({ pressed }) => [
+                        styles.promptChip,
+                        pressed ? styles.promptChipPressed : null,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.985 }),
+                      ]}
+                    >
+                      <Text style={styles.promptChipText}>{prompt.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            <Pressable
+              onPress={() => router.push("/now-mode")}
+              style={({ pressed }) => [
+                styles.teaserCard,
+                webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+              ]}
+            >
+              <Text style={styles.sectionLabel}>BEST UPCOMING WINDOW</Text>
+              <Text style={styles.teaserTitle}>{plannedWindowLine}</Text>
+              <Text style={styles.teaserMeta}>Tap to open the full time picker.</Text>
+            </Pressable>
+
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>PAST HANGS</Text>
+
+              {recaps.length ? (
+                recaps.slice(0, 3).map((recap, index) => (
+                  <Pressable
+                    key={recap.id}
+                    onPress={() => router.push(`/recap/${recap.hangoutId}`)}
+                    style={({ pressed }) => [
+                      styles.recapCard,
+                      {
+                        marginLeft: index * 8,
+                        opacity: 1 - index * 0.12,
+                      },
+                      webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+                    ]}
+                  >
+                    <Text style={styles.recapBadge}>{recap.badge}</Text>
+                    <Text style={styles.recapTitle}>{recap.title}</Text>
+                    <Text style={styles.recapSummary}>{recap.summary}</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <View style={styles.ghostStack}>
+                  <Text style={styles.recapSummary}>
+                    Your recent hangs will collect here as soft recaps.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       </ScrollView>
     </GradientMesh>
   );
 }
+
+const styles = StyleSheet.create({
+  ambientDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(139,234,255,0.68)",
+    shadowColor: nowlyColors.aqua,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  avatarChip: {
+    width: 52,
+    height: 52,
+    overflow: "hidden",
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  avatarFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarInitial: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+  },
+  eyebrow: {
+    color: "rgba(139,234,255,0.82)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 2.4,
+  },
+  ghostAction: {
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+  },
+  ghostActionText: {
+    color: "rgba(247,251,255,0.76)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  ghostStack: {
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  heroActions: {
+    gap: 10,
+  },
+  heroClusterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  heroHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  heroPanel: {
+    flex: 1,
+    justifyContent: "space-between",
+    borderRadius: 34,
+    overflow: "hidden",
+    paddingHorizontal: 22,
+    paddingVertical: 22,
+  },
+  heroPanelTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 29,
+    lineHeight: 34,
+    maxWidth: 360,
+  },
+  heroShell: {
+    overflow: "hidden",
+    borderRadius: 34,
+    shadowColor: nowlyColors.glow,
+    shadowOpacity: 0.16,
+    shadowRadius: 28,
+    shadowOffset: {
+      width: 0,
+      height: 16,
+    },
+    elevation: 10,
+  },
+  heroGlowA: {
+    position: "absolute",
+    right: -56,
+    top: -68,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  heroGlowB: {
+    position: "absolute",
+    left: -56,
+    bottom: -120,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(139,234,255,0.18)",
+  },
+  heroSupport: {
+    color: "rgba(247,251,255,0.72)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 15,
+    lineHeight: 24,
+    maxWidth: 420,
+  },
+  heroTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 34,
+    lineHeight: 38,
+  },
+  heroUtility: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  promptChip: {
+    height: 40,
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 16,
+    shadowColor: nowlyColors.glow,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+  },
+  promptChipPressed: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    shadowOpacity: 0.18,
+  },
+  promptChipText: {
+    color: "rgba(247,251,255,0.92)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+  },
+  promptRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingRight: 6,
+  },
+  pulseCore: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#B8F3FF",
+    shadowColor: nowlyColors.aqua,
+    shadowOpacity: 0.66,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  pulseField: {
+    position: "absolute",
+    right: 34,
+    bottom: 26,
+    width: 120,
+    height: 70,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pulseRing: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(139,234,255,0.44)",
+  },
+  pulseRingSecondary: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(117,207,255,0.22)",
+  },
+  recapBadge: {
+    color: "rgba(139,234,255,0.72)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
+  recapCard: {
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 8,
+  },
+  recapSummary: {
+    color: "rgba(247,251,255,0.62)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  recapTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  sectionLabel: {
+    color: "rgba(247,251,255,0.52)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 2,
+  },
+  statusStrip: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  statusText: {
+    color: "rgba(247,251,255,0.82)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+  },
+  teaserCard: {
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 8,
+  },
+  teaserMeta: {
+    color: "rgba(247,251,255,0.56)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+  },
+  teaserTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 20,
+    lineHeight: 24,
+  },
+});

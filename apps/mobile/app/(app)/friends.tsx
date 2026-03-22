@@ -1,13 +1,12 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
-import { GlassCard } from "../../components/ui/GlassCard";
-import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
-import { availabilityLabel } from "../../lib/labels";
 import { createSmartOpenUrl } from "../../lib/smart-links";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
@@ -38,6 +37,14 @@ const chatSubline = (chat: DirectChat) =>
     ? `${chat.memberCount} people in this private thread`
     : chat.participants[0]?.communityTag || chat.participants[0]?.city || "Private line");
 
+const clusterPositions = [
+  { left: 12, top: 18 },
+  { right: 18, top: 14 },
+  { left: 70, top: 86 },
+  { right: 72, top: 96 },
+  { left: 144, top: 30 },
+];
+
 export default function FriendsScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
@@ -52,6 +59,7 @@ export default function FriendsScreen() {
   const removeFriend = useAppStore((state) => state.removeFriend);
   const removeSuggestion = useAppStore((state) => state.removeSuggestion);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
+  const layout = useResponsiveLayout();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
@@ -127,6 +135,8 @@ export default function FriendsScreen() {
   const outgoingRequests = filteredFriends.filter(
     (friend) => friend.status === "PENDING" && friend.requestDirection === "OUTGOING",
   );
+  const pendingRequests = [...incomingRequests, ...outgoingRequests];
+  const liveClusterPeople = acceptedFriends.slice(0, 5);
 
   const handleDiscordPing = async (name: string) => {
     await track(token, "user_reactivated", { via: "discord_ping", friendName: name });
@@ -177,272 +187,494 @@ export default function FriendsScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
-          paddingBottom: 120,
-          gap: 18,
+          alignItems: "center",
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.isDesktop ? 40 : 58,
+          paddingBottom: 160,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <GlassCard className="p-6">
-          <View className="gap-4">
-            <View className="self-start rounded-full border border-white/8 bg-white/[0.045] px-4 py-2.5">
-              <Text className="font-body text-xs text-cloud/90">Private graph for real-life hangs</Text>
+        <View
+          style={[
+            styles.contentShell,
+            { width: layout.shellWidth },
+            layout.isDesktop ? styles.desktopShell : null,
+          ]}
+        >
+          <View style={{ width: layout.leftColumnWidth, gap: layout.sectionGap }}>
+            <View style={styles.heroHeader}>
+              <View style={{ gap: 10, flex: 1 }}>
+                <Text style={styles.eyebrow}>YOUR PEOPLE</Text>
+                <Text style={styles.heroTitle}>Signals feel stronger together.</Text>
+                <Text style={styles.heroHint}>
+                  {(radar?.localDensity.activeNowCount ?? 0).toString()} active now ·{" "}
+                  {(radar?.localDensity.nearbyFriendsCount ?? acceptedFriends.length).toString()} nearby in
+                  your graph
+                </Text>
+              </View>
             </View>
-            <Text className="font-display text-[31px] leading-[35px] text-cloud">
-              Your people on Nowly
-            </Text>
-            <Text className="font-body text-sm leading-6 text-white/72">
-              Manage requests, keep private chats going, and build a real local graph.
-            </Text>
-            <Text className="font-display text-xl text-cloud">
-              {radar?.rhythm.communityLabel ?? "Your local pocket"}
-            </Text>
-            <Text className="font-body text-sm text-white/66">
-              {(radar?.localDensity.activeNowCount ?? 0).toString()} active now -{" "}
-              {(radar?.localDensity.nearbyFriendsCount ?? 0).toString()} nearby in your graph
-            </Text>
-            <Text className="font-body text-sm text-aqua/80">
-              {radar?.suggestionLine ?? "Keep your real-world graph concentrated."}
-            </Text>
-          </View>
-        </GlassCard>
 
-        <GlassCard className="p-5">
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search people, requests, or chats"
-            placeholderTextColor="rgba(248,250,252,0.4)"
-            className="rounded-3xl border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
-          />
-        </GlassCard>
-
-        <View className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-display text-2xl text-cloud">Private chats</Text>
-            <PillButton label="New group chat" variant="secondary" onPress={handleOpenGroupBuilder} />
-          </View>
-
-          {filteredChats.length ? (
-            filteredChats.map((chat) => (
-              <GlassCard key={chat.id} className="p-5">
-                <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: "/chat/[chatId]",
-                      params: { chatId: chat.id },
-                    })
-                  }
-                  style={({ pressed }) => webPressableStyle(pressed)}
-                >
-                  <View className="flex-row items-center gap-4">
-                    <View className="flex-row">
-                      {chat.participants.slice(0, 2).map((participant, index) => (
-                        <View
-                          key={participant.id}
-                          className={`${index === 0 ? "" : "-ml-4"} h-14 w-14 overflow-hidden rounded-full border border-white/12 bg-white/8`}
-                        >
-                          {participant.photoUrl ? (
-                            <Image
-                              source={{ uri: participant.photoUrl }}
-                              className="h-full w-full"
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View className="h-full w-full items-center justify-center">
-                              <Text className="font-display text-xl text-white/70">
-                                {(participant.name[0] ?? "N").toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-
-                    <View className="flex-1">
-                      <View className="flex-row items-center justify-between gap-3">
-                        <Text className="font-display text-lg text-cloud">{chatDisplayName(chat)}</Text>
-                        <Text className="font-body text-xs text-white/40">
-                          {chat.lastMessageAt
-                            ? new Date(chat.lastMessageAt).toLocaleTimeString([], {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })
-                            : ""}
-                        </Text>
-                      </View>
-                      <Text className="mt-1 font-body text-sm text-white/60">{chatSubline(chat)}</Text>
-                      <Text className="mt-1 font-body text-sm text-aqua/80">
-                        {chat.isGroup ? `${chat.memberCount} people - private group thread` : "1:1 private line"}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
-              </GlassCard>
-            ))
-          ) : (
-            <GlassCard className="p-5">
-              <Text className="font-display text-xl text-cloud">Start your first private chat</Text>
-              <Text className="mt-2 font-body text-sm leading-6 text-white/60">
-                Tap a chat bubble on a friend card or spin up a group thread with a few people.
+            <View style={styles.clusterShell}>
+              <View style={styles.clusterGlow} pointerEvents="none" />
+              <Text style={styles.sectionLabel}>LIVE CLUSTER</Text>
+              <Text style={styles.clusterHeadline}>
+                {liveClusterPeople.length
+                  ? `${liveClusterPeople.length} friends feel warm enough to nudge.`
+                  : "Start adding people and the cluster will wake up here."}
               </Text>
-            </GlassCard>
-          )}
-        </View>
 
-        {incomingRequests.length ? (
-          <View className="gap-3">
-            <Text className="font-display text-2xl text-cloud">Friend requests</Text>
-            {incomingRequests.map((friend) => (
-              <GlassCard key={friend.id} className="p-5">
-                <View className="flex-row items-center gap-4">
-                  <Avatar name={friend.name} photoUrl={friend.photoUrl} />
-                  <View className="flex-1">
-                    <Text className="font-display text-xl text-cloud">{friend.name}</Text>
-                    <Text className="mt-1 font-body text-sm text-white/60">
-                      {friend.communityTag || friend.city}
-                    </Text>
-                    {friend.sharedLabel ? (
-                      <Text className="mt-2 font-body text-sm text-aqua/80">{friend.sharedLabel}</Text>
-                    ) : null}
+              <View style={styles.clusterField}>
+                {liveClusterPeople.length ? (
+                  liveClusterPeople.map((friend, index) => (
+                    <Pressable
+                      key={friend.id}
+                      onPress={() => void handleOpenChat(friend.id)}
+                      style={({ pressed }) => [
+                        styles.clusterAvatarWrap,
+                        clusterPositions[index % clusterPositions.length],
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.97 }),
+                      ]}
+                    >
+                      <View style={styles.clusterRing} />
+                      <Avatar name={friend.name} photoUrl={friend.photoUrl} />
+                    </Pressable>
+                  ))
+                ) : (
+                  <View style={styles.clusterEmpty}>
+                    <Text style={styles.clusterEmptyText}>Your closest people will float here.</Text>
                   </View>
-                </View>
-                <View className="mt-4 flex-row gap-3">
-                  <PillButton label="Accept" onPress={() => void handleRespond(friend, "ACCEPT")} />
-                  <PillButton
-                    label="Ignore"
-                    variant="secondary"
-                    onPress={() => void handleRespond(friend, "DECLINE")}
-                  />
-                </View>
-              </GlassCard>
-            ))}
-          </View>
-        ) : null}
+                )}
+              </View>
+            </View>
 
-        {outgoingRequests.length ? (
-          <View className="gap-3">
-            <Text className="font-display text-2xl text-cloud">Pending requests</Text>
-            {outgoingRequests.map((friend) => (
-              <GlassCard key={friend.id} className="p-5">
-                <View className="flex-row items-center justify-between gap-4">
-                  <View className="flex-row items-center gap-4">
-                    <Avatar name={friend.name} photoUrl={friend.photoUrl} />
-                    <View>
-                      <Text className="font-display text-lg text-cloud">{friend.name}</Text>
-                      <Text className="mt-1 font-body text-sm text-white/60">
-                        Request sent - waiting on them
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="rounded-full bg-white/10 px-3 py-2">
-                    <Text className="font-body text-xs text-cloud">Pending</Text>
-                  </View>
-                </View>
-              </GlassCard>
-            ))}
-          </View>
-        ) : null}
+            <Pressable
+              onPress={handleOpenGroupBuilder}
+              style={({ pressed }) => [
+                styles.threadCta,
+                webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+              ]}
+            >
+              <View style={{ gap: 6, flex: 1 }}>
+                <Text style={styles.sectionLabel}>PRIVATE CHATS</Text>
+                <Text style={styles.threadTitle}>Start a quick thread</Text>
+                <Text style={styles.threadHint}>
+                  Spin up a 1:1 or group line without turning this into a scheduling form.
+                </Text>
+              </View>
+              <View style={styles.threadArrow}>
+                <MaterialCommunityIcons name="arrow-top-right" size={18} color="#E2E8F0" />
+              </View>
+            </Pressable>
 
-        <View className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-display text-2xl text-cloud">Friends on Nowly</Text>
-            <PillButton
-              label="Invite locals"
-              variant="secondary"
+            <Pressable
               onPress={() =>
                 Share.share({
                   message: `Anyone free tonight? Let's link on Nowly -> ${createSmartOpenUrl("/onboarding")}`,
                 })
               }
-            />
+              style={({ pressed }) => [
+                styles.ghostInvite,
+                webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
+              ]}
+            >
+              <MaterialCommunityIcons name="account-plus-outline" size={16} color="#E2E8F0" />
+              <Text style={styles.ghostInviteText}>Invite locals</Text>
+            </Pressable>
           </View>
 
-          {acceptedFriends.map((friend) => (
-            <GlassCard key={friend.id} className="p-5">
-              <View className="flex-row items-start justify-between gap-4">
-                <View className="max-w-[72%] flex-1 flex-row gap-4">
-                  <Avatar name={friend.name} photoUrl={friend.photoUrl} />
-                  <View className="flex-1">
-                    <Text className="font-display text-xl text-cloud">{friend.name}</Text>
-                    <Text className="mt-1 font-body text-sm text-white/60">
-                      {friend.communityTag || friend.city} - response {Math.round(friend.responsivenessScore * 100)}%
-                    </Text>
-                    <View className="mt-2 flex-row flex-wrap gap-2">
-                      {friend.lastSignal ? (
-                        <View className="rounded-full bg-aqua/20 px-3 py-2">
-                          <Text className="font-body text-xs text-cloud">
-                            {availabilityLabel(friend.lastSignal)}
-                          </Text>
+          <View style={{ width: layout.rightColumnWidth, gap: layout.sectionGap }}>
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>PENDING REQUESTS</Text>
+              {pendingRequests.length ? (
+                pendingRequests.map((friend) => {
+                  const incoming =
+                    friend.requestDirection === "INCOMING" && friend.status === "PENDING";
+
+                  return (
+                    <View key={friend.id} style={styles.requestRow}>
+                      <Avatar name={friend.name} photoUrl={friend.photoUrl} />
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={styles.rowName}>{friend.name}</Text>
+                        <Text style={styles.rowMeta}>
+                          {incoming ? "Wants in on your circle." : "Waiting on their reply."}
+                        </Text>
+                      </View>
+                      {incoming ? (
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <Pressable
+                            onPress={() => void handleRespond(friend, "ACCEPT")}
+                            style={({ pressed }) => [
+                              styles.rowAction,
+                              webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.98 }),
+                            ]}
+                          >
+                            <Text style={styles.rowActionText}>Accept</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => void handleRespond(friend, "DECLINE")}
+                            style={({ pressed }) => [
+                              styles.rowGhostAction,
+                              webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.98 }),
+                            ]}
+                          >
+                            <Text style={styles.rowGhostText}>Ignore</Text>
+                          </Pressable>
                         </View>
-                      ) : null}
-                      <View className="rounded-full bg-white/10 px-3 py-2">
-                        <Text className="font-body text-xs text-cloud">Friend</Text>
-                      </View>
+                      ) : (
+                        <View style={styles.pendingPill}>
+                          <Text style={styles.pendingPillText}>Pending</Text>
+                        </View>
+                      )}
                     </View>
-                    {friend.insight ? (
-                      <View className="mt-3 gap-1">
-                        <Text className="font-body text-sm text-aqua/80">
-                          {friend.insight.reliabilityLabel}
-                        </Text>
-                        <Text className="font-body text-sm text-white/60">
-                          {friend.insight.cadenceNote}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+                  );
+                })
+              ) : (
+                <Text style={styles.emptyText}>No pending requests right now.</Text>
+              )}
+            </View>
 
-                <View className="items-end gap-2">
-                  <Pressable
-                    onPress={() => void handleOpenChat(friend.id)}
-                    className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/8"
-                    style={({ pressed }) =>
-                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.97 })
-                    }
-                  >
-                    <MaterialCommunityIcons name="chat-processing-outline" size={22} color="#F8FAFC" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void handleDiscordPing(friend.name)}
-                    className="h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/8"
-                    style={({ pressed }) =>
-                      webPressableStyle(pressed, { pressedOpacity: 0.86, pressedScale: 0.97 })
-                    }
-                  >
-                    <MaterialCommunityIcons name="send-outline" size={20} color="#22D3EE" />
-                  </Pressable>
-                </View>
-              </View>
-            </GlassCard>
-          ))}
-        </View>
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>CREW</Text>
+              {acceptedFriends.length ? (
+                acceptedFriends.map((friend) => (
+                  <View key={friend.id} style={styles.friendRow}>
+                    <Avatar name={friend.name} photoUrl={friend.photoUrl} />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.rowName}>{friend.name}</Text>
+                      <Text style={styles.rowMeta}>
+                        {friend.communityTag || friend.city} · {Math.round(friend.responsivenessScore * 100)}%
+                        response
+                      </Text>
+                      <Text style={styles.rowInsight}>
+                        {friend.insight?.cadenceNote ||
+                          friend.insight?.reliabilityLabel ||
+                          friend.sharedLabel ||
+                          "Easy person to catch on short notice."}
+                      </Text>
+                    </View>
 
-        <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">People on Nowly</Text>
-          {filteredSuggestions.map((friend) => (
-            <GlassCard key={friend.id} className="p-5">
-              <View className="flex-row items-center justify-between gap-4">
-                <View className="flex-row items-center gap-4">
-                  <Avatar name={friend.name} photoUrl={friend.photoUrl} />
-                  <View className="max-w-[70%]">
-                    <Text className="font-display text-lg text-cloud">{friend.name}</Text>
-                    <Text className="mt-1 font-body text-sm text-white/60">
-                      {friend.sharedLabel || friend.communityTag || friend.city}
-                    </Text>
+                    <View style={styles.friendActions}>
+                      <Pressable
+                        onPress={() => void handleOpenChat(friend.id)}
+                        style={({ pressed }) => [
+                          styles.iconButton,
+                          webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                        ]}
+                      >
+                        <MaterialCommunityIcons name="chat-processing-outline" size={20} color="#F8FAFC" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void handleDiscordPing(friend.name)}
+                        style={({ pressed }) => [
+                          styles.iconButton,
+                          webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                        ]}
+                      >
+                        <MaterialCommunityIcons name="send-outline" size={18} color="#8BEAFF" />
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
-                <PillButton
-                  label="Add friend"
-                  variant="secondary"
-                  onPress={() => void handleQuickAdd(friend.id)}
-                />
-              </View>
-            </GlassCard>
-          ))}
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Add a few people and this feed will start to move.</Text>
+              )}
+            </View>
+
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>PRIVATE THREADS</Text>
+              {filteredChats.length ? (
+                filteredChats.slice(0, 3).map((chat) => (
+                  <Pressable
+                    key={chat.id}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/chat/[chatId]",
+                        params: { chatId: chat.id },
+                      })
+                    }
+                    style={({ pressed }) => [
+                      styles.chatRow,
+                      webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+                    ]}
+                  >
+                    <Text style={styles.rowName}>{chatDisplayName(chat)}</Text>
+                    <Text style={styles.rowInsight}>{chatSubline(chat)}</Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Start your first thread and it will land here.</Text>
+              )}
+            </View>
+
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>PEOPLE NEARBY</Text>
+              {filteredSuggestions.length ? (
+                filteredSuggestions.map((friend) => (
+                  <View key={friend.id} style={styles.suggestionRow}>
+                    <Avatar name={friend.name} photoUrl={friend.photoUrl} />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.rowName}>{friend.name}</Text>
+                      <Text style={styles.rowMeta}>
+                        {friend.sharedLabel || friend.communityTag || friend.city}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => void handleQuickAdd(friend.id)}
+                      style={({ pressed }) => [
+                        styles.rowGhostAction,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.98 }),
+                      ]}
+                    >
+                      <Text style={styles.rowGhostText}>Add</Text>
+                    </Pressable>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No nearby suggestions to surface yet.</Text>
+              )}
+            </View>
+          </View>
         </View>
       </ScrollView>
     </GradientMesh>
   );
 }
+
+const styles = StyleSheet.create({
+  chatRow: {
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 4,
+  },
+  clusterAvatarWrap: {
+    position: "absolute",
+  },
+  clusterEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clusterEmptyText: {
+    color: "rgba(247,251,255,0.56)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+  },
+  clusterField: {
+    position: "relative",
+    height: 176,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    overflow: "hidden",
+  },
+  clusterGlow: {
+    position: "absolute",
+    right: -44,
+    top: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(139,234,255,0.16)",
+  },
+  clusterHeadline: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    lineHeight: 28,
+    maxWidth: 360,
+  },
+  clusterRing: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    bottom: -4,
+    left: -4,
+    borderRadius: 40,
+    borderWidth: 1,
+    borderColor: "rgba(139,234,255,0.34)",
+  },
+  clusterShell: {
+    borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 12,
+    overflow: "hidden",
+  },
+  contentShell: {
+    gap: 24,
+  },
+  desktopShell: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 28,
+  },
+  emptyText: {
+    color: "rgba(247,251,255,0.58)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  eyebrow: {
+    color: "rgba(139,234,255,0.8)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 2.2,
+  },
+  friendActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  friendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  ghostInvite: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  ghostInviteText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+  },
+  heroHeader: {
+    gap: 6,
+  },
+  heroHint: {
+    color: "rgba(247,251,255,0.68)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  heroTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 34,
+    lineHeight: 38,
+    maxWidth: 400,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  pendingPill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  pendingPillText: {
+    color: "rgba(247,251,255,0.8)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  requestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  rowAction: {
+    borderRadius: 999,
+    backgroundColor: "#E9F7FF",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rowActionText: {
+    color: "#081120",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  rowGhostAction: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rowGhostText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  rowInsight: {
+    color: "rgba(139,234,255,0.82)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  rowMeta: {
+    color: "rgba(247,251,255,0.58)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+  },
+  rowName: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  sectionLabel: {
+    color: "rgba(247,251,255,0.52)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 2,
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  threadArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  threadCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  threadHint: {
+    color: "rgba(247,251,255,0.62)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  threadTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    lineHeight: 26,
+  },
+});
