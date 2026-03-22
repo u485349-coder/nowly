@@ -10,6 +10,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { SignalChip } from "../../components/ui/SignalChip";
 import {
   formatMinutesOfDay,
+  formatOrdinalDay,
   parseTimeInput,
   recurringWindowLabel,
   toTimeInputValue,
@@ -34,8 +35,8 @@ const createDraftWindow = (recurrence: "WEEKLY" | "MONTHLY" = "WEEKLY"): DraftWi
   recurrence,
   dayOfWeek: recurrence === "WEEKLY" ? 2 : null,
   dayOfMonth: recurrence === "MONTHLY" ? 15 : null,
-  startInput: "18:00",
-  endInput: "20:00",
+  startInput: "6:00 PM",
+  endInput: "8:00 PM",
   label: "",
   vibe: null,
   hangoutIntent: null,
@@ -96,7 +97,7 @@ export const RecurringAvailabilityEditor = ({
       const endMinute = parseTimeInput(draft.endInput);
 
       if (startMinute === null || endMinute === null) {
-        throw new Error("Use 24-hour time like 18:30.");
+        throw new Error("Use a time like 6:30 PM.");
       }
 
       if (endMinute <= startMinute) {
@@ -218,9 +219,10 @@ export const RecurringAvailabilityEditor = ({
                 <TextInput
                   value={draft.startInput}
                   onChangeText={(value) => updateDraft(draft.id, { startInput: value })}
-                  autoCapitalize="none"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
                   className="rounded-[22px] border border-white/12 bg-white/6 px-4 py-3 font-body text-cloud"
-                  placeholder="18:00"
+                  placeholder="6:00 PM"
                   placeholderTextColor="rgba(248,250,252,0.35)"
                 />
               </View>
@@ -229,9 +231,10 @@ export const RecurringAvailabilityEditor = ({
                 <TextInput
                   value={draft.endInput}
                   onChangeText={(value) => updateDraft(draft.id, { endInput: value })}
-                  autoCapitalize="none"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
                   className="rounded-[22px] border border-white/12 bg-white/6 px-4 py-3 font-body text-cloud"
-                  placeholder="20:00"
+                  placeholder="8:00 PM"
                   placeholderTextColor="rgba(248,250,252,0.35)"
                 />
               </View>
@@ -290,7 +293,7 @@ export const RecurringAvailabilityEditor = ({
             <Text className="font-body text-sm leading-6 text-aqua/80">
               Preview:{" "}
               {parseTimeInput(draft.startInput) !== null && parseTimeInput(draft.endInput) !== null
-                ? `${draft.recurrence === "WEEKLY" ? weekdayOptionLabels[draft.dayOfWeek ?? 0] : `Monthly ${draft.dayOfMonth ?? 15}`} · ${formatMinutesOfDay(parseTimeInput(draft.startInput) ?? 0)} - ${formatMinutesOfDay(parseTimeInput(draft.endInput) ?? 0)}`
+                ? `${draft.recurrence === "WEEKLY" ? weekdayOptionLabels[draft.dayOfWeek ?? 0] : `Monthly on the ${formatOrdinalDay(draft.dayOfMonth ?? 15)}`} - ${formatMinutesOfDay(parseTimeInput(draft.startInput) ?? 0)} - ${formatMinutesOfDay(parseTimeInput(draft.endInput) ?? 0)}`
                 : recurringWindowLabel({
                     id: draft.id,
                     recurrence: draft.recurrence,

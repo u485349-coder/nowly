@@ -35,6 +35,11 @@ import {
 } from "../types";
 
 type AppState = {
+  bookingSetup: {
+    format: "ONE_ON_ONE" | "GROUP";
+    title: string;
+    description: string;
+  };
   token: string | null;
   user: AppUser | null;
   introSeen: boolean;
@@ -56,6 +61,7 @@ type AppState = {
   finishOnboarding: (user: AppUser) => void;
   setIntroSeen: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setBookingSetup: (payload: Partial<AppState["bookingSetup"]>) => void;
   setDashboard: (payload: {
     friends: AppFriend[];
     matches: AppMatch[];
@@ -101,6 +107,11 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       token: null,
       user: null,
+      bookingSetup: {
+        format: "ONE_ON_ONE",
+        title: "Quick catch-up",
+        description: "Pick an easy time and we can lock something in.",
+      },
       introSeen: false,
       onboardingComplete: false,
       notificationsEnabled: true,
@@ -133,6 +144,13 @@ export const useAppStore = create<AppState>()(
       setNotificationsEnabled: (enabled) =>
         set(() => ({
           notificationsEnabled: enabled,
+        })),
+      setBookingSetup: (payload) =>
+        set((state) => ({
+          bookingSetup: {
+            ...state.bookingSetup,
+            ...payload,
+          },
         })),
       setDashboard: (payload) =>
         set((state) => {
@@ -321,6 +339,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           token: null,
           user: null,
+          bookingSetup: state.bookingSetup,
           onboardingComplete: false,
           friends: [],
           matches: [],
@@ -340,8 +359,9 @@ export const useAppStore = create<AppState>()(
       bootstrapDemo: () =>
         set((state) => ({
           token: state.token ?? "demo-token",
-          user: state.user ?? demoUser,
-          onboardingComplete: true,
+        user: state.user ?? demoUser,
+        bookingSetup: state.bookingSetup,
+        onboardingComplete: true,
           friends: demoFriends,
           matches: demoMatches as AppMatch[],
           hangouts: demoHangouts,
@@ -361,6 +381,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         token: state.token,
         user: state.user,
+        bookingSetup: state.bookingSetup,
         introSeen: state.introSeen,
         onboardingComplete: state.onboardingComplete,
         notificationsEnabled: state.notificationsEnabled,

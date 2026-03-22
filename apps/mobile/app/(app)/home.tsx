@@ -69,6 +69,12 @@ export default function HomeScreen() {
   const bootstrapDemo = useAppStore((state) => state.bootstrapDemo);
   const layout = useResponsiveLayout();
   const pulse = useRef(new Animated.Value(0)).current;
+  const bookingPreviewRoute = user?.inviteCode
+    ? ({
+        pathname: "/booking/[inviteCode]",
+        params: { inviteCode: user.inviteCode },
+      } as const)
+    : ("/availability-preferences" as const);
 
   useEffect(() => {
     if (!user) {
@@ -171,6 +177,9 @@ export default function HomeScreen() {
         gap: layout.splitGap,
       }
     : undefined;
+  const openBookingPreview = () => {
+    router.push(bookingPreviewRoute as never);
+  };
 
   return (
     <GradientMesh>
@@ -205,7 +214,7 @@ export default function HomeScreen() {
 
             <View style={[styles.heroShell, { minHeight: heroHeight }]}>
               <LinearGradient
-                colors={["rgba(10,22,40,0.95)", "rgba(18,54,84,0.84)", "rgba(7,13,25,0.98)"]}
+                colors={["rgba(24,17,56,0.95)", "rgba(36,31,90,0.82)", "rgba(8,14,29,0.98)"]}
                 start={{ x: 0.08, y: 0.02 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.heroPanel}
@@ -229,9 +238,9 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.heroActions}>
-                  <PillButton label="Send light signal" onPress={() => router.push("/prompt/quick-link")} />
+                  <PillButton label="Send light signal" onPress={() => router.push("/now-mode")} />
                   <Pressable
-                    onPress={() => router.push("/now-mode")}
+                    onPress={openBookingPreview}
                     style={({ pressed }) => [
                       styles.ghostAction,
                       webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.985 }),
@@ -303,7 +312,7 @@ export default function HomeScreen() {
             </View>
 
             <Pressable
-              onPress={() => router.push("/now-mode")}
+              onPress={openBookingPreview}
               style={({ pressed }) => [
                 styles.teaserCard,
                 webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
@@ -387,7 +396,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   eyebrow: {
-    color: "rgba(139,234,255,0.82)",
+    color: "rgba(167,139,250,0.86)",
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
     letterSpacing: 2.4,
@@ -455,7 +464,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(167,139,250,0.16)",
   },
   heroGlowB: {
     position: "absolute",
@@ -464,7 +473,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: "rgba(139,234,255,0.18)",
+    backgroundColor: "rgba(124,58,237,0.14)",
   },
   heroSupport: {
     color: "rgba(247,251,255,0.72)",
@@ -551,7 +560,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(117,207,255,0.22)",
   },
   recapBadge: {
-    color: "rgba(139,234,255,0.72)",
+    color: "rgba(196,181,253,0.82)",
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     letterSpacing: 1.6,

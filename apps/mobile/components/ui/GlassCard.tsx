@@ -19,14 +19,14 @@ export const GlassCard = ({
   >
     {!isWeb ? <BlurView intensity={26} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
     <LinearGradient
-      colors={["rgba(119,205,255,0.12)", "rgba(255,255,255,0.015)", "rgba(255,255,255,0.00)"]}
+      colors={["rgba(124,58,237,0.14)", "rgba(255,255,255,0.015)", "rgba(255,255,255,0.00)"]}
       start={{ x: 0.06, y: 0.02 }}
       end={{ x: 0.74, y: 0.96 }}
       style={styles.topGlow}
       pointerEvents="none"
     />
     <LinearGradient
-      colors={["rgba(139,234,255,0.12)", "rgba(139,234,255,0.03)", "rgba(139,234,255,0.00)"]}
+      colors={["rgba(124,58,237,0.12)", "rgba(92,77,255,0.04)", "rgba(124,58,237,0.00)"]}
       start={{ x: 0.28, y: 0.1 }}
       end={{ x: 1, y: 0.9 }}
       style={styles.bottomGlow}

@@ -90,7 +90,7 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
 
         <Animated.View style={[styles.northGlow, northStyle]}>
           <LinearGradient
-            colors={["rgba(76,175,255,0.24)", "rgba(41,98,255,0.12)", "rgba(76,175,255,0.00)"]}
+            colors={["rgba(124,58,237,0.28)", "rgba(92,77,255,0.14)", "rgba(124,58,237,0.00)"]}
             start={{ x: 0.18, y: 0.08 }}
             end={{ x: 0.88, y: 0.92 }}
             style={StyleSheet.absoluteFillObject}
@@ -99,7 +99,7 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
 
         <Animated.View style={[styles.eastGlow, eastStyle]}>
           <LinearGradient
-            colors={["rgba(139,234,255,0.22)", "rgba(87,198,255,0.12)", "rgba(139,234,255,0.00)"]}
+            colors={["rgba(124,58,237,0.18)", "rgba(92,77,255,0.12)", "rgba(139,234,255,0.00)"]}
             start={{ x: 0.18, y: 0.12 }}
             end={{ x: 0.88, y: 0.86 }}
             style={StyleSheet.absoluteFillObject}
@@ -108,7 +108,7 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
 
         <Animated.View style={[styles.southGlow, southStyle]}>
           <LinearGradient
-            colors={["rgba(56,189,248,0.14)", "rgba(24,67,126,0.1)", "rgba(56,189,248,0.00)"]}
+            colors={["rgba(124,58,237,0.18)", "rgba(92,77,255,0.1)", "rgba(124,58,237,0.00)"]}
             start={{ x: 0.18, y: 0.12 }}
             end={{ x: 0.88, y: 0.9 }}
             style={StyleSheet.absoluteFillObject}

@@ -3,7 +3,6 @@ import type { ComponentProps } from "react";
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import Animated, {
   Easing,
   Extrapolation,
@@ -17,7 +16,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { nowlyColors } from "../../constants/theme";
 import { webPressableStyle } from "../../lib/web-pressable";
-import { FABMenu, type FloatingFabAction } from "./FABMenu";
 import { FABToggle } from "./FABToggle";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -27,7 +25,6 @@ const AnimatedText = Animated.createAnimatedComponent(Text);
 const isWeb = Platform.OS === "web";
 
 type FloatingNavBarProps = BottomTabBarProps & {
-  actions: FloatingFabAction[];
   fabAccentColor?: string;
   fabIcon?: IconName;
   icons: Record<string, IconName>;
@@ -112,9 +109,8 @@ const FloatingTabItem = memo(
 );
 
 const FloatingNavBarComponent = ({
-  actions,
   descriptors,
-  fabAccentColor = nowlyColors.aqua,
+  fabAccentColor = nowlyColors.violet,
   fabIcon = "plus",
   icons,
   navigation,
@@ -137,19 +133,38 @@ const FloatingNavBarComponent = ({
     setOpen(false);
   }, [state.index]);
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(menuProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-  }));
-
   const barBottom = Math.max(22, insets.bottom + 10);
   const barWidth = Math.min(width - 28, width >= 768 ? 430 : width * 0.9);
   const barLeft = (width - barWidth) / 2;
   const toggleBottom = barBottom + 18;
-  const menuBottom = barBottom + 36;
 
   const splitIndex = Math.max(1, Math.floor(state.routes.length / 2));
   const leftRoutes = useMemo(() => state.routes.slice(0, splitIndex), [splitIndex, state.routes]);
   const rightRoutes = useMemo(() => state.routes.slice(splitIndex), [splitIndex, state.routes]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(menuProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      {
+        scaleX: interpolate(menuProgress.value, [0, 1], [1, 0.82], Extrapolation.CLAMP),
+      },
+      {
+        scaleY: interpolate(menuProgress.value, [0, 1], [1, 0.78], Extrapolation.CLAMP),
+      },
+      {
+        translateY: interpolate(menuProgress.value, [0, 1], [0, 10], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  const navContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(menuProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateY: interpolate(menuProgress.value, [0, 1], [0, 6], Extrapolation.CLAMP),
+      },
+    ],
+  }));
 
   const renderTab = (routeKey: string) => {
     const route = state.routes.find((item) => item.key === routeKey);
@@ -202,31 +217,9 @@ const FloatingNavBarComponent = ({
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <Animated.View
-        pointerEvents={open ? "auto" : "none"}
-        style={[StyleSheet.absoluteFillObject, backdropStyle]}
-      >
-        <Pressable onPress={() => setOpen(false)} style={StyleSheet.absoluteFillObject}>
-          {!isWeb ? <BlurView intensity={14} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
-          <View style={styles.backdropTint} />
-        </Pressable>
-      </Animated.View>
-
-      <FABMenu
-        actions={actions}
-        accentColor={fabAccentColor}
-        bottom={menuBottom}
-        labelPosition="left"
-        onActionPress={(action) => {
-          setOpen(false);
-          action.onPress();
-        }}
-        open={open}
-        progress={menuProgress}
-      />
-
-      <View
         style={[
           styles.barWrap,
+          barStyle,
           {
             bottom: barBottom,
             left: barLeft,
@@ -234,17 +227,14 @@ const FloatingNavBarComponent = ({
           },
         ]}
       >
-        <View style={styles.blurClip}>
-          {!isWeb ? <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
-          <View style={styles.barTint} />
-        </View>
+        <View style={styles.barTint} />
 
-        <View style={styles.navRow}>
+        <Animated.View style={[styles.navRow, navContentStyle]}>
           <View style={styles.sideGroup}>{leftRoutes.map((route) => renderTab(route.key))}</View>
           <View style={styles.centerGap} />
           <View style={styles.sideGroup}>{rightRoutes.map((route) => renderTab(route.key))}</View>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
 
       <FABToggle
         accentColor={fabAccentColor}
@@ -261,10 +251,6 @@ const FloatingNavBarComponent = ({
 export const FloatingNavBar = memo(FloatingNavBarComponent);
 
 const styles = StyleSheet.create({
-  backdropTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: isWeb ? "rgba(5,8,19,0.08)" : "rgba(5,8,19,0.16)",
-  },
   barWrap: {
     position: "absolute",
     height: 64,
@@ -276,11 +262,6 @@ const styles = StyleSheet.create({
     shadowRadius: isWeb ? 16 : 24,
     shadowOffset: { width: 0, height: isWeb ? 10 : 14 },
     elevation: 0,
-  },
-  blurClip: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 34,
-    overflow: "hidden",
   },
   barTint: {
     ...StyleSheet.absoluteFillObject,

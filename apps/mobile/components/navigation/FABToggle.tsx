@@ -198,7 +198,7 @@ export const FABToggle = ({
         ]}
       >
         <LinearGradient
-          colors={["#B5F1FF", accentColor, nowlyColors.sky]}
+          colors={["#F3E8FF", accentColor, nowlyColors.iris]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0.05, y: 0.1 }}
           style={[
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowColor: "#A5F3FC",
+    shadowColor: "#C4B5FD",
     shadowOpacity: 0.5,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },

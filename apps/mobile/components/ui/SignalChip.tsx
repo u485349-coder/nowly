@@ -14,7 +14,7 @@ export const SignalChip = ({
     onPress={onPress}
     className={`rounded-full border px-4 py-2 ${
       active
-        ? "border-aqua/55 bg-aqua/16"
+        ? "border-violet/55 bg-violet/18"
         : "border-white/8 bg-white/[0.045]"
     }`}
     style={({ pressed }) =>

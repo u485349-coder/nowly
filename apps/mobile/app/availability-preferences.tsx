@@ -21,6 +21,7 @@ import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import {
   formatMinutesOfDay,
+  formatOrdinalDay,
   parseTimeInput,
   toTimeInputValue,
   weekdayOptionLabels,
@@ -54,16 +55,20 @@ type SaveWindowPayload = {
   hangoutIntent?: (typeof hangoutIntentOptions)[number] | null;
 };
 
-const createDraftWindow = (recurrence: "WEEKLY" | "MONTHLY" = "WEEKLY"): DraftWindow => ({
+const createDraftWindow = (
+  recurrence: "WEEKLY" | "MONTHLY" = "WEEKLY",
+  overrides: Partial<DraftWindow> = {},
+): DraftWindow => ({
   id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   recurrence,
   dayOfWeek: recurrence === "WEEKLY" ? 2 : null,
   dayOfMonth: recurrence === "MONTHLY" ? 15 : null,
-  startInput: "18:00",
-  endInput: "20:00",
+  startInput: "6:00 PM",
+  endInput: "8:00 PM",
   label: "",
   vibe: null,
   hangoutIntent: null,
+  ...overrides,
 });
 
 const toDraft = (window: MobileRecurringAvailabilityWindow): DraftWindow => ({
@@ -83,7 +88,7 @@ const resolveMinutes = (value: string, fallback: number) => parseTimeInput(value
 const windowDayLabel = (draft: DraftWindow) =>
   draft.recurrence === "WEEKLY"
     ? weekdayOptionLabels[draft.dayOfWeek ?? 0]
-    : `Monthly ${draft.dayOfMonth ?? 15}`;
+    : `Monthly on the ${formatOrdinalDay(draft.dayOfMonth ?? 15)}`;
 
 const windowTimeLabel = (draft: DraftWindow) =>
   `${formatMinutesOfDay(resolveMinutes(draft.startInput, 18 * 60))} - ${formatMinutesOfDay(resolveMinutes(draft.endInput, 20 * 60))}`;
@@ -129,8 +134,9 @@ export default function AvailabilityPreferencesScreen() {
   const [saving, setSaving] = useState(false);
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
+  const bookingSetup = useAppStore((state) => state.bookingSetup);
+  const setBookingSetup = useAppStore((state) => state.setBookingSetup);
   const recurringWindows = useAppStore((state) => state.recurringWindows);
-  const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const setRecurringWindows = useAppStore((state) => state.setRecurringWindows);
   const setScheduledOverlaps = useAppStore((state) => state.setScheduledOverlaps);
   const layout = useResponsiveLayout();
@@ -143,6 +149,13 @@ export default function AvailabilityPreferencesScreen() {
   );
   const [drafts, setDrafts] = useState<DraftWindow[]>(initialDrafts);
   const [expandedWindowId, setExpandedWindowId] = useState<string | null>(null);
+  const [selectedSpecificDate, setSelectedSpecificDate] = useState<number | null>(null);
+  const [specificMonth, setSpecificMonth] = useState(() => new Date());
+  const [hangoutFormat, setHangoutFormat] = useState<"ONE_ON_ONE" | "GROUP">(
+    bookingSetup.format,
+  );
+  const [hangoutTitle, setHangoutTitle] = useState(bookingSetup.title);
+  const [hangoutDescription, setHangoutDescription] = useState(bookingSetup.description);
 
   useEffect(() => {
     let active = true;
@@ -179,26 +192,132 @@ export default function AvailabilityPreferencesScreen() {
     setExpandedWindowId(null);
   }, [initialDrafts]);
 
-  const weeklyCounts = useMemo(() => {
-    const counts = Array.from({ length: 7 }, () => 0);
+  useEffect(() => {
+    setHangoutFormat(bookingSetup.format);
+    setHangoutTitle(bookingSetup.title);
+    setHangoutDescription(bookingSetup.description);
+  }, [bookingSetup.description, bookingSetup.format, bookingSetup.title]);
 
-    drafts.forEach((draft) => {
-      if (draft.recurrence === "WEEKLY" && draft.dayOfWeek !== null) {
-        counts[draft.dayOfWeek] += 1;
-      }
-    });
-
-    return counts;
-  }, [drafts]);
-
-  const monthlyCount = drafts.filter((draft) => draft.recurrence === "MONTHLY").length;
+  const weeklyRows = useMemo(
+    () =>
+      weekdayOptionLabels.map((label, dayIndex) => ({
+        label,
+        dayIndex,
+        drafts: drafts.filter(
+          (draft) => draft.recurrence === "WEEKLY" && draft.dayOfWeek === dayIndex,
+        ),
+      })),
+    [drafts],
+  );
+  const monthlyDrafts = useMemo(
+    () => drafts.filter((draft) => draft.recurrence === "MONTHLY"),
+    [drafts],
+  );
   const bookingLink = user?.inviteCode ? createSmartOpenUrl(`/booking/${user.inviteCode}`) : null;
-  const peakWeeklyCount = Math.max(...weeklyCounts, 1);
+  const specificDatesSet = useMemo(
+    () => new Set(monthlyDrafts.map((draft) => draft.dayOfMonth ?? 15)),
+    [monthlyDrafts],
+  );
+  const selectedSpecificDrafts = useMemo(
+    () =>
+      selectedSpecificDate === null
+        ? []
+        : monthlyDrafts.filter((draft) => (draft.dayOfMonth ?? 15) === selectedSpecificDate),
+    [monthlyDrafts, selectedSpecificDate],
+  );
+  const previewWindows = useMemo(
+    () =>
+      drafts
+        .slice()
+        .sort((left, right) => {
+          const leftOrder = left.recurrence === "WEEKLY" ? left.dayOfWeek ?? 0 : (left.dayOfMonth ?? 31) + 7;
+          const rightOrder = right.recurrence === "WEEKLY" ? right.dayOfWeek ?? 0 : (right.dayOfMonth ?? 31) + 7;
+          if (leftOrder !== rightOrder) {
+            return leftOrder - rightOrder;
+          }
+
+          return resolveMinutes(left.startInput, 0) - resolveMinutes(right.startInput, 0);
+        })
+        .slice(0, 3),
+    [drafts],
+  );
+  const specificCalendarDays = useMemo(() => {
+    const year = specificMonth.getFullYear();
+    const month = specificMonth.getMonth();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const cells: Array<{ key: string; dayNumber: number | null }> = Array.from(
+      { length: firstWeekday },
+      (_, index) => ({
+      key: `specific-blank-${index}`,
+      dayNumber: null,
+      }),
+    );
+
+    for (let dayNumber = 1; dayNumber <= totalDays; dayNumber += 1) {
+      cells.push({
+        key: `specific-${month}-${dayNumber}`,
+        dayNumber,
+      });
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push({
+        key: `specific-trailing-${cells.length}`,
+        dayNumber: null,
+      });
+    }
+
+    return cells;
+  }, [specificMonth]);
+  const specificMonthLabel = specificMonth.toLocaleDateString([], {
+    month: "long",
+    year: "numeric",
+  });
 
   const updateDraft = (id: string, patch: Partial<DraftWindow>) => {
     setDrafts((current) =>
       current.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)),
     );
+  };
+
+  useEffect(() => {
+    if (selectedSpecificDate !== null && specificDatesSet.has(selectedSpecificDate)) {
+      return;
+    }
+
+    const [firstSpecificDate] = [...specificDatesSet];
+    setSelectedSpecificDate(firstSpecificDate ?? specificMonth.getDate());
+  }, [selectedSpecificDate, specificDatesSet, specificMonth]);
+
+  const toggleWeeklyDay = (dayIndex: number) => {
+    const row = weeklyRows.find((item) => item.dayIndex === dayIndex);
+
+    if (row?.drafts.length) {
+      setDrafts((current) =>
+        current.filter(
+          (draft) => !(draft.recurrence === "WEEKLY" && draft.dayOfWeek === dayIndex),
+        ),
+      );
+      return;
+    }
+
+    const next = createDraftWindow("WEEKLY", { dayOfWeek: dayIndex });
+    setDrafts((current) => [...current, next]);
+    setExpandedWindowId(next.id);
+  };
+
+  const addWeeklyRange = (dayIndex: number) => {
+    const next = createDraftWindow("WEEKLY", { dayOfWeek: dayIndex });
+    setDrafts((current) => [...current, next]);
+    setExpandedWindowId(next.id);
+  };
+
+  const addSpecificDateRange = (dayOfMonth: number) => {
+    const next = createDraftWindow("MONTHLY", { dayOfMonth });
+    setDrafts((current) => [...current, next]);
+    setSelectedSpecificDate(dayOfMonth);
+    setExpandedWindowId(next.id);
   };
 
   const addWindow = () => {
@@ -237,7 +356,7 @@ export default function AvailabilityPreferencesScreen() {
       const endMinute = parseTimeInput(draft.endInput);
 
       if (startMinute === null || endMinute === null) {
-        throw new Error("Use 24-hour time like 18:30.");
+        throw new Error("Use a time like 6:30 PM.");
       }
 
       if (endMinute <= startMinute) {
@@ -259,6 +378,12 @@ export default function AvailabilityPreferencesScreen() {
 
     try {
       setSaving(true);
+      setBookingSetup({
+        format: hangoutFormat,
+        title: hangoutTitle.trim() || "Quick catch-up",
+        description:
+          hangoutDescription.trim() || "Pick an easy time and we can see what sticks.",
+      });
       await handleSaveRecurringAvailability(payload);
       setExpandedWindowId(null);
     } catch (error) {
@@ -344,67 +469,285 @@ export default function AvailabilityPreferencesScreen() {
               </View>
 
               <View style={styles.visualizerShell}>
-                <LinearGradient
-                  colors={[
-                    "rgba(255,255,255,0.08)",
-                    "rgba(255,255,255,0.02)",
-                    "rgba(255,255,255,0.00)",
-                  ]}
-                  start={{ x: 0.04, y: 0 }}
-                  end={{ x: 0.82, y: 0.94 }}
-                  style={StyleSheet.absoluteFillObject}
-                  pointerEvents="none"
-                />
+                <Text style={styles.moduleLabel}>WEEKLY HOURS</Text>
+                <Text style={styles.linkHint}>
+                  Set the default days and times you usually feel open.
+                </Text>
 
-                <Text style={styles.moduleLabel}>WEEKLY SHAPE</Text>
+                <View style={{ gap: 14 }}>
+                  {weeklyRows.map((row) => (
+                    <View key={row.label} style={styles.hoursRow}>
+                      <Pressable
+                        onPress={() => toggleWeeklyDay(row.dayIndex)}
+                        style={({ pressed }) => [
+                          styles.dayToggle,
+                          row.drafts.length ? styles.dayToggleActive : null,
+                          webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.98 }),
+                        ]}
+                      >
+                        {row.drafts.length ? (
+                          <MaterialCommunityIcons name="check" size={15} color="#081120" />
+                        ) : null}
+                      </Pressable>
 
-                <View className="flex-row items-end justify-between gap-2">
-                  {weekdayOptionLabels.map((day, index) => {
-                    const count = weeklyCounts[index];
-                    const fillHeight = count ? 12 + (count / peakWeeklyCount) * 18 : 8;
+                      <View style={styles.dayLabelWrap}>
+                        <Text style={styles.dayLabelText}>{row.label.toUpperCase()}</Text>
+                      </View>
+
+                      <View style={{ flex: 1, gap: 10 }}>
+                        {row.drafts.length ? (
+                          row.drafts.map((draft) => (
+                            <View key={draft.id} style={styles.timeRangeRow}>
+                              <View style={styles.inlineTimeField}>
+                                <TextInput
+                                  value={draft.startInput}
+                                  onChangeText={(value) => updateDraft(draft.id, { startInput: value })}
+                                  autoCapitalize="characters"
+                                  autoCorrect={false}
+                                  className="font-body text-[15px] text-cloud"
+                                  placeholder="9:00 AM"
+                                  placeholderTextColor="rgba(248,250,252,0.35)"
+                                />
+                              </View>
+                              <Text style={styles.rangeDash}>-</Text>
+                              <View style={styles.inlineTimeField}>
+                                <TextInput
+                                  value={draft.endInput}
+                                  onChangeText={(value) => updateDraft(draft.id, { endInput: value })}
+                                  autoCapitalize="characters"
+                                  autoCorrect={false}
+                                  className="font-body text-[15px] text-cloud"
+                                  placeholder="5:00 PM"
+                                  placeholderTextColor="rgba(248,250,252,0.35)"
+                                />
+                              </View>
+                              <Pressable
+                                onPress={() => removeWindow(draft.id)}
+                                style={({ pressed }) => [
+                                  styles.inlineIconButton,
+                                  webPressableStyle(pressed, {
+                                    pressedOpacity: 0.9,
+                                    pressedScale: 0.97,
+                                  }),
+                                ]}
+                              >
+                                <MaterialCommunityIcons name="close" size={16} color="#E2E8F0" />
+                              </Pressable>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.unavailableText}>Unavailable</Text>
+                        )}
+                      </View>
+
+                      <Pressable
+                        onPress={() => addWeeklyRange(row.dayIndex)}
+                        style={({ pressed }) => [
+                          styles.inlineIconButton,
+                          webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                        ]}
+                      >
+                        <MaterialCommunityIcons name="plus" size={16} color="#E2E8F0" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.linkStrip}>
+                <Text style={styles.moduleLabel}>DATE-SPECIFIC HOURS</Text>
+                <Text style={styles.linkHint}>
+                  Pick dates that should carry their own booking hours.
+                </Text>
+
+                <View style={styles.monthPickerRow}>
+                  <Pressable
+                    onPress={() =>
+                      setSpecificMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.inlineIconButton,
+                      webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="chevron-left" size={18} color="#E2E8F0" />
+                  </Pressable>
+
+                  <Text style={styles.monthPickerLabel}>{specificMonthLabel}</Text>
+
+                  <Pressable
+                    onPress={() =>
+                      setSpecificMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.inlineIconButton,
+                      webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
+                  </Pressable>
+                </View>
+
+                <View style={styles.weekdayCalendarHeader}>
+                  {weekdayOptionLabels.map((day) => (
+                    <Text key={day} style={styles.weekdayHeaderText}>
+                      {day.toUpperCase()}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.specificCalendarGrid}>
+                  {specificCalendarDays.map((cell) => {
+                    const active = cell.dayNumber !== null && cell.dayNumber === selectedSpecificDate;
+                    const hasHours = cell.dayNumber !== null && specificDatesSet.has(cell.dayNumber);
 
                     return (
-                      <View key={day} className="flex-1 items-center gap-2">
-                        <View style={styles.visualizerTrack}>
-                          <LinearGradient
-                            colors={
-                              count
-                                ? ["rgba(165,243,252,0.88)", "rgba(34,211,238,0.24)"]
-                                : ["rgba(255,255,255,0.14)", "rgba(255,255,255,0.05)"]
-                            }
-                            start={{ x: 0.5, y: 0 }}
-                            end={{ x: 0.5, y: 1 }}
-                            style={[
-                              styles.visualizerFill,
-                              {
-                                height: fillHeight,
-                                opacity: count ? 1 : 0.7,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <Text className="font-body text-[11px] text-cloud/58">{day}</Text>
-                      </View>
+                      <Pressable
+                        key={cell.key}
+                        disabled={cell.dayNumber === null}
+                        onPress={() => cell.dayNumber !== null && setSelectedSpecificDate(cell.dayNumber)}
+                        style={({ pressed }) => [
+                          styles.specificCalendarCell,
+                          active ? styles.specificCalendarCellActive : null,
+                          hasHours ? styles.specificCalendarCellFilled : null,
+                          cell.dayNumber === null ? styles.specificCalendarCellBlank : null,
+                          webPressableStyle(pressed, {
+                            disabled: cell.dayNumber === null,
+                            pressedOpacity: 0.92,
+                            pressedScale: 0.98,
+                          }),
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.specificCalendarText,
+                            active ? styles.specificCalendarTextActive : null,
+                          ]}
+                        >
+                          {cell.dayNumber ?? ""}
+                        </Text>
+                      </Pressable>
                     );
                   })}
                 </View>
 
-                {monthlyCount ? (
-                  <Text className="mt-4 font-body text-[12px] leading-5 text-cloud/54">
-                    {monthlyCount} monthly {monthlyCount === 1 ? "window is" : "windows are"} layered
-                    in too.
-                  </Text>
-                ) : null}
+                <View style={{ gap: 10 }}>
+                  {selectedSpecificDrafts.length ? (
+                    selectedSpecificDrafts.map((draft) => (
+                      <View key={draft.id} style={styles.timeRangeRow}>
+                        <View style={styles.inlineTimeField}>
+                          <TextInput
+                            value={draft.startInput}
+                            onChangeText={(value) => updateDraft(draft.id, { startInput: value })}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            className="font-body text-[15px] text-cloud"
+                            placeholder="9:00 AM"
+                            placeholderTextColor="rgba(248,250,252,0.35)"
+                          />
+                        </View>
+                        <Text style={styles.rangeDash}>-</Text>
+                        <View style={styles.inlineTimeField}>
+                          <TextInput
+                            value={draft.endInput}
+                            onChangeText={(value) => updateDraft(draft.id, { endInput: value })}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            className="font-body text-[15px] text-cloud"
+                            placeholder="5:00 PM"
+                            placeholderTextColor="rgba(248,250,252,0.35)"
+                          />
+                        </View>
+                        <Pressable
+                          onPress={() => removeWindow(draft.id)}
+                          style={({ pressed }) => [
+                            styles.inlineIconButton,
+                            webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                          ]}
+                        >
+                          <MaterialCommunityIcons name="close" size={16} color="#E2E8F0" />
+                        </Pressable>
+                      </View>
+                    ))
+                  ) : (
+                    <Pressable
+                      onPress={() => addSpecificDateRange(selectedSpecificDate ?? specificMonth.getDate())}
+                      style={({ pressed }) => [
+                        styles.linkPill,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.985 }),
+                      ]}
+                    >
+                      <Text style={styles.linkPillText}>Add hours for this date</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
 
-              <View style={styles.linkStrip}>
-                <View style={{ gap: 6, flex: 1 }}>
-                  <Text style={styles.moduleLabel}>SHARE BOOKING LINK</Text>
-                  <Text style={styles.linkHint}>
-                    {bookingLink
-                      ? "Keep your share link close so a good overlap can turn into action fast."
-                      : "Your share link will show up here as soon as your booking flow is ready."}
-                  </Text>
+              <View style={styles.previewShell}>
+                <Text style={styles.moduleLabel}>HANGOUT SETUP</Text>
+                <Text style={styles.linkHint}>
+                  Name the hangout, add a description, and preview the booking link.
+                </Text>
+
+                <View style={styles.formatRow}>
+                  {[
+                    {
+                      key: "ONE_ON_ONE",
+                      title: "1:1 hangout",
+                      subtitle: "One host with one invitee",
+                      icon: "account-switch-outline",
+                    },
+                    {
+                      key: "GROUP",
+                      title: "Group hangout",
+                      subtitle: "One host with multiple people",
+                      icon: "account-group-outline",
+                    },
+                  ].map((option) => (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => setHangoutFormat(option.key as "ONE_ON_ONE" | "GROUP")}
+                      style={({ pressed }) => [
+                        styles.formatCard,
+                        hangoutFormat === option.key ? styles.formatCardActive : null,
+                        webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={option.icon as "account-switch-outline" | "account-group-outline"}
+                        size={20}
+                        color="#F8FAFC"
+                      />
+                      <Text style={styles.formatCardTitle}>{option.title}</Text>
+                      <Text style={styles.formatCardSubtitle}>{option.subtitle}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <View style={styles.noteField}>
+                  <TextInput
+                    value={hangoutTitle}
+                    onChangeText={setHangoutTitle}
+                    className="font-body text-base text-cloud"
+                    placeholder="Coffee run, quick bite, after class walk..."
+                    placeholderTextColor="rgba(248,250,252,0.35)"
+                  />
+                </View>
+
+                <View style={styles.descriptionField}>
+                  <TextInput
+                    value={hangoutDescription}
+                    onChangeText={setHangoutDescription}
+                    multiline
+                    textAlignVertical="top"
+                    className="font-body text-base leading-6 text-cloud"
+                    placeholder="Say what you're proposing to do and keep the vibe clear."
+                    placeholderTextColor="rgba(248,250,252,0.35)"
+                  />
                 </View>
 
                 <View style={styles.linkActions}>
@@ -427,44 +770,72 @@ export default function AvailabilityPreferencesScreen() {
                     <Text style={styles.linkPillText}>Preview link</Text>
                   </Pressable>
                 </View>
-              </View>
 
-              <View style={styles.previewShell}>
-                <Text style={styles.moduleLabel}>BEST MUTUAL WINDOWS</Text>
-
-                <View style={styles.previewTimeline}>
-                  {(scheduledOverlaps.length ? scheduledOverlaps.slice(0, 3) : [null, null, null]).map(
-                    (overlap, index) => (
-                      <View key={overlap?.id ?? `empty-${index}`} style={styles.previewTrack}>
-                        <View
-                          style={[
-                            styles.previewGlow,
-                            {
-                              top: overlap ? 8 + index * 10 : 30,
-                              height: overlap ? 26 + index * 10 : 12,
-                              opacity: overlap ? 1 : 0.35,
-                            },
-                          ]}
-                        />
-                      </View>
-                    ),
-                  )}
-                </View>
-
-                {scheduledOverlaps.length ? (
-                  <View style={{ gap: 12 }}>
-                    {scheduledOverlaps.slice(0, 2).map((overlap) => (
-                      <View key={overlap.id} style={styles.previewRow}>
-                        <Text style={styles.previewName}>{overlap.matchedUser.name}</Text>
-                        <Text style={styles.previewDetail}>{overlap.label}</Text>
-                      </View>
-                    ))}
+                <View style={styles.previewBookingCard}>
+                  <View style={styles.previewBookingHeader}>
+                    <View style={styles.previewAvatar}>
+                      <Text style={styles.previewAvatarText}>
+                        {(user?.name?.[0] ?? "N").toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.previewName}>{user?.name ?? "You"}</Text>
+                      <Text style={styles.previewTitleLarge}>
+                        {hangoutTitle.trim() || "Quick catch-up"}
+                      </Text>
+                      <Text style={styles.previewDescriptionText}>
+                        {hangoutDescription.trim() ||
+                          "Pick an easy time and we can see what sticks."}
+                      </Text>
+                    </View>
                   </View>
-                ) : (
-                  <Text style={styles.previewEmpty}>
-                    When your crew saves rhythm too, the strongest mutual windows will glow here.
-                  </Text>
-                )}
+
+                  <View style={styles.previewCalendarBlock}>
+                    <Text style={styles.previewMonthLabel}>{specificMonthLabel}</Text>
+                    <View style={styles.weekdayCalendarHeader}>
+                      {weekdayOptionLabels.map((day) => (
+                        <Text key={day} style={styles.weekdayHeaderText}>
+                          {day.toUpperCase()}
+                        </Text>
+                      ))}
+                    </View>
+                    <View style={styles.specificCalendarGrid}>
+                      {specificCalendarDays.map((cell) => {
+                        const filled =
+                          cell.dayNumber !== null &&
+                          (specificDatesSet.has(cell.dayNumber) || cell.dayNumber === selectedSpecificDate);
+
+                        return (
+                          <View
+                            key={`preview-${cell.key}`}
+                            style={[
+                              styles.previewCalendarCell,
+                              filled ? styles.previewCalendarCellFilled : null,
+                            ]}
+                          >
+                            <Text style={styles.previewCalendarText}>{cell.dayNumber ?? ""}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={styles.previewTimesRow}>
+                    {previewWindows.length ? (
+                      previewWindows.map((draft) => (
+                        <View key={draft.id} style={styles.previewTimePill}>
+                          <Text style={styles.previewTimeText}>
+                            {windowDayLabel(draft)} - {windowTimeLabel(draft)}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.previewEmpty}>
+                        Your booking preview will fill in as soon as you add hours.
+                      </Text>
+                    )}
+                  </View>
+                </View>
               </View>
             </View>
 
@@ -619,9 +990,10 @@ export default function AvailabilityPreferencesScreen() {
                                     onChangeText={(value) =>
                                       updateDraft(draft.id, { startInput: value })
                                     }
-                                    autoCapitalize="none"
+                                    autoCapitalize="characters"
+                                    autoCorrect={false}
                                     className="font-body text-base text-cloud"
-                                    placeholder="18:00"
+                                    placeholder="6:00 PM"
                                     placeholderTextColor="rgba(248,250,252,0.35)"
                                   />
                                 </View>
@@ -635,9 +1007,10 @@ export default function AvailabilityPreferencesScreen() {
                                     onChangeText={(value) =>
                                       updateDraft(draft.id, { endInput: value })
                                     }
-                                    autoCapitalize="none"
+                                    autoCapitalize="characters"
+                                    autoCorrect={false}
                                     className="font-body text-base text-cloud"
-                                    placeholder="20:00"
+                                    placeholder="8:00 PM"
                                     placeholderTextColor="rgba(248,250,252,0.35)"
                                   />
                                 </View>
@@ -923,8 +1296,227 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
+  previewAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(124,58,237,0.24)",
+  },
+  previewAvatarText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+  },
+  previewBookingBlock: {
+    gap: 12,
+  },
+  previewBookingCard: {
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 16,
+  },
+  previewBookingHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  previewCalendarBlock: {
+    gap: 10,
+  },
+  previewCalendarCell: {
+    width: "13.2%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  previewCalendarCellFilled: {
+    backgroundColor: "rgba(124,58,237,0.18)",
+  },
+  previewCalendarText: {
+    color: "rgba(248,250,252,0.78)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  previewDescriptionText: {
+    color: "rgba(248,250,252,0.66)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  previewMonthLabel: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  previewTimePill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  previewTimesRow: {
+    gap: 8,
+  },
+  previewTimeText: {
+    color: "rgba(248,250,252,0.82)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  previewTitleLarge: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 20,
+    lineHeight: 24,
+  },
   screen: {
     flex: 1,
+  },
+  dayLabelText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  dayLabelWrap: {
+    width: 44,
+  },
+  dayToggle: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(248,250,252,0.22)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayToggleActive: {
+    borderColor: "rgba(231,217,255,0.92)",
+    backgroundColor: "#E7D9FF",
+  },
+  descriptionField: {
+    minHeight: 120,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  formatCard: {
+    flex: 1,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  formatCardActive: {
+    backgroundColor: "rgba(124,58,237,0.18)",
+    shadowColor: nowlyColors.violet,
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+  },
+  formatCardSubtitle: {
+    color: "rgba(248,250,252,0.62)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  formatCardTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  formatRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  hoursRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  inlineIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  inlineTimeField: {
+    minWidth: 82,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  monthPickerLabel: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  monthPickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  rangeDash: {
+    color: "rgba(248,250,252,0.58)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 16,
+    paddingTop: 10,
+  },
+  specificCalendarCell: {
+    width: "13.2%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  specificCalendarCellActive: {
+    backgroundColor: "#E7D9FF",
+  },
+  specificCalendarCellBlank: {
+    backgroundColor: "transparent",
+  },
+  specificCalendarCellFilled: {
+    backgroundColor: "rgba(124,58,237,0.16)",
+  },
+  specificCalendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  specificCalendarText: {
+    color: "rgba(248,250,252,0.78)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+  },
+  specificCalendarTextActive: {
+    color: "#081120",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  timeRangeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  unavailableText: {
+    color: "rgba(248,250,252,0.48)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    paddingTop: 10,
   },
   visualizerShell: {
     overflow: "hidden",
@@ -954,6 +1546,17 @@ const styles = StyleSheet.create({
   visualizerFill: {
     width: "100%",
     borderRadius: 18,
+  },
+  weekdayCalendarHeader: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  weekdayHeaderText: {
+    flex: 1,
+    textAlign: "center",
+    color: "rgba(248,250,252,0.4)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
   },
   windowCardShadow: {
     shadowColor: "#67E8F9",
