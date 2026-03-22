@@ -28,17 +28,39 @@ import {
   AppMatch,
   AppRadar,
   AppUser,
+  DateSpecificAvailabilityWindow,
   DirectChat,
   DirectMessage,
   RecapCard,
   ThreadMessage,
 } from "../types";
 
+const syncBrowserSessionMarker = (token: string | null) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (token) {
+      window.localStorage.setItem("nowly.browser.session", "1");
+    } else {
+      window.localStorage.removeItem("nowly.browser.session");
+    }
+  } catch (error) {
+    // Ignore browser storage errors so auth state still works in-app.
+  }
+};
+
 type AppState = {
   bookingSetup: {
     format: "ONE_ON_ONE" | "GROUP";
     title: string;
     description: string;
+    locationName: string;
+  };
+  liveSignalPreferences: {
+    showLocation: boolean;
+    locationLabel: string;
   };
   token: string | null;
   user: AppUser | null;
@@ -47,6 +69,7 @@ type AppState = {
   notificationsEnabled: boolean;
   activeSignal: MobileAvailabilitySignal | null;
   recurringWindows: MobileRecurringAvailabilityWindow[];
+  dateSpecificWindows: DateSpecificAvailabilityWindow[];
   scheduledOverlaps: MobileScheduledOverlap[];
   friends: AppFriend[];
   matches: AppMatch[];
@@ -62,6 +85,7 @@ type AppState = {
   setIntroSeen: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setBookingSetup: (payload: Partial<AppState["bookingSetup"]>) => void;
+  setLiveSignalPreferences: (payload: Partial<AppState["liveSignalPreferences"]>) => void;
   setDashboard: (payload: {
     friends: AppFriend[];
     matches: AppMatch[];
@@ -79,6 +103,7 @@ type AppState = {
   removeSuggestion: (userId: string) => void;
   setActiveSignal: (signal: MobileAvailabilitySignal | null) => void;
   setRecurringWindows: (windows: MobileRecurringAvailabilityWindow[]) => void;
+  setDateSpecificWindows: (windows: DateSpecificAvailabilityWindow[]) => void;
   setScheduledOverlaps: (overlaps: MobileScheduledOverlap[]) => void;
   updateUser: (payload: Partial<AppUser>) => void;
   upsertHangout: (hangout: AppHangout) => void;
@@ -111,12 +136,18 @@ export const useAppStore = create<AppState>()(
         format: "ONE_ON_ONE",
         title: "Quick catch-up",
         description: "Pick an easy time and we can lock something in.",
+        locationName: "",
+      },
+      liveSignalPreferences: {
+        showLocation: false,
+        locationLabel: "",
       },
       introSeen: false,
       onboardingComplete: false,
       notificationsEnabled: true,
       activeSignal: null,
       recurringWindows: [],
+      dateSpecificWindows: [],
       scheduledOverlaps: [],
       friends: [],
       matches: [],
@@ -128,10 +159,13 @@ export const useAppStore = create<AppState>()(
       recaps: [],
       suggestions: [],
       setSession: (token, user) =>
-        set(() => ({
+        set(() => {
+          syncBrowserSessionMarker(token);
+          return {
           token,
           user,
-        })),
+          };
+        }),
       finishOnboarding: (user) =>
         set(() => ({
           user,
@@ -149,6 +183,13 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           bookingSetup: {
             ...state.bookingSetup,
+            ...payload,
+          },
+        })),
+      setLiveSignalPreferences: (payload) =>
+        set((state) => ({
+          liveSignalPreferences: {
+            ...state.liveSignalPreferences,
             ...payload,
           },
         })),
@@ -205,6 +246,10 @@ export const useAppStore = create<AppState>()(
       setRecurringWindows: (windows) =>
         set(() => ({
           recurringWindows: windows,
+        })),
+      setDateSpecificWindows: (windows) =>
+        set(() => ({
+          dateSpecificWindows: windows,
         })),
       setScheduledOverlaps: (overlaps) =>
         set(() => ({
@@ -336,10 +381,13 @@ export const useAppStore = create<AppState>()(
           suggestions: state.suggestions.filter((item) => item.id !== friend.id),
         })),
       clearSession: () =>
-        set((state) => ({
+        set((state) => {
+          syncBrowserSessionMarker(null);
+          return {
           token: null,
           user: null,
           bookingSetup: state.bookingSetup,
+          liveSignalPreferences: state.liveSignalPreferences,
           onboardingComplete: false,
           friends: [],
           matches: [],
@@ -352,15 +400,18 @@ export const useAppStore = create<AppState>()(
           suggestions: [],
           activeSignal: null,
           recurringWindows: [],
+          dateSpecificWindows: [],
           scheduledOverlaps: [],
           introSeen: state.introSeen,
           notificationsEnabled: state.notificationsEnabled,
-        })),
+          };
+        }),
       bootstrapDemo: () =>
         set((state) => ({
           token: state.token ?? "demo-token",
         user: state.user ?? demoUser,
         bookingSetup: state.bookingSetup,
+        liveSignalPreferences: state.liveSignalPreferences,
         onboardingComplete: true,
           friends: demoFriends,
           matches: demoMatches as AppMatch[],
@@ -369,6 +420,7 @@ export const useAppStore = create<AppState>()(
           recaps: demoRecaps,
           activeSignal: demoSignal,
           recurringWindows: demoRecurringWindows,
+          dateSpecificWindows: state.dateSpecificWindows,
           scheduledOverlaps: demoScheduledOverlaps,
           threadMessages: demoThreads,
           directChats: demoDirectChats,
@@ -382,10 +434,12 @@ export const useAppStore = create<AppState>()(
         token: state.token,
         user: state.user,
         bookingSetup: state.bookingSetup,
+        liveSignalPreferences: state.liveSignalPreferences,
         introSeen: state.introSeen,
         onboardingComplete: state.onboardingComplete,
         notificationsEnabled: state.notificationsEnabled,
         activeSignal: state.activeSignal,
+        dateSpecificWindows: state.dateSpecificWindows,
       }),
     },
   ),

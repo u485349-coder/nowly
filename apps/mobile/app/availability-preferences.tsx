@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   hangoutIntentOptions,
   MobileRecurringAvailabilityWindow,
@@ -17,6 +17,7 @@ import { GradientMesh } from "../components/ui/GradientMesh";
 import { PillButton } from "../components/ui/PillButton";
 import { useResponsiveLayout } from "../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../constants/theme";
+import { AvailabilityComposer } from "../features/availability/AvailabilityComposer";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import {
@@ -30,6 +31,7 @@ import { hangoutIntentLabel, vibeLabel } from "../lib/labels";
 import { createSmartOpenUrl } from "../lib/smart-links";
 import { webPressableStyle } from "../lib/web-pressable";
 import { useAppStore } from "../store/useAppStore";
+import type { DateSpecificAvailabilityWindow } from "../types";
 
 type DraftWindow = {
   id: string;
@@ -54,6 +56,40 @@ type SaveWindowPayload = {
   vibe?: (typeof vibeOptions)[number] | null;
   hangoutIntent?: (typeof hangoutIntentOptions)[number] | null;
 };
+
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const toDateKey = (value: Date) =>
+  `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(value.getDate())}`;
+
+const parseDateKey = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+};
+
+const formatSpecificDateLabel = (value: string) => {
+  const date = parseDateKey(value);
+  return `${date.toLocaleDateString([], { month: "long" })} ${formatOrdinalDay(date.getDate())}, ${date.getFullYear()}`;
+};
+
+const sameMonthAs = (dateKey: string, monthDate: Date) => {
+  const date = parseDateKey(dateKey);
+  return (
+    date.getFullYear() === monthDate.getFullYear() &&
+    date.getMonth() === monthDate.getMonth()
+  );
+};
+
+const createSpecificDateWindow = (
+  dateKey: string,
+  overrides: Partial<DateSpecificAvailabilityWindow> = {},
+): DateSpecificAvailabilityWindow => ({
+  id: `specific-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  dateKey,
+  startInput: "6:00 PM",
+  endInput: "8:00 PM",
+  ...overrides,
+});
 
 const createDraftWindow = (
   recurrence: "WEEKLY" | "MONTHLY" = "WEEKLY",
@@ -129,15 +165,53 @@ const PreferenceChip = ({
   </Pressable>
 );
 
+const buildBookingSharePath = (
+  inviteCode: string,
+  setup: {
+    format: "ONE_ON_ONE" | "GROUP";
+    title: string;
+    description: string;
+    locationName: string;
+  },
+) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("format", setup.format);
+
+  const trimmedTitle = setup.title.trim();
+  const trimmedDescription = setup.description.trim();
+  const trimmedLocation = setup.locationName.trim();
+
+  if (trimmedTitle) {
+    searchParams.set("title", trimmedTitle);
+  }
+
+  if (trimmedDescription) {
+    searchParams.set("description", trimmedDescription);
+  }
+
+  if (trimmedLocation) {
+    searchParams.set("location", trimmedLocation);
+  }
+
+  const query = searchParams.toString();
+  return `/booking/${inviteCode}${query ? `?${query}` : ""}`;
+};
+
 export default function AvailabilityPreferencesScreen() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
+  const activeSignal = useAppStore((state) => state.activeSignal);
   const bookingSetup = useAppStore((state) => state.bookingSetup);
+  const liveSignalPreferences = useAppStore((state) => state.liveSignalPreferences);
   const setBookingSetup = useAppStore((state) => state.setBookingSetup);
+  const setLiveSignalPreferences = useAppStore((state) => state.setLiveSignalPreferences);
   const recurringWindows = useAppStore((state) => state.recurringWindows);
+  const storedDateSpecificWindows = useAppStore((state) => state.dateSpecificWindows);
   const setRecurringWindows = useAppStore((state) => state.setRecurringWindows);
+  const setDateSpecificWindows = useAppStore((state) => state.setDateSpecificWindows);
+  const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const setScheduledOverlaps = useAppStore((state) => state.setScheduledOverlaps);
   const layout = useResponsiveLayout();
   const initialDrafts = useMemo(
@@ -148,14 +222,20 @@ export default function AvailabilityPreferencesScreen() {
     [recurringWindows],
   );
   const [drafts, setDrafts] = useState<DraftWindow[]>(initialDrafts);
-  const [expandedWindowId, setExpandedWindowId] = useState<string | null>(null);
-  const [selectedSpecificDate, setSelectedSpecificDate] = useState<number | null>(null);
+  const [specificWindows, setSpecificWindows] = useState<DateSpecificAvailabilityWindow[]>(
+    storedDateSpecificWindows,
+  );
+  const [previewExpanded, setPreviewExpanded] = useState(true);
+  const [selectedSpecificDateKey, setSelectedSpecificDateKey] = useState<string | null>(null);
   const [specificMonth, setSpecificMonth] = useState(() => new Date());
   const [hangoutFormat, setHangoutFormat] = useState<"ONE_ON_ONE" | "GROUP">(
     bookingSetup.format,
   );
   const [hangoutTitle, setHangoutTitle] = useState(bookingSetup.title);
   const [hangoutDescription, setHangoutDescription] = useState(bookingSetup.description);
+  const [hangoutLocation, setHangoutLocation] = useState(bookingSetup.locationName);
+  const [savingLiveStatus, setSavingLiveStatus] = useState(false);
+  const [clearingLiveStatus, setClearingLiveStatus] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -189,14 +269,18 @@ export default function AvailabilityPreferencesScreen() {
 
   useEffect(() => {
     setDrafts(initialDrafts);
-    setExpandedWindowId(null);
   }, [initialDrafts]);
+
+  useEffect(() => {
+    setSpecificWindows(storedDateSpecificWindows);
+  }, [storedDateSpecificWindows]);
 
   useEffect(() => {
     setHangoutFormat(bookingSetup.format);
     setHangoutTitle(bookingSetup.title);
     setHangoutDescription(bookingSetup.description);
-  }, [bookingSetup.description, bookingSetup.format, bookingSetup.title]);
+    setHangoutLocation(bookingSetup.locationName);
+  }, [bookingSetup.description, bookingSetup.format, bookingSetup.locationName, bookingSetup.title]);
 
   const weeklyRows = useMemo(
     () =>
@@ -213,51 +297,95 @@ export default function AvailabilityPreferencesScreen() {
     () => drafts.filter((draft) => draft.recurrence === "MONTHLY"),
     [drafts],
   );
-  const bookingLink = user?.inviteCode ? createSmartOpenUrl(`/booking/${user.inviteCode}`) : null;
+  const bookingSharePath = useMemo(
+    () =>
+      user?.inviteCode
+        ? buildBookingSharePath(user.inviteCode, {
+            format: hangoutFormat,
+            title: hangoutTitle,
+            description: hangoutDescription,
+            locationName: hangoutLocation,
+          })
+        : null,
+    [hangoutDescription, hangoutFormat, hangoutLocation, hangoutTitle, user?.inviteCode],
+  );
+  const bookingLink = bookingSharePath ? createSmartOpenUrl(bookingSharePath) : null;
+  const currentSpecificMonthPrefix = useMemo(
+    () => `${specificMonth.getFullYear()}-${padDatePart(specificMonth.getMonth() + 1)}`,
+    [specificMonth],
+  );
   const specificDatesSet = useMemo(
-    () => new Set(monthlyDrafts.map((draft) => draft.dayOfMonth ?? 15)),
-    [monthlyDrafts],
+    () => new Set(specificWindows.map((window) => window.dateKey)),
+    [specificWindows],
   );
-  const selectedSpecificDrafts = useMemo(
+  const selectedSpecificDay = useMemo(
+    () => (selectedSpecificDateKey ? parseDateKey(selectedSpecificDateKey) : specificMonth),
+    [selectedSpecificDateKey, specificMonth],
+  );
+  const selectedSpecificDayNumber = selectedSpecificDay.getDate();
+  const selectedSpecificLabel = formatSpecificDateLabel(toDateKey(selectedSpecificDay));
+  const selectedSpecificWindows = useMemo(
     () =>
-      selectedSpecificDate === null
+      selectedSpecificDateKey === null
         ? []
-        : monthlyDrafts.filter((draft) => (draft.dayOfMonth ?? 15) === selectedSpecificDate),
-    [monthlyDrafts, selectedSpecificDate],
+        : specificWindows.filter((window) => window.dateKey === selectedSpecificDateKey),
+    [selectedSpecificDateKey, specificWindows],
   );
-  const previewWindows = useMemo(
+  const selectedRepeatingDrafts = useMemo(
     () =>
-      drafts
+      monthlyDrafts.filter(
+        (draft) => (draft.dayOfMonth ?? 15) === selectedSpecificDayNumber,
+      ),
+    [monthlyDrafts, selectedSpecificDayNumber],
+  );
+  const previewRows = useMemo(
+    () =>
+      [
+        ...specificWindows.map((window) => ({
+          id: window.id,
+          title: formatSpecificDateLabel(window.dateKey),
+          subtitle: `${window.startInput} - ${window.endInput}`,
+          meta: "One-off date",
+          sortValue: parseDateKey(window.dateKey).getTime(),
+        })),
+        ...drafts.map((draft) => ({
+          id: draft.id,
+          title: windowDayLabel(draft),
+          subtitle: windowTimeLabel(draft),
+          meta: draft.recurrence === "WEEKLY" ? "Repeats weekly" : "Repeats monthly",
+          sortValue:
+            draft.recurrence === "WEEKLY"
+              ? draft.dayOfWeek ?? 0
+              : 10_000 + (draft.dayOfMonth ?? 15),
+        })),
+      ]
         .slice()
         .sort((left, right) => {
-          const leftOrder = left.recurrence === "WEEKLY" ? left.dayOfWeek ?? 0 : (left.dayOfMonth ?? 31) + 7;
-          const rightOrder = right.recurrence === "WEEKLY" ? right.dayOfWeek ?? 0 : (right.dayOfMonth ?? 31) + 7;
-          if (leftOrder !== rightOrder) {
-            return leftOrder - rightOrder;
-          }
-
-          return resolveMinutes(left.startInput, 0) - resolveMinutes(right.startInput, 0);
+          return left.sortValue - right.sortValue;
         })
         .slice(0, 3),
-    [drafts],
+    [drafts, specificWindows],
   );
   const specificCalendarDays = useMemo(() => {
     const year = specificMonth.getFullYear();
     const month = specificMonth.getMonth();
     const totalDays = new Date(year, month + 1, 0).getDate();
     const firstWeekday = new Date(year, month, 1).getDay();
-    const cells: Array<{ key: string; dayNumber: number | null }> = Array.from(
+    const cells: Array<{ key: string; dayNumber: number | null; dateKey: string | null }> = Array.from(
       { length: firstWeekday },
       (_, index) => ({
       key: `specific-blank-${index}`,
       dayNumber: null,
+      dateKey: null,
       }),
     );
 
     for (let dayNumber = 1; dayNumber <= totalDays; dayNumber += 1) {
+      const dateKey = `${year}-${padDatePart(month + 1)}-${padDatePart(dayNumber)}`;
       cells.push({
         key: `specific-${month}-${dayNumber}`,
         dayNumber,
+        dateKey,
       });
     }
 
@@ -265,6 +393,7 @@ export default function AvailabilityPreferencesScreen() {
       cells.push({
         key: `specific-trailing-${cells.length}`,
         dayNumber: null,
+        dateKey: null,
       });
     }
 
@@ -282,13 +411,22 @@ export default function AvailabilityPreferencesScreen() {
   };
 
   useEffect(() => {
-    if (selectedSpecificDate !== null && specificDatesSet.has(selectedSpecificDate)) {
+    if (
+      selectedSpecificDateKey &&
+      sameMonthAs(selectedSpecificDateKey, specificMonth)
+    ) {
       return;
     }
 
-    const [firstSpecificDate] = [...specificDatesSet];
-    setSelectedSpecificDate(firstSpecificDate ?? specificMonth.getDate());
-  }, [selectedSpecificDate, specificDatesSet, specificMonth]);
+    const firstSpecificInMonth = specificWindows.find((window) =>
+      window.dateKey.startsWith(currentSpecificMonthPrefix),
+    );
+
+    setSelectedSpecificDateKey(
+      firstSpecificInMonth?.dateKey ??
+        `${currentSpecificMonthPrefix}-${padDatePart(1)}`,
+    );
+  }, [currentSpecificMonthPrefix, selectedSpecificDateKey, specificMonth, specificWindows]);
 
   const toggleWeeklyDay = (dayIndex: number) => {
     const row = weeklyRows.find((item) => item.dayIndex === dayIndex);
@@ -304,33 +442,92 @@ export default function AvailabilityPreferencesScreen() {
 
     const next = createDraftWindow("WEEKLY", { dayOfWeek: dayIndex });
     setDrafts((current) => [...current, next]);
-    setExpandedWindowId(next.id);
   };
 
   const addWeeklyRange = (dayIndex: number) => {
     const next = createDraftWindow("WEEKLY", { dayOfWeek: dayIndex });
     setDrafts((current) => [...current, next]);
-    setExpandedWindowId(next.id);
   };
 
-  const addSpecificDateRange = (dayOfMonth: number) => {
-    const next = createDraftWindow("MONTHLY", { dayOfMonth });
-    setDrafts((current) => [...current, next]);
-    setSelectedSpecificDate(dayOfMonth);
-    setExpandedWindowId(next.id);
-  };
-
-  const addWindow = () => {
-    const next = createDraftWindow("WEEKLY");
-    setDrafts((current) => [...current, next]);
-    setExpandedWindowId(next.id);
-  };
-
-  const removeWindow = (id: string) => {
-    setDrafts((current) =>
-      current.length > 1 ? current.filter((draft) => draft.id !== id) : current,
+  const updateSpecificWindow = (
+    id: string,
+    patch: Partial<DateSpecificAvailabilityWindow>,
+  ) => {
+    setSpecificWindows((current) =>
+      current.map((window) => (window.id === id ? { ...window, ...patch } : window)),
     );
-    setExpandedWindowId((current) => (current === id ? null : current));
+  };
+
+  const addSpecificDateRange = (dateKey: string) => {
+    const next = createSpecificDateWindow(dateKey);
+    setSpecificWindows((current) => [...current, next]);
+    setSelectedSpecificDateKey(dateKey);
+  };
+
+  const removeSpecificDateWindow = (id: string) => {
+    setSpecificWindows((current) => current.filter((window) => window.id !== id));
+  };
+
+  const addRepeatingMonthlyRange = () => {
+    const next = createDraftWindow("MONTHLY", { dayOfMonth: selectedSpecificDayNumber });
+    setDrafts((current) => [...current, next]);
+  };
+
+  const removeRecurringWindow = (id: string) => {
+    setDrafts((current) => current.filter((draft) => draft.id !== id));
+  };
+
+  const handleSaveLiveStatus = async (
+    payload: Parameters<typeof api.setAvailability>[1],
+  ) => {
+    try {
+      setSavingLiveStatus(true);
+      const nextSignal = await api.setAvailability(token, payload);
+      setActiveSignal({
+        ...nextSignal,
+        showLocation: payload.showLocation ?? false,
+        locationLabel: payload.locationLabel ?? null,
+      });
+      setLiveSignalPreferences({
+        showLocation: payload.showLocation ?? false,
+        locationLabel: payload.locationLabel ?? "",
+      });
+      await track(token, "availability_set", {
+        state: payload.state,
+        durationHours: payload.durationHours ?? null,
+        showLocation: payload.showLocation ?? false,
+      });
+      const overlaps = await api.fetchScheduledOverlaps(token);
+      setScheduledOverlaps(overlaps);
+    } catch (error) {
+      Alert.alert(
+        "Could not update your live status",
+        error instanceof Error ? error.message : "Try that again.",
+      );
+    } finally {
+      setSavingLiveStatus(false);
+    }
+  };
+
+  const handleClearLiveStatus = async () => {
+    if (!activeSignal) {
+      return;
+    }
+
+    try {
+      setClearingLiveStatus(true);
+      await api.clearAvailability(token, activeSignal.id);
+      setActiveSignal(null);
+      const overlaps = await api.fetchScheduledOverlaps(token);
+      setScheduledOverlaps(overlaps);
+    } catch (error) {
+      Alert.alert(
+        "Could not clear your live status",
+        error instanceof Error ? error.message : "Try that again.",
+      );
+    } finally {
+      setClearingLiveStatus(false);
+    }
   };
 
   const handleSaveRecurringAvailability = async (windows: SaveWindowPayload[]) => {
@@ -376,6 +573,19 @@ export default function AvailabilityPreferencesScreen() {
       };
     });
 
+    specificWindows.forEach((window) => {
+      const startMinute = parseTimeInput(window.startInput);
+      const endMinute = parseTimeInput(window.endInput);
+
+      if (startMinute === null || endMinute === null) {
+        throw new Error("Use a time like 6:30 PM.");
+      }
+
+      if (endMinute <= startMinute) {
+        throw new Error("End time must be later than start time.");
+      }
+    });
+
     try {
       setSaving(true);
       setBookingSetup({
@@ -383,9 +593,10 @@ export default function AvailabilityPreferencesScreen() {
         title: hangoutTitle.trim() || "Quick catch-up",
         description:
           hangoutDescription.trim() || "Pick an easy time and we can see what sticks.",
+        locationName: hangoutLocation.trim(),
       });
+      setDateSpecificWindows(specificWindows);
       await handleSaveRecurringAvailability(payload);
-      setExpandedWindowId(null);
     } catch (error) {
       Alert.alert(
         "Could not save hang rhythm",
@@ -418,12 +629,12 @@ export default function AvailabilityPreferencesScreen() {
   };
 
   const handlePreviewLink = () => {
-    if (!user?.inviteCode) {
+    if (!bookingSharePath) {
       router.push("/now-mode");
       return;
     }
 
-    router.push(`/booking/${user.inviteCode}`);
+    router.push(bookingSharePath as never);
   };
 
   return (
@@ -522,7 +733,7 @@ export default function AvailabilityPreferencesScreen() {
                                 />
                               </View>
                               <Pressable
-                                onPress={() => removeWindow(draft.id)}
+                                onPress={() => removeRecurringWindow(draft.id)}
                                 style={({ pressed }) => [
                                   styles.inlineIconButton,
                                   webPressableStyle(pressed, {
@@ -602,21 +813,25 @@ export default function AvailabilityPreferencesScreen() {
 
                 <View style={styles.specificCalendarGrid}>
                   {specificCalendarDays.map((cell) => {
-                    const active = cell.dayNumber !== null && cell.dayNumber === selectedSpecificDate;
-                    const hasHours = cell.dayNumber !== null && specificDatesSet.has(cell.dayNumber);
+                    const active =
+                      cell.dateKey !== null && cell.dateKey === selectedSpecificDateKey;
+                    const hasHours =
+                      cell.dateKey !== null && specificDatesSet.has(cell.dateKey);
 
                     return (
                       <Pressable
                         key={cell.key}
-                        disabled={cell.dayNumber === null}
-                        onPress={() => cell.dayNumber !== null && setSelectedSpecificDate(cell.dayNumber)}
+                        disabled={cell.dateKey === null}
+                        onPress={() =>
+                          cell.dateKey !== null && setSelectedSpecificDateKey(cell.dateKey)
+                        }
                         style={({ pressed }) => [
                           styles.specificCalendarCell,
                           active ? styles.specificCalendarCellActive : null,
                           hasHours ? styles.specificCalendarCellFilled : null,
-                          cell.dayNumber === null ? styles.specificCalendarCellBlank : null,
+                          cell.dateKey === null ? styles.specificCalendarCellBlank : null,
                           webPressableStyle(pressed, {
-                            disabled: cell.dayNumber === null,
+                            disabled: cell.dateKey === null,
                             pressedOpacity: 0.92,
                             pressedScale: 0.98,
                           }),
@@ -635,14 +850,23 @@ export default function AvailabilityPreferencesScreen() {
                   })}
                 </View>
 
+                <View style={styles.dateCallout}>
+                  <Text style={styles.dateCalloutLabel}>{selectedSpecificLabel}</Text>
+                  <Text style={styles.dateCalloutHint}>
+                    One-off date only. This does not repeat unless you add a monthly repeat below.
+                  </Text>
+                </View>
+
                 <View style={{ gap: 10 }}>
-                  {selectedSpecificDrafts.length ? (
-                    selectedSpecificDrafts.map((draft) => (
-                      <View key={draft.id} style={styles.timeRangeRow}>
+                  {selectedSpecificWindows.length ? (
+                    selectedSpecificWindows.map((window) => (
+                      <View key={window.id} style={styles.timeRangeRow}>
                         <View style={styles.inlineTimeField}>
                           <TextInput
-                            value={draft.startInput}
-                            onChangeText={(value) => updateDraft(draft.id, { startInput: value })}
+                            value={window.startInput}
+                            onChangeText={(value) =>
+                              updateSpecificWindow(window.id, { startInput: value })
+                            }
                             autoCapitalize="characters"
                             autoCorrect={false}
                             className="font-body text-[15px] text-cloud"
@@ -653,8 +877,10 @@ export default function AvailabilityPreferencesScreen() {
                         <Text style={styles.rangeDash}>-</Text>
                         <View style={styles.inlineTimeField}>
                           <TextInput
-                            value={draft.endInput}
-                            onChangeText={(value) => updateDraft(draft.id, { endInput: value })}
+                            value={window.endInput}
+                            onChangeText={(value) =>
+                              updateSpecificWindow(window.id, { endInput: value })
+                            }
                             autoCapitalize="characters"
                             autoCorrect={false}
                             className="font-body text-[15px] text-cloud"
@@ -663,7 +889,7 @@ export default function AvailabilityPreferencesScreen() {
                           />
                         </View>
                         <Pressable
-                          onPress={() => removeWindow(draft.id)}
+                          onPress={() => removeSpecificDateWindow(window.id)}
                           style={({ pressed }) => [
                             styles.inlineIconButton,
                             webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
@@ -675,7 +901,11 @@ export default function AvailabilityPreferencesScreen() {
                     ))
                   ) : (
                     <Pressable
-                      onPress={() => addSpecificDateRange(selectedSpecificDate ?? specificMonth.getDate())}
+                      onPress={() =>
+                        addSpecificDateRange(
+                          selectedSpecificDateKey ?? `${currentSpecificMonthPrefix}-01`,
+                        )
+                      }
                       style={({ pressed }) => [
                         styles.linkPill,
                         webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.985 }),
@@ -684,6 +914,84 @@ export default function AvailabilityPreferencesScreen() {
                       <Text style={styles.linkPillText}>Add hours for this date</Text>
                     </Pressable>
                   )}
+                </View>
+
+                <View style={styles.repeatShell}>
+                  <View style={styles.repeatHeader}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.repeatTitle}>Repeat this date every month</Text>
+                      <Text style={styles.repeatHint}>
+                        Keep repeating windows separate from one-off dates.
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      onPress={addRepeatingMonthlyRange}
+                      style={({ pressed }) => [
+                        styles.linkPill,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.985 }),
+                      ]}
+                    >
+                      <Text style={styles.linkPillText}>Add repeat</Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ gap: 10 }}>
+                    {selectedRepeatingDrafts.length ? (
+                      selectedRepeatingDrafts.map((draft) => (
+                        <View key={draft.id} style={styles.repeatRow}>
+                          <Text style={styles.repeatBadge}>
+                            Monthly on the {formatOrdinalDay(selectedSpecificDayNumber)}
+                          </Text>
+                          <View style={styles.timeRangeRow}>
+                            <View style={styles.inlineTimeField}>
+                              <TextInput
+                                value={draft.startInput}
+                                onChangeText={(value) =>
+                                  updateDraft(draft.id, { startInput: value })
+                                }
+                                autoCapitalize="characters"
+                                autoCorrect={false}
+                                className="font-body text-[15px] text-cloud"
+                                placeholder="9:00 AM"
+                                placeholderTextColor="rgba(248,250,252,0.35)"
+                              />
+                            </View>
+                            <Text style={styles.rangeDash}>-</Text>
+                            <View style={styles.inlineTimeField}>
+                              <TextInput
+                                value={draft.endInput}
+                                onChangeText={(value) =>
+                                  updateDraft(draft.id, { endInput: value })
+                                }
+                                autoCapitalize="characters"
+                                autoCorrect={false}
+                                className="font-body text-[15px] text-cloud"
+                                placeholder="5:00 PM"
+                                placeholderTextColor="rgba(248,250,252,0.35)"
+                              />
+                            </View>
+                            <Pressable
+                              onPress={() => removeRecurringWindow(draft.id)}
+                              style={({ pressed }) => [
+                                styles.inlineIconButton,
+                                webPressableStyle(pressed, {
+                                  pressedOpacity: 0.9,
+                                  pressedScale: 0.97,
+                                }),
+                              ]}
+                            >
+                              <MaterialCommunityIcons name="close" size={16} color="#E2E8F0" />
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.repeatHint}>
+                        No monthly repeat yet. Add one only if this should come back each month.
+                      </Text>
+                    )}
+                  </View>
                 </View>
               </View>
 
@@ -750,6 +1058,16 @@ export default function AvailabilityPreferencesScreen() {
                   />
                 </View>
 
+                <View style={styles.noteField}>
+                  <TextInput
+                    value={hangoutLocation}
+                    onChangeText={setHangoutLocation}
+                    className="font-body text-base text-cloud"
+                    placeholder="Hangout location or area"
+                    placeholderTextColor="rgba(248,250,252,0.35)"
+                  />
+                </View>
+
                 <View style={styles.linkActions}>
                   <Pressable
                     onPress={() => void handleCopyLink()}
@@ -770,352 +1088,213 @@ export default function AvailabilityPreferencesScreen() {
                     <Text style={styles.linkPillText}>Preview link</Text>
                   </Pressable>
                 </View>
+              </View>
 
-                <View style={styles.previewBookingCard}>
-                  <View style={styles.previewBookingHeader}>
-                    <View style={styles.previewAvatar}>
-                      <Text style={styles.previewAvatarText}>
-                        {(user?.name?.[0] ?? "N").toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={styles.previewName}>{user?.name ?? "You"}</Text>
-                      <Text style={styles.previewTitleLarge}>
-                        {hangoutTitle.trim() || "Quick catch-up"}
-                      </Text>
-                      <Text style={styles.previewDescriptionText}>
-                        {hangoutDescription.trim() ||
-                          "Pick an easy time and we can see what sticks."}
-                      </Text>
-                    </View>
-                  </View>
+              <View style={styles.liveStatusShell}>
+                <Text style={styles.moduleLabel}>LIVE STATUS</Text>
+                <Text style={styles.linkHint}>
+                  Go live for a set amount of time so Nowly can match free-time overlap in real time.
+                </Text>
 
-                  <View style={styles.previewCalendarBlock}>
-                    <Text style={styles.previewMonthLabel}>{specificMonthLabel}</Text>
-                    <View style={styles.weekdayCalendarHeader}>
-                      {weekdayOptionLabels.map((day) => (
-                        <Text key={day} style={styles.weekdayHeaderText}>
-                          {day.toUpperCase()}
-                        </Text>
-                      ))}
-                    </View>
-                    <View style={styles.specificCalendarGrid}>
-                      {specificCalendarDays.map((cell) => {
-                        const filled =
-                          cell.dayNumber !== null &&
-                          (specificDatesSet.has(cell.dayNumber) || cell.dayNumber === selectedSpecificDate);
+                <AvailabilityComposer
+                  activeSignal={activeSignal}
+                  defaultLocationLabel={user?.communityTag || user?.city || null}
+                  signalPreferences={liveSignalPreferences}
+                  onSignalPreferencesChange={setLiveSignalPreferences}
+                  onSave={(payload) => void handleSaveLiveStatus(payload)}
+                />
 
-                        return (
-                          <View
-                            key={`preview-${cell.key}`}
-                            style={[
-                              styles.previewCalendarCell,
-                              filled ? styles.previewCalendarCellFilled : null,
-                            ]}
-                          >
-                            <Text style={styles.previewCalendarText}>{cell.dayNumber ?? ""}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  <View style={styles.previewTimesRow}>
-                    {previewWindows.length ? (
-                      previewWindows.map((draft) => (
-                        <View key={draft.id} style={styles.previewTimePill}>
-                          <Text style={styles.previewTimeText}>
-                            {windowDayLabel(draft)} - {windowTimeLabel(draft)}
-                          </Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.previewEmpty}>
-                        Your booking preview will fill in as soon as you add hours.
-                      </Text>
-                    )}
-                  </View>
-                </View>
+                {activeSignal ? (
+                  <Pressable
+                    onPress={() => void handleClearLiveStatus()}
+                    disabled={clearingLiveStatus}
+                    style={({ pressed }) => [
+                      styles.clearLiveButton,
+                      webPressableStyle(pressed, {
+                        disabled: clearingLiveStatus,
+                        pressedOpacity: 0.9,
+                        pressedScale: 0.985,
+                      }),
+                    ]}
+                  >
+                    <Text style={styles.clearLiveText}>
+                      {clearingLiveStatus
+                        ? "Clearing live status..."
+                        : savingLiveStatus
+                          ? "Updating live status..."
+                          : "Clear live status"}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
 
             <View style={{ width: layout.rightColumnWidth, gap: 16 }}>
-            {drafts.map((draft) => {
-              const expanded = draft.id === expandedWindowId;
-              const dayLabel = windowDayLabel(draft);
-              const timeLabel = windowTimeLabel(draft);
-
-              return (
-                <Animated.View key={draft.id} layout={LinearTransition.duration(220)}>
-                  <View style={styles.windowCardShadow}>
+              <Animated.View layout={LinearTransition.duration(220)}>
+                <View style={styles.windowCardShadow}>
+                  <LinearGradient
+                    colors={[
+                      "rgba(12,17,31,0.94)",
+                      "rgba(18,39,58,0.86)",
+                      "rgba(9,12,24,0.95)",
+                    ]}
+                    locations={[0, 0.52, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.windowCard, previewExpanded ? styles.windowCardExpanded : null]}
+                  >
                     <LinearGradient
                       colors={[
-                        "rgba(12,17,31,0.94)",
-                        "rgba(18,39,58,0.86)",
-                        "rgba(9,12,24,0.95)",
+                        "rgba(255,255,255,0.08)",
+                        "rgba(255,255,255,0.02)",
+                        "rgba(255,255,255,0.00)",
                       ]}
-                      locations={[0, 0.52, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[styles.windowCard, expanded ? styles.windowCardExpanded : null]}
+                      start={{ x: 0.04, y: 0 }}
+                      end={{ x: 0.82, y: 0.9 }}
+                      style={StyleSheet.absoluteFillObject}
+                      pointerEvents="none"
+                    />
+                    <View style={styles.windowGlow} pointerEvents="none" />
+                    <View style={styles.windowStroke} pointerEvents="none" />
+
+                    <Pressable
+                      onPress={() => setPreviewExpanded((current) => !current)}
+                      style={({ pressed }) =>
+                        webPressableStyle(pressed, {
+                          pressedOpacity: 0.96,
+                          pressedScale: 0.995,
+                        })
+                      }
                     >
-                      <LinearGradient
-                        colors={[
-                          "rgba(255,255,255,0.08)",
-                          "rgba(255,255,255,0.02)",
-                          "rgba(255,255,255,0.00)",
-                        ]}
-                        start={{ x: 0.04, y: 0 }}
-                        end={{ x: 0.82, y: 0.9 }}
-                        style={StyleSheet.absoluteFillObject}
-                        pointerEvents="none"
-                      />
-                      <View style={styles.windowGlow} pointerEvents="none" />
-                      <View style={styles.windowStroke} pointerEvents="none" />
-
-                      <Pressable
-                        onPress={() => setExpandedWindowId(expanded ? null : draft.id)}
-                        style={({ pressed }) =>
-                          webPressableStyle(pressed, {
-                            pressedOpacity: 0.96,
-                            pressedScale: 0.995,
-                          })
-                        }
-                      >
-                        <View className="flex-row items-center gap-4">
-                          <View className="min-w-0 flex-1 gap-1.5">
-                            <Text className="font-display text-[20px] leading-[24px] text-cloud">
-                              {dayLabel}
-                            </Text>
-                            <Text className="font-body text-sm text-cloud/76">{timeLabel}</Text>
-                            <Text className="font-body text-[12px] leading-5 text-aqua/82">
-                              {windowMoodSummary(draft)}
-                            </Text>
-                          </View>
-
-                          <View style={styles.chevronShell}>
-                            <MaterialCommunityIcons
-                              name={expanded ? "chevron-up" : "chevron-right"}
-                              size={20}
-                              color="#E2E8F0"
-                            />
-                          </View>
+                      <View className="flex-row items-center gap-4">
+                        <View className="min-w-0 flex-1 gap-1.5">
+                          <Text className="font-display text-[20px] leading-[24px] text-cloud">
+                            {hangoutTitle.trim() || "Quick catch-up"}
+                          </Text>
+                          <Text className="font-body text-sm text-cloud/76">
+                            {hangoutFormat === "GROUP"
+                              ? "Group hangout booking preview"
+                              : "1:1 hangout booking preview"}
+                          </Text>
+                          <Text className="font-body text-[12px] leading-5 text-aqua/82">
+                            {previewRows[0]?.title ??
+                              "Add a date or recurring window to preview the booking page."}
+                          </Text>
                         </View>
-                      </Pressable>
 
-                      {expanded ? (
-                        <Animated.View
-                          entering={FadeInDown.duration(220)}
-                          exiting={FadeOutUp.duration(180)}
-                          className="gap-6 pt-6"
-                        >
-                          <View className="gap-3">
-                            <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                              Repeats
-                            </Text>
-                            <View className="flex-row gap-2.5">
-                              {(["WEEKLY", "MONTHLY"] as const).map((option) => (
-                                <PreferenceChip
-                                  key={option}
-                                  label={option === "WEEKLY" ? "Weekly" : "Monthly"}
-                                  active={draft.recurrence === option}
-                                  onPress={() =>
-                                    updateDraft(draft.id, {
-                                      recurrence: option,
-                                      dayOfWeek: option === "WEEKLY" ? draft.dayOfWeek ?? 2 : null,
-                                      dayOfMonth:
-                                        option === "MONTHLY" ? draft.dayOfMonth ?? 15 : null,
-                                    })
-                                  }
+                        <View style={styles.chevronShell}>
+                          <MaterialCommunityIcons
+                            name={previewExpanded ? "chevron-up" : "chevron-right"}
+                            size={20}
+                            color="#E2E8F0"
+                          />
+                        </View>
+                      </View>
+                    </Pressable>
+
+                    {previewExpanded ? (
+                      <Animated.View
+                        entering={FadeInDown.duration(220)}
+                        exiting={FadeOutUp.duration(180)}
+                        className="gap-5 pt-6"
+                      >
+                        <View style={styles.previewBookingCard}>
+                          <View style={styles.previewBookingHeader}>
+                            <View style={styles.previewAvatar}>
+                              {user?.photoUrl ? (
+                                <Image
+                                  source={{ uri: user.photoUrl }}
+                                  style={styles.previewAvatarImage}
                                 />
+                              ) : (
+                                <Text style={styles.previewAvatarText}>
+                                  {(user?.name?.[0] ?? "N").toUpperCase()}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={{ flex: 1, gap: 4 }}>
+                              <Text style={styles.previewName}>{user?.name ?? "You"}</Text>
+                              <Text style={styles.previewTitleLarge}>
+                                {hangoutTitle.trim() || "Quick catch-up"}
+                              </Text>
+                              <Text style={styles.previewDescriptionText}>
+                                {hangoutDescription.trim() ||
+                                  "Pick an easy time and we can see what sticks."}
+                              </Text>
+                              <Text style={styles.previewLocationText}>
+                                {hangoutLocation.trim() ||
+                                  user?.communityTag ||
+                                  user?.city ||
+                                  "Location shared in the booking flow"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.previewModeStrip}>
+                            <View style={styles.previewModeBadge}>
+                              <Text style={styles.previewModeBadgeText}>
+                                {hangoutFormat === "GROUP" ? "GROUP HANGOUT" : "1:1 HANGOUT"}
+                              </Text>
+                            </View>
+                            <Text style={styles.previewModeHint}>
+                              {hangoutFormat === "GROUP"
+                                ? "Made to share with a few people and let the crew choose what works."
+                                : "Made for one person to pick the easiest time and lock it in."}
+                            </Text>
+                          </View>
+
+                          <View style={styles.previewCalendarBlock}>
+                            <Text style={styles.previewMonthLabel}>{specificMonthLabel}</Text>
+                            <View style={styles.weekdayCalendarHeader}>
+                              {weekdayOptionLabels.map((day) => (
+                                <Text key={day} style={styles.weekdayHeaderText}>
+                                  {day.toUpperCase()}
+                                </Text>
                               ))}
                             </View>
+                            <View style={styles.specificCalendarGrid}>
+                              {specificCalendarDays.map((cell) => {
+                                const filled =
+                                  cell.dateKey !== null &&
+                                  (specificDatesSet.has(cell.dateKey) ||
+                                    cell.dateKey === selectedSpecificDateKey);
+
+                                return (
+                                  <View
+                                    key={`preview-${cell.key}`}
+                                    style={[
+                                      styles.previewCalendarCell,
+                                      filled ? styles.previewCalendarCellFilled : null,
+                                    ]}
+                                  >
+                                    <Text style={styles.previewCalendarText}>{cell.dayNumber ?? ""}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
                           </View>
 
-                          {draft.recurrence === "WEEKLY" ? (
-                            <View className="gap-3">
-                              <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                                Day
+                          <View style={styles.previewTimesRow}>
+                            {previewRows.length ? (
+                              previewRows.map((row) => (
+                                <View key={row.id} style={styles.previewTimePill}>
+                                  <Text style={styles.previewTimeText}>{row.title}</Text>
+                                  <Text style={styles.previewTimeMeta}>{row.subtitle}</Text>
+                                  <Text style={styles.previewTimeMetaMuted}>{row.meta}</Text>
+                                </View>
+                              ))
+                            ) : (
+                              <Text style={styles.previewEmpty}>
+                                Your booking preview will fill in as soon as you add hours.
                               </Text>
-                              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                <View className="flex-row gap-2.5 pr-2">
-                                  {weekdayOptionLabels.map((day, dayIndex) => (
-                                    <PreferenceChip
-                                      key={day}
-                                      label={day}
-                                      active={draft.dayOfWeek === dayIndex}
-                                      onPress={() =>
-                                        updateDraft(draft.id, { dayOfWeek: dayIndex })
-                                      }
-                                    />
-                                  ))}
-                                </View>
-                              </ScrollView>
-                            </View>
-                          ) : (
-                            <View className="gap-3">
-                              <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                                Day of month
-                              </Text>
-                              <View style={styles.compactInputWrap}>
-                                <TextInput
-                                  value={String(draft.dayOfMonth ?? 15)}
-                                  onChangeText={(value) => {
-                                    const digits = value.replace(/[^0-9]/g, "").slice(0, 2);
-                                    updateDraft(draft.id, {
-                                      dayOfMonth: digits
-                                        ? Math.max(1, Math.min(31, Number(digits)))
-                                        : 15,
-                                    });
-                                  }}
-                                  keyboardType="number-pad"
-                                  className="font-body text-base text-cloud"
-                                  placeholder="15"
-                                  placeholderTextColor="rgba(248,250,252,0.35)"
-                                />
-                              </View>
-                            </View>
-                          )}
-
-                          <View className="gap-3">
-                            <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                              Time
-                            </Text>
-                            <View className="flex-row gap-3">
-                              <View className="flex-1 gap-2">
-                                <Text className="font-body text-[12px] text-cloud/58">Start</Text>
-                                <View style={styles.timeField}>
-                                  <TextInput
-                                    value={draft.startInput}
-                                    onChangeText={(value) =>
-                                      updateDraft(draft.id, { startInput: value })
-                                    }
-                                    autoCapitalize="characters"
-                                    autoCorrect={false}
-                                    className="font-body text-base text-cloud"
-                                    placeholder="6:00 PM"
-                                    placeholderTextColor="rgba(248,250,252,0.35)"
-                                  />
-                                </View>
-                              </View>
-
-                              <View className="flex-1 gap-2">
-                                <Text className="font-body text-[12px] text-cloud/58">End</Text>
-                                <View style={styles.timeField}>
-                                  <TextInput
-                                    value={draft.endInput}
-                                    onChangeText={(value) =>
-                                      updateDraft(draft.id, { endInput: value })
-                                    }
-                                    autoCapitalize="characters"
-                                    autoCorrect={false}
-                                    className="font-body text-base text-cloud"
-                                    placeholder="8:00 PM"
-                                    placeholderTextColor="rgba(248,250,252,0.35)"
-                                  />
-                                </View>
-                              </View>
-                            </View>
+                            )}
                           </View>
-
-                          <View className="gap-3">
-                            <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                              Window note
-                            </Text>
-                            <View style={styles.noteField}>
-                              <TextInput
-                                value={draft.label}
-                                onChangeText={(value) => updateDraft(draft.id, { label: value })}
-                                className="font-body text-base text-cloud"
-                                placeholder="After class, Friday reset, Sunday recharge..."
-                                placeholderTextColor="rgba(248,250,252,0.35)"
-                              />
-                            </View>
-                          </View>
-
-                          <View className="gap-3">
-                            <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                              Best for
-                            </Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                              <View className="flex-row gap-2.5 pr-2">
-                                {hangoutIntentOptions.map((option) => (
-                                  <PreferenceChip
-                                    key={option}
-                                    label={hangoutIntentLabel(option)}
-                                    active={draft.hangoutIntent === option}
-                                    onPress={() =>
-                                      updateDraft(draft.id, {
-                                        hangoutIntent:
-                                          draft.hangoutIntent === option ? null : option,
-                                      })
-                                    }
-                                  />
-                                ))}
-                              </View>
-                            </ScrollView>
-                          </View>
-
-                          <View className="gap-3">
-                            <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/55">
-                              Vibe
-                            </Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                              <View className="flex-row gap-2.5 pr-2">
-                                {vibeOptions.map((option) => (
-                                  <PreferenceChip
-                                    key={option}
-                                    label={vibeLabel(option)}
-                                    active={draft.vibe === option}
-                                    onPress={() =>
-                                      updateDraft(draft.id, {
-                                        vibe: draft.vibe === option ? null : option,
-                                      })
-                                    }
-                                  />
-                                ))}
-                              </View>
-                            </ScrollView>
-                          </View>
-
-                          <View className="flex-row items-center justify-between gap-4">
-                            <Text className="min-w-0 flex-1 font-body text-[12px] leading-5 text-cloud/52">
-                              Preview: {windowDayLabel(draft)} - {windowTimeLabel(draft)}
-                            </Text>
-
-                            {drafts.length > 1 ? (
-                              <Pressable
-                                onPress={() => removeWindow(draft.id)}
-                                style={({ pressed }) =>
-                                  webPressableStyle(pressed, {
-                                    pressedOpacity: 0.86,
-                                    pressedScale: 0.98,
-                                  })
-                                }
-                              >
-                                <Text className="font-body text-sm text-aqua/82">Remove</Text>
-                              </Pressable>
-                            ) : null}
-                          </View>
-                        </Animated.View>
-                      ) : null}
-                    </LinearGradient>
-                  </View>
-                </Animated.View>
-              );
-            })}
-              <View className="items-center pt-2">
-                <Pressable
-                  onPress={addWindow}
-                  style={({ pressed }) => [
-                    styles.addWindowPill,
-                    webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
-                  ]}
-                >
-                  <MaterialCommunityIcons name="plus" size={16} color="#E2E8F0" />
-                  <Text className="font-display text-[15px] text-cloud">Add another window</Text>
-                </Pressable>
-              </View>
+                        </View>
+                      </Animated.View>
+                    ) : null}
+                  </LinearGradient>
+                </View>
+              </Animated.View>
             </View>
           </View>
         </ScrollView>
@@ -1206,6 +1385,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 16,
   },
+  clearLiveButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  clearLiveText: {
+    color: "rgba(139,234,255,0.92)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
   linkActions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1235,11 +1426,36 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     gap: 14,
   },
+  liveStatusShell: {
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 14,
+  },
   moduleLabel: {
     color: "rgba(248,250,252,0.56)",
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
     letterSpacing: 2,
+  },
+  dateCallout: {
+    borderRadius: 20,
+    backgroundColor: "rgba(124,58,237,0.12)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  dateCalloutHint: {
+    color: "rgba(248,250,252,0.64)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  dateCalloutLabel: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
   },
   previewDetail: {
     color: "rgba(139,234,255,0.82)",
@@ -1303,6 +1519,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(124,58,237,0.24)",
+    overflow: "hidden",
+  },
+  previewAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
   previewAvatarText: {
     color: nowlyColors.cloud,
@@ -1349,6 +1570,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+  previewLocationText: {
+    color: "rgba(139,234,255,0.82)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  previewModeBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.16)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  previewModeBadgeText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  previewModeHint: {
+    color: "rgba(248,250,252,0.66)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  previewModeStrip: {
+    gap: 8,
+  },
   previewMonthLabel: {
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1369,11 +1618,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  previewTimeMeta: {
+    color: "rgba(248,250,252,0.72)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  previewTimeMetaMuted: {
+    color: "rgba(248,250,252,0.48)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    lineHeight: 16,
+  },
   previewTitleLarge: {
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 20,
     lineHeight: 24,
+  },
+  repeatBadge: {
+    color: "rgba(139,234,255,0.9)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  repeatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  repeatHint: {
+    color: "rgba(248,250,252,0.64)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  repeatRow: {
+    gap: 8,
+  },
+  repeatShell: {
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  repeatTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
   },
   screen: {
     flex: 1,

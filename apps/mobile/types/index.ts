@@ -12,6 +12,13 @@ import {
   MicroResponse,
 } from "@nowly/shared";
 
+export type DateSpecificAvailabilityWindow = {
+  id: string;
+  dateKey: string;
+  startInput: string;
+  endInput: string;
+};
+
 export type AppUser = MobileUser & {
   streakCount: number;
   invitesSent: number;

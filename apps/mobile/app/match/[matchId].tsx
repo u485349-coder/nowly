@@ -44,8 +44,36 @@ export default function MatchDetailScreen() {
   const user = useAppStore((state) => state.user);
   const matches = useAppStore((state) => state.matches);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
+  const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
 
   const match = matches.find((item) => item.id === matchId);
+
+  const handleOpenChat = async () => {
+    if (!match) {
+      return;
+    }
+
+    const chat = await api.openDirectChat(token, match.matchedUser.id);
+    upsertDirectChat(chat);
+    router.push({
+      pathname: "/chat/[chatId]",
+      params: { chatId: chat.id },
+    });
+  };
+
+  const handleSendPrompt = () => {
+    if (!match) {
+      return;
+    }
+
+    router.push({
+      pathname: "/prompt/[promptKey]",
+      params: {
+        promptKey: "custom-prompt",
+        recipientId: match.matchedUser.id,
+      },
+    });
+  };
 
   const handlePropose = async (plan: (typeof fastPlans)[number]) => {
     if (!match) {
@@ -126,6 +154,11 @@ export default function MatchDetailScreen() {
           <Text className="mt-4 font-body text-sm text-aqua/80">
             {match.insightLabel ?? match.reason.momentumLabel ?? "Strong short-notice fit"}
           </Text>
+
+          <View className="mt-5 flex-row flex-wrap gap-3">
+            <PillButton label="Open private chat" variant="secondary" onPress={() => void handleOpenChat()} />
+            <PillButton label="Send prompt" onPress={handleSendPrompt} />
+          </View>
         </GlassCard>
 
         <View className="gap-3">

@@ -59,18 +59,18 @@ const FloatingTabItem = memo(
       color: interpolateColor(
         progress.value,
         [0, 1],
-        ["rgba(255,255,255,0.35)", "#FFFFFF"],
+        ["rgba(148,163,184,0.48)", "#FFFFFF"],
       ),
       textShadowColor: interpolateColor(
         progress.value,
         [0, 1],
-        ["rgba(255,255,255,0)", "rgba(255,255,255,0.35)"],
+        ["rgba(255,255,255,0)", "rgba(255,255,255,0.82)"],
       ),
-      textShadowRadius: interpolate(progress.value, [0, 1], [0, 8], Extrapolation.CLAMP),
+      textShadowRadius: interpolate(progress.value, [0, 1], [0, 14], Extrapolation.CLAMP),
       textShadowOffset: { width: 0, height: 0 },
       transform: [
         {
-          scale: interpolate(progress.value, [0, 1], [1, 1.08], Extrapolation.CLAMP),
+          scale: interpolate(progress.value, [0, 1], [0.98, 1.1], Extrapolation.CLAMP),
         },
       ],
     }));
@@ -79,8 +79,15 @@ const FloatingTabItem = memo(
       color: interpolateColor(
         progress.value,
         [0, 1],
-        ["rgba(255,255,255,0.5)", "rgba(255,255,255,0.72)"],
+        ["rgba(148,163,184,0.62)", "rgba(255,255,255,0.88)"],
       ),
+      textShadowColor: interpolateColor(
+        progress.value,
+        [0, 1],
+        ["rgba(255,255,255,0)", "rgba(255,255,255,0.4)"],
+      ),
+      textShadowRadius: interpolate(progress.value, [0, 1], [0, 10], Extrapolation.CLAMP),
+      textShadowOffset: { width: 0, height: 0 },
       transform: [
         {
           translateY: interpolate(progress.value, [0, 1], [0, -1], Extrapolation.CLAMP),

@@ -117,6 +117,8 @@ export type MobileAvailabilitySignal = {
   state: AvailabilityState;
   label?: string | null;
   radiusKm: number;
+  showLocation?: boolean;
+  locationLabel?: string | null;
   vibe?: Vibe | null;
   energyLevel?: EnergyLevel | null;
   budgetMood?: BudgetMood | null;

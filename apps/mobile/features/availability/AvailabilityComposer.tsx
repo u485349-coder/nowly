@@ -42,12 +42,18 @@ const durationOptions = [1, 2, 3, 6, 12, 24, 48];
 
 export const AvailabilityComposer = ({
   activeSignal,
+  defaultLocationLabel,
   onSave,
+  signalPreferences,
+  onSignalPreferencesChange,
 }: {
   activeSignal: MobileAvailabilitySignal | null;
+  defaultLocationLabel?: string | null;
   onSave: (payload: {
     state: AvailabilityState;
     radiusKm: number;
+    showLocation?: boolean;
+    locationLabel?: string | null;
     vibe?: Vibe | null;
     energyLevel?: EnergyLevel | null;
     budgetMood?: BudgetMood | null;
@@ -55,6 +61,14 @@ export const AvailabilityComposer = ({
     hangoutIntent?: HangoutIntent | null;
     label?: string | null;
     durationHours?: number;
+  }) => void;
+  signalPreferences: {
+    showLocation: boolean;
+    locationLabel: string;
+  };
+  onSignalPreferencesChange: (payload: {
+    showLocation?: boolean;
+    locationLabel?: string;
   }) => void;
 }) => {
   const estimateDuration = (signal: MobileAvailabilitySignal | null, fallback: number) => {
@@ -88,6 +102,8 @@ export const AvailabilityComposer = ({
     activeSignal?.budgetMood ?? "LOW_SPEND",
   );
   const [label, setLabel] = useState(activeSignal?.label ?? "");
+  const [showLocation, setShowLocation] = useState(signalPreferences.showLocation);
+  const [locationLabel, setLocationLabel] = useState(signalPreferences.locationLabel);
   const [durationHours, setDurationHours] = useState(
     estimateDuration(activeSignal, initialState.duration),
   );
@@ -106,6 +122,11 @@ export const AvailabilityComposer = ({
     setLabel(activeSignal?.label ?? "");
     setDurationHours(estimateDuration(activeSignal, nextState.duration));
   }, [activeSignal]);
+
+  useEffect(() => {
+    setShowLocation(signalPreferences.showLocation);
+    setLocationLabel(signalPreferences.locationLabel);
+  }, [signalPreferences.locationLabel, signalPreferences.showLocation]);
 
   const selectedState = useMemo(
     () => stateOptions.find((item) => item.state === state) ?? stateOptions[0],
@@ -163,6 +184,48 @@ export const AvailabilityComposer = ({
           <Text className="font-body text-sm text-aqua/80">
             {selectedState.label} is just the preset mood. The timer is fully up to you.
           </Text>
+        </View>
+
+        <View className="gap-2">
+          <Text className="font-display text-base text-cloud">Location sharing</Text>
+          <Text className="font-body text-sm leading-6 text-white/60">
+            Let friends know where to catch you when your signal goes live.
+          </Text>
+          <View className="flex-row gap-2">
+            <SignalChip
+              label="Hide spot"
+              active={!showLocation}
+              onPress={() => {
+                setShowLocation(false);
+                onSignalPreferencesChange({ showLocation: false });
+              }}
+            />
+            <SignalChip
+              label="Show area"
+              active={showLocation}
+              onPress={() => {
+                setShowLocation(true);
+                onSignalPreferencesChange({ showLocation: true });
+              }}
+            />
+          </View>
+          {showLocation ? (
+            <>
+              <TextInput
+                value={locationLabel}
+                onChangeText={(nextValue) => {
+                  setLocationLabel(nextValue);
+                  onSignalPreferencesChange({ locationLabel: nextValue });
+                }}
+                className="rounded-[22px] border border-white/12 bg-white/6 px-4 py-3 font-body text-cloud"
+                placeholder={defaultLocationLabel ?? "Near campus, downtown, west side..."}
+                placeholderTextColor="rgba(248,250,252,0.35)"
+              />
+              <Text className="font-body text-sm text-aqua/80">
+                This area label can ride with the live alert and overlap copy.
+              </Text>
+            </>
+          ) : null}
         </View>
 
         <View className="gap-2">
@@ -256,6 +319,10 @@ export const AvailabilityComposer = ({
               state,
               label: label.trim() || null,
               radiusKm,
+              showLocation,
+              locationLabel: showLocation
+                ? locationLabel.trim() || defaultLocationLabel || null
+                : null,
               vibe,
               energyLevel,
               budgetMood,

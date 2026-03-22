@@ -733,6 +733,8 @@ export const api = {
       state: string;
       label?: string | null;
       radiusKm: number;
+      showLocation?: boolean;
+      locationLabel?: string | null;
       vibe?: Vibe | null;
       energyLevel?: EnergyLevel | null;
       budgetMood?: BudgetMood | null;
@@ -758,7 +760,11 @@ export const api = {
       body: JSON.stringify(payload),
     });
 
-    return response.data;
+    return {
+      ...response.data,
+      showLocation: payload.showLocation ?? false,
+      locationLabel: payload.locationLabel ?? null,
+    };
   },
 
   async clearAvailability(token: string | null, signalId: string) {
@@ -857,6 +863,7 @@ export const api = {
       startsAt: string;
       endsAt: string;
       note?: string | null;
+      locationName?: string | null;
     },
   ) {
     if (demoMode) {

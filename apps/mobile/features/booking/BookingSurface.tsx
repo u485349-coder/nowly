@@ -20,12 +20,20 @@ import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
+import { parseTimeInput } from "../../lib/recurring-availability";
 import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
+import type { DateSpecificAvailabilityWindow } from "../../types";
 
 type BookingSurfaceProps = {
   inviteCode?: string | null;
   mode: "preview" | "booking";
+  sharedSetup?: {
+    format?: string | null;
+    title?: string | null;
+    description?: string | null;
+    locationName?: string | null;
+  };
 };
 
 type DayGroup = {
@@ -65,6 +73,37 @@ const toMonthKey = (value: string) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
+const formatOrdinalDay = (day: number) => {
+  const remainder = day % 10;
+  const teen = day % 100;
+
+  if (teen >= 11 && teen <= 13) return `${day}th`;
+  if (remainder === 1) return `${day}st`;
+  if (remainder === 2) return `${day}nd`;
+  if (remainder === 3) return `${day}rd`;
+  return `${day}th`;
+};
+
+const formatSpecificDateLabel = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return `${date.toLocaleDateString([], { month: "long" })} ${formatOrdinalDay(
+    date.getDate(),
+  )}, ${date.getFullYear()}`;
+};
+
+const buildDateTimeIso = (dateKey: string, minutes: number) => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(
+    year,
+    (month || 1) - 1,
+    day || 1,
+    Math.floor(minutes / 60),
+    minutes % 60,
+  );
+  return date.toISOString();
+};
+
 const parseMonthKey = (value: string | null) => {
   if (!value) {
     return null;
@@ -96,10 +135,11 @@ const buildTimezoneLabel = () => {
   return zone.replaceAll("_", " ");
 };
 
-export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
+export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurfaceProps) => {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const bookingSetup = useAppStore((state) => state.bookingSetup);
+  const dateSpecificWindows = useAppStore((state) => state.dateSpecificWindows);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const layout = useResponsiveLayout();
   const [bookingProfile, setBookingProfile] = useState<MobileBookingProfile | null>(null);
@@ -114,6 +154,48 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
     user?.id && bookingProfile?.host.id && user.id === bookingProfile.host.id,
   );
   const isPreview = mode === "preview" || isHostViewingOwnLink;
+  const sharedFormat =
+    sharedSetup?.format === "GROUP" || sharedSetup?.format === "ONE_ON_ONE"
+      ? sharedSetup.format
+      : null;
+
+  const localPreviewSlots = useMemo<MobileBookableSlot[]>(() => {
+    if (!isPreview) {
+      return [];
+    }
+
+    return dateSpecificWindows.reduce<MobileBookableSlot[]>((list, window) => {
+      const startMinute = parseTimeInput(window.startInput);
+      const endMinute = parseTimeInput(window.endInput);
+
+      if (startMinute === null || endMinute === null || endMinute <= startMinute) {
+        return list;
+      }
+
+      const title =
+        bookingSetup.title.trim() ||
+        (bookingSetup.format === "GROUP" ? "Group hangout" : "Quick catch-up");
+      const description =
+        bookingSetup.description.trim() ||
+        (bookingSetup.format === "GROUP"
+          ? "Share a few times with the crew and let people grab what works."
+          : "Pick an easy time and we can see what sticks.");
+
+      return [
+        ...list,
+        {
+          id: `specific-${window.id}`,
+          startsAt: buildDateTimeIso(window.dateKey, startMinute),
+          endsAt: buildDateTimeIso(window.dateKey, endMinute),
+          label: formatSpecificDateLabel(window.dateKey),
+          summary: description,
+          sourceLabel: title,
+          mutualFit: true,
+          score: 0.88,
+        },
+      ];
+    }, []);
+  }, [bookingSetup.description, bookingSetup.format, bookingSetup.title, dateSpecificWindows, isPreview]);
 
   useEffect(() => {
     if (!inviteCode) {
@@ -136,11 +218,16 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
     };
   }, [inviteCode, mode, token]);
 
+  const allSlots = useMemo(
+    () => [...(bookingProfile?.slots ?? []), ...localPreviewSlots],
+    [bookingProfile?.slots, localPreviewSlots],
+  );
+
   const dayGroups = useMemo<DayGroup[]>(() => {
-    if (!bookingProfile) return [];
+    if (!allSlots.length) return [];
     const map = new Map<string, DayGroup>();
 
-    bookingProfile.slots.forEach((slot) => {
+    allSlots.forEach((slot) => {
       const key = toDayKey(slot.startsAt);
       const current = map.get(key);
       if (current) {
@@ -159,7 +246,7 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
     });
 
     return [...map.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [bookingProfile]);
+  }, [allSlots]);
 
   const monthGroups = useMemo(
     () =>
@@ -195,23 +282,36 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
   const selectedDay = dayGroups.find((group) => group.key === selectedDayKey) ?? visibleDays[0] ?? null;
   const selectedDaySlots = selectedDay?.slots ?? [];
   const selectedSlots = selectedSlotIds
-    .map((id) => bookingProfile?.slots.find((slot) => slot.id === id) ?? null)
+    .map((id) => allSlots.find((slot) => slot.id === id) ?? null)
     .filter(Boolean) as MobileBookableSlot[];
-  const highlightSlot = bookingProfile?.slots[0] ?? null;
-  const emptyState = !loading && !errorMessage && !bookingProfile?.slots.length;
+  const highlightSlot = allSlots[0] ?? null;
+  const emptyState = !loading && !errorMessage && !allSlots.length;
   const timezoneLabel = useMemo(buildTimezoneLabel, []);
+  const displayFormat = isPreview ? bookingSetup.format : sharedFormat ?? bookingSetup.format;
   const title =
-    bookingSetup.title.trim() ||
+    (isPreview ? bookingSetup.title : sharedSetup?.title ?? bookingSetup.title).trim() ||
     highlightSlot?.sourceLabel ||
     (highlightSlot?.hangoutIntent ? hangoutIntentLabel(highlightSlot.hangoutIntent) : "Quick catch-up");
   const description =
-    bookingSetup.description.trim() ||
-    (highlightSlot?.summary ?? "Pick an easy time and we can see what sticks.");
+    (isPreview ? bookingSetup.description : sharedSetup?.description ?? bookingSetup.description).trim() ||
+    (highlightSlot?.summary ??
+      (displayFormat === "GROUP"
+        ? "Share a few times with the crew and let people claim what works."
+        : "Pick an easy time and we can see what sticks."));
+  const locationName =
+    (isPreview ? bookingSetup.locationName : sharedSetup?.locationName ?? "").trim() ||
+    bookingProfile?.host.communityTag ||
+    bookingProfile?.host.city ||
+    "Nearby";
   const previewTags = [
-    bookingSetup.format === "GROUP" ? "Group hangout" : "1:1 hangout",
+    displayFormat === "GROUP" ? "Group hangout" : "1:1 hangout",
     highlightSlot?.hangoutIntent ? hangoutIntentLabel(highlightSlot.hangoutIntent) : null,
     highlightSlot?.vibe ? vibeLabel(highlightSlot.vibe) : null,
   ].filter(Boolean) as string[];
+  const formatSupportLine =
+    displayFormat === "GROUP"
+      ? "Built for sharing a few slots with the crew."
+      : "Built for one person to grab the easiest time.";
   const calendarDays = useMemo(() => {
     if (!selectedMonthDate) {
       return [] as Array<{ key: string; dayNumber: number | null; group: DayGroup | null }>;
@@ -307,6 +407,8 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
       const hangout = await api.bookSharedAvailability(token, inviteCode, {
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
+        note: title,
+        locationName,
       });
 
       upsertHangout(hangout);
@@ -403,8 +505,12 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
                   <View style={styles.heroGlow} pointerEvents="none" />
                   <View className="flex-row items-center gap-4">
                     <View style={styles.avatarShell}>
-                      {bookingProfile?.host.photoUrl ? (
-                        <Image source={{ uri: bookingProfile.host.photoUrl }} resizeMode="cover" style={styles.avatarImage} />
+                      {bookingProfile?.host.photoUrl || user?.photoUrl ? (
+                        <Image
+                          source={{ uri: bookingProfile?.host.photoUrl ?? user?.photoUrl ?? undefined }}
+                          resizeMode="cover"
+                          style={styles.avatarImage}
+                        />
                       ) : (
                         <View style={styles.avatarFallback}>
                           <Text style={styles.avatarInitial}>
@@ -417,11 +523,11 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
                       <Text className="font-display text-xl text-cloud">
                         {bookingProfile?.host.name ?? user?.name ?? "Nowly friend"}
                       </Text>
-                      <Text className="mt-1 font-body text-[13px] text-white/58">
-                        {bookingProfile?.host.communityTag || bookingProfile?.host.city || "Nearby"}
-                      </Text>
-                    </View>
+                    <Text className="mt-1 font-body text-[13px] text-white/58">
+                      {bookingProfile?.host.communityTag || bookingProfile?.host.city || "Nearby"}
+                    </Text>
                   </View>
+                </View>
 
                   <View className="gap-2">
                     <Text className="font-body text-xs tracking-[2px] text-violet/85">
@@ -429,6 +535,13 @@ export const BookingSurface = ({ inviteCode, mode }: BookingSurfaceProps) => {
                     </Text>
                     <Text className="font-display text-[30px] leading-[34px] text-cloud">{title}</Text>
                     <Text className="font-body text-sm leading-6 text-white/72">{description}</Text>
+                    <Text className="font-body text-[12px] leading-5 text-aqua/78">
+                      {formatSupportLine}
+                    </Text>
+                    <View style={styles.locationRow}>
+                      <MaterialCommunityIcons name="map-marker-radius-outline" size={15} color="#8BEAFF" />
+                      <Text style={styles.locationText}>{locationName}</Text>
+                    </View>
                   </View>
 
                   {previewTags.length ? (
@@ -797,6 +910,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  locationText: {
+    color: "rgba(139,234,255,0.86)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
   },
   primaryButton: {
     height: 56,

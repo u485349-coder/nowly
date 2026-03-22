@@ -30,6 +30,42 @@ const durationByState: Record<AvailabilityState, number> = {
   DOWN_THIS_WEEKEND: 48
 };
 
+const livePromptSuffixes = [
+  "Could be an easy time to check in.",
+  "Might be a clean window to link up.",
+  "If you are free too, this one looks easy to answer.",
+  "Could be a good moment to send a quick prompt.",
+];
+
+const normalizeLocationLabel = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, 80);
+};
+
+const humanizeIntent = (value: HangoutIntent | null | undefined) =>
+  value ? value.replaceAll("_", " ").toLowerCase() : null;
+
+const buildFriendLiveBody = ({
+  intent,
+  locationLabel,
+}: {
+  intent?: HangoutIntent | null;
+  locationLabel?: string | null;
+}) => {
+  const suffix = livePromptSuffixes[Math.floor(Math.random() * livePromptSuffixes.length)];
+  const intro = intent ? `They look open for ${humanizeIntent(intent)}.` : "They just opened up a live window.";
+  const area = locationLabel ? ` Around ${locationLabel}.` : "";
+  return `${intro}${area} ${suffix}`.trim();
+};
+
 const createSignalSchema = z.object({
   state: z.nativeEnum(AvailabilityState),
   label: z.string().min(2).max(40).nullable().optional(),
@@ -190,6 +226,7 @@ availabilityRouter.post(
 
     const startsAt = new Date(body.startsAt);
     const endsAt = new Date(body.endsAt);
+    const requestedLocationName = normalizeLocationLabel(request.body?.locationName);
     const hostWindowMinutes = Math.max(
       15,
       Math.round((endsAt.getTime() - startsAt.getTime()) / (60 * 1000)),
@@ -200,6 +237,11 @@ availabilityRouter.post(
       (selectedSlot.hangoutIntent
         ? selectedSlot.hangoutIntent.replaceAll("_", " ").toLowerCase()
         : "hang out");
+    const locationName =
+      requestedLocationName ||
+      booking.host.communityTag ||
+      booking.host.city ||
+      "nearby";
 
     const hangout = await prisma.hangout.create({
       data: {
@@ -210,8 +252,7 @@ availabilityRouter.post(
           hostWindowMinutes <= 90
             ? MicroCommitment.QUICK_WINDOW
             : MicroCommitment.OPEN_ENDED,
-        locationName:
-          booking.host.communityTag || booking.host.city || "nearby",
+        locationName,
         scheduledFor: startsAt,
         participants: {
           create: [request.userId!, booking.host.id].map((userId) => ({
@@ -311,6 +352,8 @@ availabilityRouter.post(
   requireAuth,
   asyncHandler(async (request, response) => {
     const body = createSignalSchema.parse(request.body);
+    const wantsToShareLocation = request.body?.showLocation === true;
+    const requestedLocationLabel = normalizeLocationLabel(request.body?.locationLabel);
     const expiresAt = new Date(
       Date.now() +
         (body.durationHours ?? durationByState[body.state]) * 60 * 60 * 1000
@@ -345,6 +388,8 @@ availabilityRouter.post(
       state: body.state,
       label: body.label,
       radiusKm: body.radiusKm,
+      showLocation: wantsToShareLocation,
+      locationLabel: wantsToShareLocation ? requestedLocationLabel : null,
       vibe: body.vibe,
       energyLevel: body.energyLevel,
       budgetMood: body.budgetMood,
@@ -352,6 +397,52 @@ availabilityRouter.post(
       hangoutIntent: body.hangoutIntent,
       expiresAt: expiresAt.toISOString()
     });
+
+    const signalUser = await prisma.user.findUnique({
+      where: { id: request.userId! },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        communityTag: true,
+      },
+    });
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        status: FriendshipStatus.ACCEPTED,
+        OR: [{ userAId: request.userId! }, { userBId: request.userId! }],
+      },
+      select: {
+        userAId: true,
+        userBId: true,
+      },
+    });
+
+    const friendIds = friendships.map((friendship) =>
+      friendship.userAId === request.userId ? friendship.userBId : friendship.userAId,
+    );
+    const locationLabel = wantsToShareLocation
+      ? requestedLocationLabel || signalUser?.communityTag || signalUser?.city || null
+      : null;
+
+    await Promise.all(
+      friendIds.map((friendId) =>
+        sendPushToUser({
+          userId: friendId,
+          type: NotificationType.INVITE_NUDGE,
+          dedupeKey: `friend-live:${signal.id}:${friendId}`,
+          title: `${signalUser?.name ?? "A friend"} is live on Nowly`,
+          body: buildFriendLiveBody({
+            intent: body.hangoutIntent,
+            locationLabel,
+          }),
+          data: {
+            screen: "friends",
+          },
+        }),
+      ),
+    );
 
     response.status(201).json({ data: signal });
   })

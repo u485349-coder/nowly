@@ -38,11 +38,13 @@ export default function NowModeScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const activeSignal = useAppStore((state) => state.activeSignal);
+  const liveSignalPreferences = useAppStore((state) => state.liveSignalPreferences);
   const matches = useAppStore((state) => state.matches);
   const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const radar = useAppStore((state) => state.radar);
   const setDashboard = useAppStore((state) => state.setDashboard);
   const setActiveSignal = useAppStore((state) => state.setActiveSignal);
+  const setLiveSignalPreferences = useAppStore((state) => state.setLiveSignalPreferences);
   const layout = useResponsiveLayout();
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -80,6 +82,12 @@ export default function NowModeScreen() {
       onPress: () => router.push(`/match/${match.id}` as never),
     }));
   }, [matches, scheduledOverlaps, user?.inviteCode]);
+
+  const locationShareLabel =
+    liveSignalPreferences.locationLabel.trim() ||
+    user?.communityTag ||
+    user?.city ||
+    "your area";
 
   useEffect(() => {
     if (!user) {
@@ -124,10 +132,19 @@ export default function NowModeScreen() {
     try {
       setSaving(true);
       const nextSignal = await api.setAvailability(token, payload);
-      setActiveSignal(nextSignal);
+      setActiveSignal({
+        ...nextSignal,
+        showLocation: payload.showLocation ?? false,
+        locationLabel: payload.locationLabel ?? null,
+      });
+      setLiveSignalPreferences({
+        showLocation: payload.showLocation ?? false,
+        locationLabel: payload.locationLabel ?? "",
+      });
       await track(token, "availability_set", {
         state: payload.state,
         durationHours: payload.durationHours ?? null,
+        showLocation: payload.showLocation ?? false,
       });
       await refreshDashboard();
     } catch (error) {
@@ -230,6 +247,9 @@ export default function NowModeScreen() {
                     {radar?.suggestionLine ||
                       "Free now, free later, busy, or weekend plans. This is the fast layer that helps you overlap with someone else in the moment."}
                   </Text>
+                  {liveSignalPreferences.showLocation ? (
+                    <Text style={styles.heroLocationTag}>Sharing location: {locationShareLabel}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.heroActions}>
@@ -251,7 +271,13 @@ export default function NowModeScreen() {
               </LinearGradient>
             </View>
 
-            <AvailabilityComposer activeSignal={activeSignal} onSave={(payload) => void handleSaveStatus(payload)} />
+            <AvailabilityComposer
+              activeSignal={activeSignal}
+              defaultLocationLabel={user?.communityTag || user?.city || null}
+              signalPreferences={liveSignalPreferences}
+              onSignalPreferencesChange={setLiveSignalPreferences}
+              onSave={(payload) => void handleSaveStatus(payload)}
+            />
 
             {activeSignal ? (
               <Pressable
@@ -429,6 +455,12 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
     letterSpacing: 2,
+  },
+  heroLocationTag: {
+    color: "rgba(139,234,255,0.86)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    lineHeight: 20,
   },
   heroShell: {
     overflow: "hidden",

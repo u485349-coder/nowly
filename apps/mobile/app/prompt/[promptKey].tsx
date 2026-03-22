@@ -20,7 +20,10 @@ type PromptRecipient = {
 };
 
 export default function PromptPickerScreen() {
-  const { promptKey } = useLocalSearchParams<{ promptKey: string }>();
+  const { promptKey, recipientId } = useLocalSearchParams<{
+    promptKey: string;
+    recipientId?: string | string[];
+  }>();
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const matches = useAppStore((state) => state.matches);
@@ -76,6 +79,7 @@ export default function PromptPickerScreen() {
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(
     recipients[0]?.id ?? null,
   );
+  const preferredRecipientId = Array.isArray(recipientId) ? recipientId[0] : recipientId;
 
   useEffect(() => {
     if (!recipients.length) {
@@ -83,10 +87,15 @@ export default function PromptPickerScreen() {
       return;
     }
 
+    if (preferredRecipientId && recipients.some((recipient) => recipient.id === preferredRecipientId)) {
+      setSelectedRecipientId(preferredRecipientId);
+      return;
+    }
+
     if (!selectedRecipientId || !recipients.some((recipient) => recipient.id === selectedRecipientId)) {
       setSelectedRecipientId(recipients[0].id);
     }
-  }, [recipients, selectedRecipientId]);
+  }, [preferredRecipientId, recipients, selectedRecipientId]);
 
   useEffect(() => {
     setCustomLabel(prompt?.label ?? "");

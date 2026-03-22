@@ -44,6 +44,7 @@ export const FABToggle = ({
   const pressProgress = useSharedValue(0);
   const breatheProgress = useSharedValue(0);
   const orbitProgress = useSharedValue(0);
+  const logoBlendColor = nowlyColors.aqua;
 
   useEffect(() => {
     breatheProgress.value = withRepeat(
@@ -157,7 +158,7 @@ export const FABToggle = ({
             width: size + 10,
             height: size + 10,
             borderRadius: (size + 10) / 2,
-            borderColor: `${accentColor}66`,
+            borderColor: `${logoBlendColor}66`,
           },
         ]}
       />
@@ -173,7 +174,7 @@ export const FABToggle = ({
           },
         ]}
       >
-        <View style={[styles.orbitDot, { backgroundColor: accentColor }]} />
+        <View style={[styles.orbitDot, { backgroundColor: logoBlendColor }]} />
       </Animated.View>
       <Animated.View
         pointerEvents="none"
@@ -181,7 +182,7 @@ export const FABToggle = ({
           styles.halo,
           haloStyle,
           {
-            backgroundColor: accentColor,
+            backgroundColor: "rgba(124,58,237,0.82)",
           },
         ]}
       />
@@ -193,14 +194,14 @@ export const FABToggle = ({
             width: size,
             height: size,
             borderRadius: size / 2,
-            shadowColor: accentColor,
+            shadowColor: nowlyColors.violet,
           },
         ]}
       >
         <LinearGradient
-          colors={["#F3E8FF", accentColor, nowlyColors.iris]}
+          colors={["#F3E8FF", nowlyColors.violet, logoBlendColor]}
           end={{ x: 1, y: 1 }}
-          start={{ x: 0.05, y: 0.1 }}
+          start={{ x: 0.08, y: 0.08 }}
           style={[
             styles.gradientFill,
             {
@@ -236,15 +237,15 @@ const styles = StyleSheet.create({
   },
   orbitRing: {
     position: "absolute",
-    alignItems: "center",
-    justifyContent: "flex-start",
+      alignItems: "center",
+      justifyContent: "flex-start",
   },
   orbitDot: {
     marginTop: 1,
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowColor: "#C4B5FD",
+    shadowColor: nowlyColors.aqua,
     shadowOpacity: 0.5,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
