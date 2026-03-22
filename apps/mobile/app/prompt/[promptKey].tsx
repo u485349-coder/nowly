@@ -33,6 +33,10 @@ export default function PromptPickerScreen() {
   const [customLabel, setCustomLabel] = useState(prompt?.label ?? "");
   const [customDetail, setCustomDetail] = useState(prompt?.detail ?? "");
   const [customActivity, setCustomActivity] = useState(prompt?.activity ?? "");
+  const matchByRecipientId = useMemo(
+    () => new Map(matches.map((match) => [match.matchedUser.id, match])),
+    [matches],
+  );
 
   const recipients = useMemo<PromptRecipient[]>(() => {
     const seen = new Set<string>();
@@ -48,7 +52,10 @@ export default function PromptPickerScreen() {
         id: match.matchedUser.id,
         name: match.matchedUser.name,
         photoUrl: match.matchedUser.photoUrl,
-        eyebrow: `${availabilityLabel(match.matchedSignal.state).toLowerCase()} · ${match.reason.travelMinutes ?? 15} min away`,
+        eyebrow:
+          match.reason.meetingStyle === "ONLINE"
+            ? `${availabilityLabel(match.matchedSignal.state).toLowerCase()} · ${match.reason.onlineVenue ?? "online"}`
+            : `${availabilityLabel(match.matchedSignal.state).toLowerCase()} · ${match.reason.travelMinutes ?? 15} min away`,
         detail: match.insightLabel ?? match.reason.momentumLabel ?? "Strong short-notice fit",
       });
     });
@@ -104,6 +111,9 @@ export default function PromptPickerScreen() {
   }, [prompt?.activity, prompt?.detail, prompt?.label]);
 
   const selectedRecipient = recipients.find((recipient) => recipient.id === selectedRecipientId) ?? null;
+  const selectedMatch = selectedRecipientId
+    ? matchByRecipientId.get(selectedRecipientId) ?? null
+    : null;
 
   const handleSendPrompt = async () => {
     if (!prompt || !selectedRecipientId) {
@@ -117,7 +127,11 @@ export default function PromptPickerScreen() {
         activity: nextActivity,
         microType: prompt.microType,
         commitmentLevel: prompt.commitmentLevel,
-        locationName: user?.communityTag || user?.city || "nearby",
+        locationName:
+          selectedMatch?.reason.onlineVenue ||
+          user?.communityTag ||
+          user?.city ||
+          "nearby",
         participantIds: [selectedRecipientId],
         scheduledFor: new Date(Date.now() + 35 * 60 * 1000).toISOString(),
       });

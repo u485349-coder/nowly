@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import Animated, {
@@ -17,6 +17,7 @@ export default function IndexScreen() {
   const introSeen = useAppStore((state) => state.introSeen);
   const onboardingComplete = useAppStore((state) => state.onboardingComplete);
   const setIntroSeen = useAppStore((state) => state.setIntroSeen);
+  const isWeb = Platform.OS === "web";
 
   const leftX = useSharedValue(introSeen ? -28 : -52);
   const rightX = useSharedValue(introSeen ? 28 : 52);
@@ -27,6 +28,15 @@ export default function IndexScreen() {
   const wordmarkY = useSharedValue(introSeen ? 10 : 18);
 
   useEffect(() => {
+    if (isWeb) {
+      const timeout = setTimeout(() => {
+        setIntroSeen();
+        router.replace(onboardingComplete ? "/home" : "/onboarding");
+      }, 40);
+
+      return () => clearTimeout(timeout);
+    }
+
     const duration = introSeen ? 680 : 1280;
 
     glowOpacity.value = withTiming(1, { duration: duration * 0.45 });
@@ -43,7 +53,7 @@ export default function IndexScreen() {
     }, introSeen ? 920 : 1700);
 
     return () => clearTimeout(timeout);
-  }, [glowOpacity, introSeen, leftX, lockupOpacity, onboardingComplete, pulseOpacity, pulseScale, rightX, router, setIntroSeen, wordmarkY]);
+  }, [glowOpacity, introSeen, isWeb, leftX, lockupOpacity, onboardingComplete, pulseOpacity, pulseScale, rightX, router, setIntroSeen, wordmarkY]);
 
   const leftStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: leftX.value }],

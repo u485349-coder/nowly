@@ -5,6 +5,8 @@ import {
   MobileRecurringAvailabilityWindow,
   MobileScheduledOverlap,
   ParticipantResponse,
+  SchedulingDecisionMode,
+  SchedulingVisibilityMode,
 } from "@nowly/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -57,6 +59,16 @@ type AppState = {
     title: string;
     description: string;
     locationName: string;
+    durationMinutes: number;
+    participantCap: number;
+    minimumConfirmations: number;
+    decisionMode: SchedulingDecisionMode;
+    visibilityMode: SchedulingVisibilityMode;
+    responseDeadlineHours: number;
+    lastGroupSession: {
+      shareCode: string;
+      signature: string;
+    } | null;
   };
   liveSignalPreferences: {
     showLocation: boolean;
@@ -137,6 +149,13 @@ export const useAppStore = create<AppState>()(
         title: "Quick catch-up",
         description: "Pick an easy time and we can lock something in.",
         locationName: "",
+        durationMinutes: 60,
+        participantCap: 5,
+        minimumConfirmations: 3,
+        decisionMode: "MINIMUM_REQUIRED",
+        visibilityMode: "PUBLIC",
+        responseDeadlineHours: 24,
+        lastGroupSession: null,
       },
       liveSignalPreferences: {
         showLocation: false,

@@ -9,7 +9,11 @@ import {
   Text,
   View,
 } from "react-native";
-import type { MobileBookableSlot, MobileBookingProfile } from "@nowly/shared";
+import type {
+  MobileBookableSlot,
+  MobileBookingProfile,
+  MobileGroupBookingProfile,
+} from "@nowly/shared";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -24,11 +28,13 @@ import { parseTimeInput } from "../../lib/recurring-availability";
 import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
 import type { DateSpecificAvailabilityWindow } from "../../types";
+import { GroupSchedulingSurface } from "./GroupSchedulingSurface";
 
 type BookingSurfaceProps = {
   inviteCode?: string | null;
   mode: "preview" | "booking";
   sharedSetup?: {
+    sessionShareCode?: string | null;
     format?: string | null;
     title?: string | null;
     description?: string | null;
@@ -208,7 +214,11 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
     setLoading(true);
     setErrorMessage(null);
 
-    api.fetchBookingProfile(token, inviteCode)
+    api.fetchBookingProfileWithSession(
+      token,
+      inviteCode,
+      sharedSetup?.sessionShareCode ?? null,
+    )
       .then((profile) => active && setBookingProfile(profile))
       .catch((error) => active && setErrorMessage(readErrorMessage(error)))
       .finally(() => active && setLoading(false));
@@ -216,11 +226,23 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
     return () => {
       active = false;
     };
-  }, [inviteCode, mode, token]);
+  }, [inviteCode, mode, sharedSetup?.sessionShareCode, token]);
+
+  if (bookingProfile?.type === "GROUP" && inviteCode) {
+    return (
+      <GroupSchedulingSurface
+        inviteCode={inviteCode}
+        profile={bookingProfile as MobileGroupBookingProfile}
+      />
+    );
+  }
 
   const allSlots = useMemo(
-    () => [...(bookingProfile?.slots ?? []), ...localPreviewSlots],
-    [bookingProfile?.slots, localPreviewSlots],
+    () => [
+      ...(bookingProfile?.type === "ONE_ON_ONE" ? bookingProfile.slots : []),
+      ...localPreviewSlots,
+    ],
+    [bookingProfile, localPreviewSlots],
   );
 
   const dayGroups = useMemo<DayGroup[]>(() => {

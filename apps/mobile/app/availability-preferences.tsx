@@ -139,6 +139,15 @@ const windowMoodSummary = (draft: DraftWindow) => {
   return parts.length ? parts.slice(0, 2).join(" / ") : "Tap to tune the mood";
 };
 
+const recurringWindowSummary = (window: MobileRecurringAvailabilityWindow) => {
+  const dayLabel =
+    window.recurrence === "WEEKLY"
+      ? weekdayOptionLabels[window.dayOfWeek ?? 0]
+      : `Monthly on the ${formatOrdinalDay(window.dayOfMonth ?? 15)}`;
+
+  return `${dayLabel} · ${formatMinutesOfDay(window.startMinute)} - ${formatMinutesOfDay(window.endMinute)}`;
+};
+
 const PreferenceChip = ({
   label,
   active,
@@ -208,6 +217,7 @@ export default function AvailabilityPreferencesScreen() {
   const setBookingSetup = useAppStore((state) => state.setBookingSetup);
   const setLiveSignalPreferences = useAppStore((state) => state.setLiveSignalPreferences);
   const recurringWindows = useAppStore((state) => state.recurringWindows);
+  const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const storedDateSpecificWindows = useAppStore((state) => state.dateSpecificWindows);
   const setRecurringWindows = useAppStore((state) => state.setRecurringWindows);
   const setDateSpecificWindows = useAppStore((state) => state.setDateSpecificWindows);
@@ -225,6 +235,7 @@ export default function AvailabilityPreferencesScreen() {
   const [specificWindows, setSpecificWindows] = useState<DateSpecificAvailabilityWindow[]>(
     storedDateSpecificWindows,
   );
+  const [detailTab, setDetailTab] = useState<"PREVIEW" | "SUGGESTED">("PREVIEW");
   const [previewExpanded, setPreviewExpanded] = useState(true);
   const [selectedSpecificDateKey, setSelectedSpecificDateKey] = useState<string | null>(null);
   const [specificMonth, setSpecificMonth] = useState(() => new Date());
@@ -365,6 +376,10 @@ export default function AvailabilityPreferencesScreen() {
         })
         .slice(0, 3),
     [drafts, specificWindows],
+  );
+  const sortedSuggestedTimes = useMemo(
+    () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
+    [scheduledOverlaps],
   );
   const specificCalendarDays = useMemo(() => {
     const year = specificMonth.getFullYear();
@@ -1063,7 +1078,7 @@ export default function AvailabilityPreferencesScreen() {
                     value={hangoutLocation}
                     onChangeText={setHangoutLocation}
                     className="font-body text-base text-cloud"
-                    placeholder="Hangout location or area"
+                    placeholder="Place or platform: St. Marks, Discord, Roblox..."
                     placeholderTextColor="rgba(248,250,252,0.35)"
                   />
                 </View>
@@ -1119,10 +1134,10 @@ export default function AvailabilityPreferencesScreen() {
                   >
                     <Text style={styles.clearLiveText}>
                       {clearingLiveStatus
-                        ? "Clearing live status..."
+                        ? "Stopping live..."
                         : savingLiveStatus
                           ? "Updating live status..."
-                          : "Clear live status"}
+                          : "Stop live"}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -1157,141 +1172,229 @@ export default function AvailabilityPreferencesScreen() {
                     <View style={styles.windowGlow} pointerEvents="none" />
                     <View style={styles.windowStroke} pointerEvents="none" />
 
-                    <Pressable
-                      onPress={() => setPreviewExpanded((current) => !current)}
-                      style={({ pressed }) =>
-                        webPressableStyle(pressed, {
-                          pressedOpacity: 0.96,
-                          pressedScale: 0.995,
-                        })
-                      }
-                    >
-                      <View className="flex-row items-center gap-4">
-                        <View className="min-w-0 flex-1 gap-1.5">
-                          <Text className="font-display text-[20px] leading-[24px] text-cloud">
-                            {hangoutTitle.trim() || "Quick catch-up"}
-                          </Text>
-                          <Text className="font-body text-sm text-cloud/76">
-                            {hangoutFormat === "GROUP"
-                              ? "Group hangout booking preview"
-                              : "1:1 hangout booking preview"}
-                          </Text>
-                          <Text className="font-body text-[12px] leading-5 text-aqua/82">
-                            {previewRows[0]?.title ??
-                              "Add a date or recurring window to preview the booking page."}
-                          </Text>
-                        </View>
+                    <View style={styles.detailTabRow}>
+                      <Pressable
+                        onPress={() => setDetailTab("PREVIEW")}
+                        style={({ pressed }) => [
+                          styles.detailTabPill,
+                          detailTab === "PREVIEW" ? styles.detailTabPillActive : null,
+                          webPressableStyle(pressed, {
+                            pressedOpacity: 0.92,
+                            pressedScale: 0.985,
+                          }),
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.detailTabText,
+                            detailTab === "PREVIEW" ? styles.detailTabTextActive : null,
+                          ]}
+                        >
+                          Preview
+                        </Text>
+                      </Pressable>
 
-                        <View style={styles.chevronShell}>
-                          <MaterialCommunityIcons
-                            name={previewExpanded ? "chevron-up" : "chevron-right"}
-                            size={20}
-                            color="#E2E8F0"
-                          />
-                        </View>
-                      </View>
-                    </Pressable>
+                      <Pressable
+                        onPress={() => setDetailTab("SUGGESTED")}
+                        style={({ pressed }) => [
+                          styles.detailTabPill,
+                          detailTab === "SUGGESTED" ? styles.detailTabPillActive : null,
+                          webPressableStyle(pressed, {
+                            pressedOpacity: 0.92,
+                            pressedScale: 0.985,
+                          }),
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.detailTabText,
+                            detailTab === "SUGGESTED" ? styles.detailTabTextActive : null,
+                          ]}
+                        >
+                          Suggested times
+                        </Text>
+                      </Pressable>
+                    </View>
 
-                    {previewExpanded ? (
+                    {detailTab === "PREVIEW" ? (
+                      <>
+                        <Pressable
+                          onPress={() => setPreviewExpanded((current) => !current)}
+                          style={({ pressed }) =>
+                            webPressableStyle(pressed, {
+                              pressedOpacity: 0.96,
+                              pressedScale: 0.995,
+                            })
+                          }
+                        >
+                          <View className="flex-row items-center gap-4">
+                            <View className="min-w-0 flex-1 gap-1.5">
+                              <Text className="font-display text-[20px] leading-[24px] text-cloud">
+                                {hangoutTitle.trim() || "Quick catch-up"}
+                              </Text>
+                              <Text className="font-body text-sm text-cloud/76">
+                                {hangoutFormat === "GROUP"
+                                  ? "Group hangout booking preview"
+                                  : "1:1 hangout booking preview"}
+                              </Text>
+                              <Text className="font-body text-[12px] leading-5 text-aqua/82">
+                                {previewRows[0]?.title ??
+                                  "Add a date or recurring window to preview the booking page."}
+                              </Text>
+                            </View>
+
+                            <View style={styles.chevronShell}>
+                              <MaterialCommunityIcons
+                                name={previewExpanded ? "chevron-up" : "chevron-right"}
+                                size={20}
+                                color="#E2E8F0"
+                              />
+                            </View>
+                          </View>
+                        </Pressable>
+
+                        {previewExpanded ? (
+                          <Animated.View
+                            entering={FadeInDown.duration(220)}
+                            exiting={FadeOutUp.duration(180)}
+                            className="gap-5 pt-6"
+                          >
+                            <View style={styles.previewBookingCard}>
+                              <View style={styles.previewBookingHeader}>
+                                <View style={styles.previewAvatar}>
+                                  {user?.photoUrl ? (
+                                    <Image
+                                      source={{ uri: user.photoUrl }}
+                                      style={styles.previewAvatarImage}
+                                    />
+                                  ) : (
+                                    <Text style={styles.previewAvatarText}>
+                                      {(user?.name?.[0] ?? "N").toUpperCase()}
+                                    </Text>
+                                  )}
+                                </View>
+                                <View style={{ flex: 1, gap: 4 }}>
+                                  <Text style={styles.previewName}>{user?.name ?? "You"}</Text>
+                                  <Text style={styles.previewTitleLarge}>
+                                    {hangoutTitle.trim() || "Quick catch-up"}
+                                  </Text>
+                                  <Text style={styles.previewDescriptionText}>
+                                    {hangoutDescription.trim() ||
+                                      "Pick an easy time and we can see what sticks."}
+                                  </Text>
+                                  <Text style={styles.previewLocationText}>
+                                    {hangoutLocation.trim() ||
+                                      user?.communityTag ||
+                                      user?.city ||
+                                      "Location shared in the booking flow"}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <View style={styles.previewModeStrip}>
+                                <View style={styles.previewModeBadge}>
+                                  <Text style={styles.previewModeBadgeText}>
+                                    {hangoutFormat === "GROUP" ? "GROUP HANGOUT" : "1:1 HANGOUT"}
+                                  </Text>
+                                </View>
+                                <Text style={styles.previewModeHint}>
+                                  {hangoutFormat === "GROUP"
+                                    ? "Made to share with a few people and let the crew choose what works."
+                                    : "Made for one person to pick the easiest time and lock it in."}
+                                </Text>
+                              </View>
+
+                              <View style={styles.previewCalendarBlock}>
+                                <Text style={styles.previewMonthLabel}>{specificMonthLabel}</Text>
+                                <View style={styles.weekdayCalendarHeader}>
+                                  {weekdayOptionLabels.map((day) => (
+                                    <Text key={day} style={styles.weekdayHeaderText}>
+                                      {day.toUpperCase()}
+                                    </Text>
+                                  ))}
+                                </View>
+                                <View style={styles.specificCalendarGrid}>
+                                  {specificCalendarDays.map((cell) => {
+                                    const filled =
+                                      cell.dateKey !== null &&
+                                      (specificDatesSet.has(cell.dateKey) ||
+                                        cell.dateKey === selectedSpecificDateKey);
+
+                                    return (
+                                      <View
+                                        key={`preview-${cell.key}`}
+                                        style={[
+                                          styles.previewCalendarCell,
+                                          filled ? styles.previewCalendarCellFilled : null,
+                                        ]}
+                                      >
+                                        <Text style={styles.previewCalendarText}>{cell.dayNumber ?? ""}</Text>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+
+                              <View style={styles.previewTimesRow}>
+                                {previewRows.length ? (
+                                  previewRows.map((row) => (
+                                    <View key={row.id} style={styles.previewTimePill}>
+                                      <Text style={styles.previewTimeText}>{row.title}</Text>
+                                      <Text style={styles.previewTimeMeta}>{row.subtitle}</Text>
+                                      <Text style={styles.previewTimeMetaMuted}>{row.meta}</Text>
+                                    </View>
+                                  ))
+                                ) : (
+                                  <Text style={styles.previewEmpty}>
+                                    Your booking preview will fill in as soon as you add hours.
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          </Animated.View>
+                        ) : null}
+                      </>
+                    ) : (
                       <Animated.View
                         entering={FadeInDown.duration(220)}
                         exiting={FadeOutUp.duration(180)}
-                        className="gap-5 pt-6"
+                        className="gap-4 pt-3"
                       >
-                        <View style={styles.previewBookingCard}>
-                          <View style={styles.previewBookingHeader}>
-                            <View style={styles.previewAvatar}>
-                              {user?.photoUrl ? (
-                                <Image
-                                  source={{ uri: user.photoUrl }}
-                                  style={styles.previewAvatarImage}
-                                />
-                              ) : (
-                                <Text style={styles.previewAvatarText}>
-                                  {(user?.name?.[0] ?? "N").toUpperCase()}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={{ flex: 1, gap: 4 }}>
-                              <Text style={styles.previewName}>{user?.name ?? "You"}</Text>
-                              <Text style={styles.previewTitleLarge}>
-                                {hangoutTitle.trim() || "Quick catch-up"}
-                              </Text>
-                              <Text style={styles.previewDescriptionText}>
-                                {hangoutDescription.trim() ||
-                                  "Pick an easy time and we can see what sticks."}
-                              </Text>
-                              <Text style={styles.previewLocationText}>
-                                {hangoutLocation.trim() ||
-                                  user?.communityTag ||
-                                  user?.city ||
-                                  "Location shared in the booking flow"}
-                              </Text>
-                            </View>
-                          </View>
-
-                          <View style={styles.previewModeStrip}>
-                            <View style={styles.previewModeBadge}>
-                              <Text style={styles.previewModeBadgeText}>
-                                {hangoutFormat === "GROUP" ? "GROUP HANGOUT" : "1:1 HANGOUT"}
-                              </Text>
-                            </View>
-                            <Text style={styles.previewModeHint}>
-                              {hangoutFormat === "GROUP"
-                                ? "Made to share with a few people and let the crew choose what works."
-                                : "Made for one person to pick the easiest time and lock it in."}
-                            </Text>
-                          </View>
-
-                          <View style={styles.previewCalendarBlock}>
-                            <Text style={styles.previewMonthLabel}>{specificMonthLabel}</Text>
-                            <View style={styles.weekdayCalendarHeader}>
-                              {weekdayOptionLabels.map((day) => (
-                                <Text key={day} style={styles.weekdayHeaderText}>
-                                  {day.toUpperCase()}
-                                </Text>
-                              ))}
-                            </View>
-                            <View style={styles.specificCalendarGrid}>
-                              {specificCalendarDays.map((cell) => {
-                                const filled =
-                                  cell.dateKey !== null &&
-                                  (specificDatesSet.has(cell.dateKey) ||
-                                    cell.dateKey === selectedSpecificDateKey);
-
-                                return (
-                                  <View
-                                    key={`preview-${cell.key}`}
-                                    style={[
-                                      styles.previewCalendarCell,
-                                      filled ? styles.previewCalendarCellFilled : null,
-                                    ]}
-                                  >
-                                    <Text style={styles.previewCalendarText}>{cell.dayNumber ?? ""}</Text>
-                                  </View>
-                                );
-                              })}
-                            </View>
-                          </View>
-
-                          <View style={styles.previewTimesRow}>
-                            {previewRows.length ? (
-                              previewRows.map((row) => (
-                                <View key={row.id} style={styles.previewTimePill}>
-                                  <Text style={styles.previewTimeText}>{row.title}</Text>
-                                  <Text style={styles.previewTimeMeta}>{row.subtitle}</Text>
-                                  <Text style={styles.previewTimeMetaMuted}>{row.meta}</Text>
-                                </View>
-                              ))
-                            ) : (
-                              <Text style={styles.previewEmpty}>
-                                Your booking preview will fill in as soon as you add hours.
-                              </Text>
-                            )}
-                          </View>
+                        <View style={{ gap: 6 }}>
+                          <Text style={styles.suggestedTimesTitle}>Friends' hangtimes</Text>
+                          <Text style={styles.linkHint}>
+                            Suggested times come from saved crew overlap, ranked from strongest fit
+                            to weakest.
+                          </Text>
                         </View>
+
+                        {sortedSuggestedTimes.length ? (
+                          sortedSuggestedTimes.map((overlap) => (
+                            <View key={overlap.id} style={styles.suggestedTimeCard}>
+                              <View style={{ flex: 1, gap: 4 }}>
+                                <Text style={styles.suggestedTimeName}>{overlap.matchedUser.name}</Text>
+                                <Text style={styles.suggestedTimeLabel}>{overlap.label}</Text>
+                                <Text style={styles.suggestedTimeSummary}>{overlap.summary}</Text>
+                                <Text style={styles.suggestedTimeMeta}>
+                                  Their hangtime: {recurringWindowSummary(overlap.matchedWindow)}
+                                </Text>
+                              </View>
+
+                              <View style={styles.suggestedTimeScore}>
+                                <Text style={styles.suggestedTimeScoreText}>
+                                  {Math.round(overlap.score * 100)}%
+                                </Text>
+                              </View>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.previewEmpty}>
+                            Once friends save weekly hours, their overlapping hangtimes will show up
+                            here as suggestions.
+                          </Text>
+                        )}
                       </Animated.View>
-                    ) : null}
+                    )}
                   </LinearGradient>
                 </View>
               </Animated.View>
@@ -1457,6 +1560,33 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
   },
+  detailTabPill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  detailTabPillActive: {
+    backgroundColor: "rgba(124,58,237,0.22)",
+    shadowColor: nowlyColors.glow,
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  detailTabRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 18,
+  },
+  detailTabText: {
+    color: "rgba(248,250,252,0.72)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  detailTabTextActive: {
+    color: nowlyColors.cloud,
+  },
   previewDetail: {
     color: "rgba(139,234,255,0.82)",
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1468,6 +1598,60 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
     lineHeight: 22,
+  },
+  suggestedTimeCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  suggestedTimeLabel: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  suggestedTimeMeta: {
+    color: "rgba(139,234,255,0.82)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  suggestedTimeName: {
+    color: "rgba(248,250,252,0.72)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
+  suggestedTimeScore: {
+    minWidth: 56,
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  suggestedTimeScoreText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  suggestedTimeSummary: {
+    color: "rgba(248,250,252,0.64)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  suggestedTimesTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    lineHeight: 28,
   },
   previewGlow: {
     position: "absolute",

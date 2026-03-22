@@ -47,6 +47,12 @@ export default function MatchDetailScreen() {
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
 
   const match = matches.find((item) => item.id === matchId);
+  const isOnlineMatch = match?.reason.meetingStyle === "ONLINE";
+  const liveFitLine = match
+    ? isOnlineMatch
+      ? `${match.reason.overlapMinutes} minutes live, ${match.reason.onlineVenue ? `best on ${match.reason.onlineVenue}, ` : ""}and a ${Math.round(match.score * 100)}% likelihood this turns into a real link.`
+      : `${match.reason.overlapMinutes} minutes live, about ${match.reason.travelMinutes ?? 15} min apart, and a ${Math.round(match.score * 100)}% likelihood this turns into a real link.`
+    : "";
 
   const handleOpenChat = async () => {
     if (!match) {
@@ -85,7 +91,11 @@ export default function MatchDetailScreen() {
       microType: plan.microType,
       commitmentLevel: plan.commitmentLevel,
       locationName:
-        match.matchedUser.communityTag || match.matchedUser.city || user?.city || "nearby",
+        match.reason.onlineVenue ||
+        match.matchedUser.communityTag ||
+        match.matchedUser.city ||
+        user?.city ||
+        "nearby",
       participantIds: [match.matchedUser.id],
       scheduledFor: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     });
@@ -124,7 +134,7 @@ export default function MatchDetailScreen() {
             You and {match.matchedUser.name} overlap right now
           </Text>
           <Text className="mt-3 font-body text-base leading-6 text-white/60">
-            {match.reason.overlapMinutes} minutes live, about {match.reason.travelMinutes ?? 15} min apart, and a {Math.round(match.score * 100)}% likelihood this turns into a real link.
+            {liveFitLine}
           </Text>
 
           <View className="mt-5 flex-row flex-wrap gap-2">
@@ -147,6 +157,18 @@ export default function MatchDetailScreen() {
                 <Text className="font-body text-sm text-cloud">
                   strongest {match.reason.timingLabel}
                 </Text>
+              </View>
+            ) : null}
+            {isOnlineMatch ? (
+              <View className="rounded-full bg-white/10 px-3 py-2">
+                <Text className="font-body text-sm text-cloud">
+                  {match.reason.onlineVenue ? `online via ${match.reason.onlineVenue}` : "online hang"}
+                </Text>
+              </View>
+            ) : null}
+            {match.reason.crowdMode === "GROUP" ? (
+              <View className="rounded-full bg-white/10 px-3 py-2">
+                <Text className="font-body text-sm text-cloud">group friendly</Text>
               </View>
             ) : null}
           </View>

@@ -48,6 +48,10 @@ export default function ProposalScreen() {
   const hangout = hangouts.find((item) => item.id === hangoutId);
   const recap = recaps.find((item) => item.hangoutId === hangoutId);
   const isCompleted = hangout?.status === "COMPLETED";
+  const confirmationHint =
+    hangout && hangout.participants.length <= 2
+      ? "This 1:1 locks once both of you are in."
+      : "This group hang locks once at least 3 people are in.";
 
   useEffect(() => {
     if (hangout && isCompleted) {
@@ -131,7 +135,7 @@ export default function ProposalScreen() {
 
           <Text className="mt-4 font-body text-sm leading-6 text-aqua/80">
             Keep it light. This is meant to feel easy to join, easy to exit, and fast to turn
-            into a real link.
+            into a real link. {confirmationHint}
           </Text>
         </GlassCard>
 

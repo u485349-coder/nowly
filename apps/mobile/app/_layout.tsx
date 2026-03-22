@@ -1,11 +1,85 @@
 import "../global.css";
 
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-google-fonts/space-grotesk";
-import { Stack, useRouter } from "expo-router";
-import { useEffect } from "react";
-import { Platform, Text, View } from "react-native";
+import { Stack, useRouter, type ErrorBoundaryProps } from "expo-router";
+import { Suspense, useEffect } from "react";
+import { Platform, Pressable, Text, View } from "react-native";
 import { api } from "../lib/api";
 import { useAppStore } from "../store/useAppStore";
+
+const LoadingShell = ({
+  detail,
+  label = "Loading Nowly...",
+  onRetry,
+}: {
+  detail?: string;
+  label?: string;
+  onRetry?: () => void;
+}) => (
+  <View
+    style={{
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#0B1020",
+      paddingHorizontal: 24,
+      gap: 12,
+    }}
+  >
+    <Text
+      style={{
+        color: "#F8FAFC",
+        fontSize: 18,
+        fontFamily: Platform.OS === "web" ? "system-ui, sans-serif" : undefined,
+      }}
+    >
+      {label}
+    </Text>
+    {detail ? (
+      <Text
+        style={{
+          color: "rgba(248,250,252,0.68)",
+          fontSize: 14,
+          textAlign: "center",
+          maxWidth: 420,
+        }}
+      >
+        {detail}
+      </Text>
+    ) : null}
+    {onRetry ? (
+      <Pressable
+        onPress={onRetry}
+        style={{
+          borderRadius: 999,
+          backgroundColor: "rgba(255,255,255,0.08)",
+          paddingHorizontal: 18,
+          paddingVertical: 12,
+        }}
+      >
+        <Text
+          style={{
+            color: "#F8FAFC",
+            fontSize: 14,
+            fontWeight: "600",
+          }}
+        >
+          Try again
+        </Text>
+      </Pressable>
+    ) : null}
+  </View>
+);
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <LoadingShell
+      label="This screen hit a snag"
+      detail={error?.message || "Something went sideways while loading this page."}
+      onRetry={retry}
+    />
+  );
+}
 
 export default function RootLayout() {
   const router = useRouter();
@@ -15,6 +89,7 @@ export default function RootLayout() {
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
   });
+  const readyToRender = Platform.OS === "web" ? true : fontsLoaded;
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") {
@@ -90,36 +165,39 @@ export default function RootLayout() {
     };
   }, [router]);
 
-  if (!fontsLoaded) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#0B1020",
-        }}
-      >
-        <Text
-          style={{
-            color: "#F8FAFC",
-            fontSize: 16,
-          }}
-        >
-          Loading Nowly...
-        </Text>
-      </View>
-    );
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    const prefetch = (router as { prefetch?: (href: string) => void }).prefetch;
+    if (!prefetch) {
+      return;
+    }
+
+    ["/home", "/friends", "/profile", "/now-mode", "/availability-preferences"].forEach((path) => {
+      try {
+        prefetch(path);
+      } catch (error) {
+        // Ignore prefetch misses so navigation still works.
+      }
+    });
+  }, [router]);
+
+  if (!readyToRender) {
+    return <LoadingShell />;
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: {
-          backgroundColor: "#0B1020",
-        },
-      }}
-    />
+    <Suspense fallback={<LoadingShell />}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: "#0B1020",
+          },
+        }}
+      />
+    </Suspense>
   );
 }

@@ -69,12 +69,23 @@ export default function HomeScreen() {
   const bootstrapDemo = useAppStore((state) => state.bootstrapDemo);
   const layout = useResponsiveLayout();
   const pulse = useRef(new Animated.Value(0)).current;
+  const orderedLiveMatches = useMemo(
+    () => [...matches].sort((left, right) => right.score - left.score),
+    [matches],
+  );
+  const orderedScheduledOverlaps = useMemo(
+    () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
+    [scheduledOverlaps],
+  );
   const bookingPreviewRoute = user?.inviteCode
     ? ({
         pathname: "/booking/[inviteCode]",
         params: { inviteCode: user.inviteCode },
       } as const)
     : ("/availability-preferences" as const);
+  const openBookingPreview = () => {
+    router.push(bookingPreviewRoute as never);
+  };
 
   useEffect(() => {
     if (!user) {
@@ -130,7 +141,7 @@ export default function HomeScreen() {
   const warmPeople = useMemo(() => {
     const seen = new Set<string>();
 
-    return [...matches, ...scheduledOverlaps]
+    return [...orderedLiveMatches, ...orderedScheduledOverlaps]
       .flatMap((item) => {
         const person = "matchedUser" in item ? item.matchedUser : null;
 
@@ -142,24 +153,53 @@ export default function HomeScreen() {
         return [person];
       })
       .slice(0, 4);
-  }, [matches, scheduledOverlaps]);
+  }, [orderedLiveMatches, orderedScheduledOverlaps]);
 
-  const statusLine = scheduledOverlaps.length
-    ? scheduledOverlaps[0].label
+  const liveRadarRows = useMemo(
+    () => [
+      ...orderedLiveMatches.map((match) => ({
+        id: match.id,
+        name: match.matchedUser.name,
+        line: match.insightLabel ?? match.reason.momentumLabel ?? "Strong live signal fit",
+        detail:
+          match.reason.meetingStyle === "ONLINE"
+            ? `${Math.round(match.score * 100)}% fit · ${match.reason.overlapMinutes} min overlap · ${match.reason.onlineVenue ?? "online"}`
+            : `${Math.round(match.score * 100)}% fit · ${match.reason.overlapMinutes} min overlap · ${match.reason.travelMinutes ?? 15} min away`,
+        action: "Open",
+        onPress: () => router.push(`/match/${match.id}` as never),
+      })),
+      ...orderedScheduledOverlaps.slice(0, 2).map((overlap) => ({
+        id: overlap.id,
+        name: overlap.matchedUser.name,
+        line: overlap.label,
+        detail: overlap.summary,
+        action: "Suggest",
+        onPress: openBookingPreview,
+      })),
+    ],
+    [openBookingPreview, orderedLiveMatches, orderedScheduledOverlaps],
+  );
+
+  const statusLine = orderedLiveMatches.length
+    ? `${orderedLiveMatches[0].matchedUser.name} is the strongest live match right now.`
+    : orderedScheduledOverlaps.length
+      ? orderedScheduledOverlaps[0].label
     : activeSignal
       ? `Signal live until ${formatDayTime(activeSignal.expiresAt)}`
       : radar?.rhythm.detail || "No overlap yet.";
 
-  const heroSupport = scheduledOverlaps.length
-    ? scheduledOverlaps[0].summary
-    : matches.length
-      ? `${matches.length} ${matches.length === 1 ? "friend looks" : "friends look"} warm on the line.`
+  const heroSupport = orderedLiveMatches.length
+    ? `${orderedLiveMatches.length} ${orderedLiveMatches.length === 1 ? "friend looks" : "friends look"} warm on the line.`
+    : orderedScheduledOverlaps.length
+      ? orderedScheduledOverlaps[0].summary
+      : matches.length
+        ? `${matches.length} ${matches.length === 1 ? "friend looks" : "friends look"} warm on the line.`
       : activeSignal
         ? `Your light signal is up and ${availabilityLabel(activeSignal.state).toLowerCase()} still feels easy.`
         : radar?.suggestionLine || "Wake the radar up and let timing do the rest.";
 
   const plannedWindowLine = formatWindowLine(
-    scheduledOverlaps[0]?.startsAt ?? (activeSignal ? activeSignal.expiresAt : null),
+    orderedScheduledOverlaps[0]?.startsAt ?? (activeSignal ? activeSignal.expiresAt : null),
   );
   const pulseScale = pulse.interpolate({
     inputRange: [0, 1],
@@ -177,10 +217,6 @@ export default function HomeScreen() {
         gap: layout.splitGap,
       }
     : undefined;
-  const openBookingPreview = () => {
-    router.push(bookingPreviewRoute as never);
-  };
-
   return (
     <GradientMesh>
       <ScrollView
@@ -288,6 +324,36 @@ export default function HomeScreen() {
           <View style={{ width: layout.rightColumnWidth, gap: layout.sectionGap }}>
             <View style={styles.statusStrip}>
               <Text style={styles.statusText}>{statusLine}</Text>
+            </View>
+
+            <View style={{ gap: 12 }}>
+              <Text style={styles.sectionLabel}>LIVE RADAR</Text>
+
+              {liveRadarRows.length ? (
+                liveRadarRows.slice(0, 5).map((item) => (
+                  <View key={item.id} style={styles.radarRow}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.radarName}>{item.name}</Text>
+                      <Text style={styles.radarLine}>{item.line}</Text>
+                      <Text style={styles.radarDetail}>{item.detail}</Text>
+                    </View>
+
+                    <Pressable
+                      onPress={item.onPress}
+                      style={({ pressed }) => [
+                        styles.radarAction,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.985 }),
+                      ]}
+                    >
+                      <Text style={styles.radarActionText}>{item.action}</Text>
+                    </Pressable>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.radarEmpty}>
+                  Go live or save a hang rhythm and the radar feed will stack your best fits here.
+                </Text>
+              )}
             </View>
 
             <View style={{ gap: 12 }}>
@@ -523,6 +589,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     paddingRight: 6,
+  },
+  radarAction: {
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  radarActionText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+  },
+  radarDetail: {
+    color: "rgba(247,251,255,0.54)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  radarEmpty: {
+    color: "rgba(247,251,255,0.6)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  radarLine: {
+    color: "rgba(196,181,253,0.9)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  radarName: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  radarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 4,
   },
   pulseCore: {
     width: 16,

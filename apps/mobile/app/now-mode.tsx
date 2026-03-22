@@ -1,8 +1,9 @@
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import Animated, { FadeInDown, FadeOutUp, LinearTransition } from "react-native-reanimated";
 import { GradientMesh } from "../components/ui/GradientMesh";
 import { useResponsiveLayout } from "../components/ui/useResponsiveLayout";
 import { AvailabilityComposer } from "../features/availability/AvailabilityComposer";
@@ -10,6 +11,7 @@ import { nowlyColors } from "../constants/theme";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { availabilityLabel } from "../lib/labels";
+import { playMatchFeedback } from "../lib/match-feedback";
 import { formatDayTime } from "../lib/format";
 import { webPressableStyle } from "../lib/web-pressable";
 import { useAppStore } from "../store/useAppStore";
@@ -19,12 +21,12 @@ const liveInsight = (
   scheduledOverlaps: ReturnType<typeof useAppStore.getState>["scheduledOverlaps"],
   matches: ReturnType<typeof useAppStore.getState>["matches"],
 ) => {
-  if (scheduledOverlaps.length) {
-    return scheduledOverlaps[0].label;
-  }
-
   if (matches.length) {
     return `${matches[0].matchedUser.name} looks like the warmest live overlap.`;
+  }
+
+  if (scheduledOverlaps.length) {
+    return scheduledOverlaps[0].label;
   }
 
   if (activeSignal) {
@@ -48,10 +50,40 @@ export default function NowModeScreen() {
   const layout = useResponsiveLayout();
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [matchToast, setMatchToast] = useState<{
+    id: string;
+    label: string;
+    route: string;
+  } | null>(null);
+  const previousMatchIdsRef = useRef<string[] | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const overlapRows = useMemo(() => {
-    if (scheduledOverlaps.length) {
-      return scheduledOverlaps.slice(0, 3).map((overlap) => ({
+  const orderedLiveMatches = useMemo(
+    () => [...matches].sort((left, right) => right.score - left.score),
+    [matches],
+  );
+  const orderedScheduledOverlaps = useMemo(
+    () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
+    [scheduledOverlaps],
+  );
+  const liveMatchRows = useMemo(
+    () =>
+      orderedLiveMatches.map((match) => ({
+        id: match.id,
+        name: match.matchedUser.name,
+        line: match.insightLabel ?? match.reason.momentumLabel ?? "Strong short-notice fit",
+        detail:
+          match.reason.meetingStyle === "ONLINE"
+            ? `${Math.round(match.score * 100)}% fit · ${match.reason.overlapMinutes} min overlap · ${match.reason.onlineVenue ?? "online"}`
+            : `${Math.round(match.score * 100)}% fit · ${match.reason.overlapMinutes} min overlap · ${match.reason.travelMinutes ?? 15} min away`,
+        action: "Open",
+        actionRoute: `/match/${match.id}`,
+      })),
+    [orderedLiveMatches],
+  );
+  const suggestedTimeRows = useMemo(
+    () =>
+      orderedScheduledOverlaps.slice(0, 4).map((overlap) => ({
         id: overlap.id,
         name: overlap.matchedUser.name,
         line: overlap.label,
@@ -70,18 +102,9 @@ export default function NowModeScreen() {
             } as never,
           );
         },
-      }));
-    }
-
-    return matches.slice(0, 3).map((match) => ({
-      id: match.id,
-      name: match.matchedUser.name,
-      line: match.insightLabel ?? match.reason.momentumLabel ?? "Strong short-notice fit",
-      detail: `${match.reason.travelMinutes ?? 15} min away`,
-      action: "Open",
-      onPress: () => router.push(`/match/${match.id}` as never),
-    }));
-  }, [matches, scheduledOverlaps, user?.inviteCode]);
+      })),
+    [orderedScheduledOverlaps, user?.inviteCode],
+  );
 
   const locationShareLabel =
     liveSignalPreferences.locationLabel.trim() ||
@@ -113,6 +136,53 @@ export default function NowModeScreen() {
       active = false;
     };
   }, [setDashboard, token, user]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextIds = orderedLiveMatches.map((match) => match.id);
+
+    if (previousMatchIdsRef.current === null) {
+      previousMatchIdsRef.current = nextIds;
+      return;
+    }
+
+    const previousIds = new Set(previousMatchIdsRef.current);
+    const newMatches = orderedLiveMatches.filter((match) => !previousIds.has(match.id));
+
+    previousMatchIdsRef.current = nextIds;
+
+    if (!newMatches.length) {
+      return;
+    }
+
+    const topMatch = newMatches[0];
+    const label =
+      newMatches.length > 1
+        ? `${newMatches.length} live matches just landed.`
+        : `${topMatch.matchedUser.name} lines up with you right now.`;
+
+    playMatchFeedback();
+    setMatchToast({
+      id: topMatch.id,
+      label,
+      route: `/match/${topMatch.id}`,
+    });
+
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setMatchToast(null);
+    }, 2800);
+  }, [orderedLiveMatches]);
 
   const refreshDashboard = async () => {
     if (!user) {
@@ -294,7 +364,7 @@ export default function NowModeScreen() {
                 ]}
               >
                 <Text style={styles.clearActionText}>
-                  {clearing ? "Clearing your signal..." : "Go quiet"}
+                  {clearing ? "Stopping live..." : "Stop live"}
                 </Text>
               </Pressable>
             ) : null}
@@ -305,16 +375,76 @@ export default function NowModeScreen() {
               <Text style={styles.insightStripText}>{liveInsight(activeSignal, scheduledOverlaps, matches)}</Text>
             </View>
 
+            {matchToast ? (
+              <Animated.View
+                entering={FadeInDown.duration(180)}
+                exiting={FadeOutUp.duration(180)}
+                layout={LinearTransition.duration(180)}
+              >
+                <Pressable
+                  onPress={() => router.push(matchToast.route as never)}
+                  style={({ pressed }) => [
+                    styles.matchToast,
+                    webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
+                  ]}
+                >
+                  <View style={styles.matchToastIcon}>
+                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#081120" />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.matchToastLabel}>New live match</Text>
+                    <Text style={styles.matchToastText}>{matchToast.label}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
+                </Pressable>
+              </Animated.View>
+            ) : null}
+
             <View style={styles.overlapShell}>
-              <Text style={styles.sectionLabel}>WHO MIGHT OVERLAP</Text>
+              <Text style={styles.sectionLabel}>LIVE MATCHES</Text>
               <Text style={styles.sectionHeadline}>
-                {overlapRows.length
-                  ? "The strongest social timing shows up here."
-                  : "No live overlap yet. Once your signal is up, this list can light up fast."}
+                {liveMatchRows.length
+                  ? "Most compatible live people float to the top."
+                  : "No live overlap yet. Once your signal is up, the strongest matches will stack here first."}
               </Text>
 
-              {overlapRows.length ? (
-                overlapRows.map((item) => (
+              {liveMatchRows.length ? (
+                liveMatchRows.map((item) => (
+                  <View key={item.id} style={styles.overlapRow}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.rowName}>{item.name}</Text>
+                      <Text style={styles.rowLine}>{item.line}</Text>
+                      <Text style={styles.rowDetail}>{item.detail}</Text>
+                    </View>
+
+                    <Pressable
+                      onPress={() => router.push(item.actionRoute as never)}
+                      style={({ pressed }) => [
+                        styles.rowAction,
+                        webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.98 }),
+                      ]}
+                    >
+                      <Text style={styles.rowActionText}>{item.action}</Text>
+                    </Pressable>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>
+                  Set your status, keep the radius tight, and Nowly will start surfacing who feels reachable.
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.overlapShell}>
+              <Text style={styles.sectionLabel}>SUGGESTED TIMES</Text>
+              <Text style={styles.sectionHeadline}>
+                {suggestedTimeRows.length
+                  ? "Friends' hangtimes still show up for softer planning."
+                  : "Recurring overlap suggestions will show up here once your crew saves hang rhythm."}
+              </Text>
+
+              {suggestedTimeRows.length ? (
+                suggestedTimeRows.map((item) => (
                   <View key={item.id} style={styles.overlapRow}>
                     <View style={{ flex: 1, gap: 4 }}>
                       <Text style={styles.rowName}>{item.name}</Text>
@@ -335,7 +465,7 @@ export default function NowModeScreen() {
                 ))
               ) : (
                 <Text style={styles.emptyText}>
-                  Set your status, keep the radius tight, and Nowly will start surfacing who feels reachable.
+                  Saved windows from your people turn into lightweight suggested times here.
                 </Text>
               )}
             </View>
@@ -503,6 +633,40 @@ const styles = StyleSheet.create({
     color: "rgba(247,251,255,0.82)",
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
+  },
+  matchToast: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 24,
+    backgroundColor: "rgba(102,237,255,0.12)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: nowlyColors.aqua,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  matchToastIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139,234,255,0.94)",
+  },
+  matchToastLabel: {
+    color: "rgba(139,234,255,0.84)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
+  matchToastText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+    lineHeight: 20,
   },
   overlapRow: {
     flexDirection: "row",
