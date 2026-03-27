@@ -8,6 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:shared": "npm --prefix ../../packages/shared run build",
+    "preexport:web": "npm run build:shared",
     "export:web": "expo export --platform web --output-dir dist && node ./scripts/patch-web-export.cjs dist/index.html",
     "generate:icons": "powershell -ExecutionPolicy Bypass -File ./scripts/generate-icon-assets.ps1"
   },
