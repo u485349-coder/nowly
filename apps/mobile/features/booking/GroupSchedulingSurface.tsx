@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -24,7 +24,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
-import { disconnectSocket, getSocket } from "../../lib/socket";
+import { getSocket } from "../../lib/socket";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -82,6 +82,7 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
   const [finalizing, setFinalizing] = useState(false);
   const [locking, setLocking] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const draftDirtyRef = useRef(draftDirty);
 
   useEffect(() => {
     setSession(profile.session);
@@ -89,6 +90,10 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
     setVoteDraft(buildVoteDraft(profile.session));
     setDraftDirty(false);
   }, [profile.session]);
+
+  useEffect(() => {
+    draftDirtyRef.current = draftDirty;
+  }, [draftDirty]);
 
   useEffect(() => {
     const socket = getSocket(token);
@@ -105,7 +110,7 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
 
       setSession(nextSession);
       setSelectedSlotId((current) => current ?? nextSession.finalSlotId ?? nextSession.slots[0]?.id ?? null);
-      if (!draftDirty) {
+      if (!draftDirtyRef.current) {
         setVoteDraft(buildVoteDraft(nextSession));
       }
     };
@@ -123,9 +128,8 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
     return () => {
       socket.off("schedule:update", handleUpdate);
       socket.off("schedule:message", handleMessage);
-      disconnectSocket();
     };
-  }, [draftDirty, session.shareCode, token]);
+  }, [session.shareCode, token]);
 
   const selectedSlot =
     session.slots.find((slot) => slot.id === selectedSlotId) ??

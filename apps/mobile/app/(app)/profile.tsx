@@ -4,11 +4,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import Animated, {
-  Extrapolation,
   FadeInDown,
-  interpolate,
-  type SharedValue,
-  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -24,7 +20,6 @@ import { useAppStore } from "../../store/useAppStore";
 
 const intensityOptions = ["QUIET", "BALANCED", "LIVE"] as const;
 const SLIDER_THUMB = 24;
-const MOMENTUM_GAP = 14;
 
 type MomentumCardData = {
   key: string;
@@ -33,7 +28,6 @@ type MomentumCardData = {
   title: string;
   detail: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  colors: [string, string, string];
   onPress?: () => void;
 };
 
@@ -105,81 +99,6 @@ const rhythmSummaryLabel = (
   return "Light, social, low-pressure";
 };
 
-const MomentumCard = ({
-  card,
-  cardWidth,
-  index,
-  scrollX,
-}: {
-  card: MomentumCardData;
-  cardWidth: number;
-  index: number;
-  scrollX: SharedValue<number>;
-}) => {
-  const pageWidth = cardWidth + MOMENTUM_GAP;
-  const cardStyle = useAnimatedStyle(() => {
-    const center = index * pageWidth;
-    const inputRange = [center - pageWidth, center, center + pageWidth];
-
-    return {
-      opacity: interpolate(scrollX.value, inputRange, [0.72, 1, 0.72], Extrapolation.CLAMP),
-      transform: [
-        {
-          translateY: interpolate(scrollX.value, inputRange, [10, 0, 10], Extrapolation.CLAMP),
-        },
-        {
-          scale: interpolate(scrollX.value, inputRange, [0.95, 1, 0.95], Extrapolation.CLAMP),
-        },
-      ],
-    };
-  });
-
-  const contentStyle = useAnimatedStyle(() => {
-    const center = index * pageWidth;
-    const inputRange = [center - pageWidth, center, center + pageWidth];
-
-    return {
-      transform: [
-        {
-          translateX: interpolate(scrollX.value, inputRange, [-10, 0, 10], Extrapolation.CLAMP),
-        },
-      ],
-    };
-  });
-
-  return (
-    <Animated.View style={[{ width: cardWidth }, cardStyle]}>
-      <Pressable onPress={card.onPress} disabled={!card.onPress}>
-        <LinearGradient colors={card.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.momentumCard}>
-          <Animated.View style={contentStyle}>
-            <View className="flex-row items-start justify-between">
-              <View className="gap-1">
-                <Text className="font-body text-[11px] uppercase tracking-[1.8px] text-cloud/56">
-                  {card.eyebrow}
-                </Text>
-                <Text className="font-display text-[32px] leading-[34px] text-cloud">
-                  {card.value}
-                </Text>
-              </View>
-
-              <View style={styles.momentumIconBubble}>
-                <MaterialCommunityIcons name={card.icon} size={18} color="#E0F2FE" />
-              </View>
-            </View>
-
-            <View className="mt-6 gap-1.5">
-              <Text className="font-display text-[18px] leading-[22px] text-cloud">
-                {card.title}
-              </Text>
-              <Text className="font-body text-sm leading-6 text-white/68">{card.detail}</Text>
-            </View>
-          </Animated.View>
-        </LinearGradient>
-      </Pressable>
-    </Animated.View>
-  );
-};
-
 export default function ProfileScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
@@ -202,11 +121,6 @@ export default function ProfileScreen() {
   const sliderProgress = useSharedValue(progressForIntensity(currentIntensity));
   const rippleOpacity = useSharedValue(0);
   const rippleScale = useSharedValue(0.82);
-  const momentumScrollX = useSharedValue(0);
-  const momentumCardWidth = Math.min(
-    Math.max(shellWidth - 92, 216),
-    layout.isDesktop ? 282 : 246,
-  );
   const rhythmSubtitle = useMemo(
     () => rhythmSummaryLabel(recurringWindows, radar),
     [radar, recurringWindows],
@@ -253,10 +167,6 @@ export default function ProfileScreen() {
         { scale: rippleScale.value },
       ],
     };
-  });
-
-  const momentumScrollHandler = useAnimatedScrollHandler((event) => {
-    momentumScrollX.value = event.contentOffset.x;
   });
 
   const handleChangePhoto = async () => {
@@ -417,7 +327,6 @@ export default function ProfileScreen() {
           recaps[0]?.title ??
           "Quick hangs keep your line warm and your social graph moving.",
         icon: "flash-triangle-outline",
-        colors: ["rgba(11,16,30,0.92)", "rgba(18,41,62,0.84)", "rgba(8,12,23,0.94)"],
         onPress: recaps[0] ? () => router.push(`/recap/${recaps[0].hangoutId}`) : undefined,
       },
       {
@@ -429,7 +338,6 @@ export default function ProfileScreen() {
           radar?.suggestionLine ??
           `${notificationIntensityLabel(currentIntensity)} energy keeps Nowly alive without getting loud.`,
         icon: "lightning-bolt-circle",
-        colors: ["rgba(10,15,28,0.92)", "rgba(21,44,69,0.84)", "rgba(7,11,22,0.94)"],
       },
       {
         key: "overlap",
@@ -441,11 +349,12 @@ export default function ProfileScreen() {
           radar?.rhythm.detail ??
           "Save a hang rhythm to sharpen the overlap forecast.",
         icon: "orbit-variant",
-        colors: ["rgba(9,14,26,0.92)", "rgba(18,39,58,0.84)", "rgba(7,11,22,0.94)"],
       },
     ],
     [currentIntensity, radar, recaps, scheduledOverlaps, user?.streakCount],
   );
+  const leadMomentumCard = momentumCards[0];
+  const secondaryMomentumCards = momentumCards.slice(1);
 
   const weeklyTracks = useMemo(
     () =>
@@ -480,67 +389,97 @@ export default function ProfileScreen() {
       >
         <View style={{ width: shellWidth, gap: 24 }}>
         <Animated.View entering={FadeInDown.delay(60).duration(420)}>
-          <LinearGradient
-            colors={["rgba(10,15,30,0.92)", "rgba(13,30,47,0.86)", "rgba(8,12,23,0.94)"]}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroShell}
-          >
-            <View style={styles.heroGlowLarge} pointerEvents="none" />
+          <View style={[styles.heroGrid, layout.isDesktop ? styles.heroGridDesktop : null]}>
+            <LinearGradient
+              colors={["rgba(10,15,30,0.88)", "rgba(13,30,47,0.78)", "rgba(8,12,23,0.9)"]}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.heroShell, layout.isDesktop ? styles.heroIdentityPanel : null]}
+            >
+              <View style={styles.heroGlowLarge} pointerEvents="none" />
 
-            <Pressable onPress={() => void handleChangePhoto()} style={styles.avatarHalo}>
-              <View style={styles.avatarWrap}>
-                {user?.photoUrl ? (
-                  <Image source={{ uri: user.photoUrl }} className="h-full w-full" resizeMode="cover" />
-                ) : (
-                  <View className="h-full w-full items-center justify-center bg-white/8">
-                    <Text className="font-display text-[42px] text-white/72">
-                      {(user?.name?.[0] ?? "N").toUpperCase()}
+              <Pressable onPress={() => void handleChangePhoto()} style={styles.avatarHalo}>
+                <View style={styles.avatarWrap}>
+                  {user?.photoUrl ? (
+                    <Image source={{ uri: user.photoUrl }} className="h-full w-full" resizeMode="cover" />
+                  ) : (
+                    <View className="h-full w-full items-center justify-center bg-white/8">
+                      <Text className="font-display text-[42px] text-white/72">
+                        {(user?.name?.[0] ?? "N").toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.avatarEditBadge}>
+                  <MaterialCommunityIcons name="camera-outline" size={14} color="#0F172A" />
+                </View>
+              </Pressable>
+
+              <Text className="mt-5 font-display text-[32px] leading-[34px] text-cloud">
+                {user?.name ?? "Your profile"}
+              </Text>
+              <Text className="mt-2 font-body text-[15px] text-white/68">{rhythmSubtitle}</Text>
+
+              <View className="mt-4 flex-row flex-wrap gap-2">
+                {user?.communityTag || user?.city ? (
+                  <View style={styles.identityChip}>
+                    <Text className="font-body text-[12px] text-cloud/88">
+                      {user?.communityTag || user?.city}
                     </Text>
                   </View>
-                )}
+                ) : null}
+                {user?.discordUsername ? (
+                  <View style={styles.identityChip}>
+                    <Text className="font-body text-[12px] text-cloud/88">@{user.discordUsername}</Text>
+                  </View>
+                ) : null}
               </View>
-              <View style={styles.avatarEditBadge}>
-                <MaterialCommunityIcons name="camera-outline" size={14} color="#0F172A" />
-              </View>
-            </Pressable>
 
-            <Text className="mt-5 font-display text-[32px] leading-[34px] text-cloud">
-              {user?.name ?? "Your profile"}
-            </Text>
-            <Text className="mt-2 font-body text-[15px] text-white/68">{rhythmSubtitle}</Text>
-
-            <View className="mt-4 flex-row flex-wrap justify-center gap-2">
-              {user?.communityTag || user?.city ? (
-                <View style={styles.identityChip}>
-                  <Text className="font-body text-[12px] text-cloud/88">
-                    {user?.communityTag || user?.city}
-                  </Text>
-                </View>
-              ) : null}
-              {user?.discordUsername ? (
-                <View style={styles.identityChip}>
-                  <Text className="font-body text-[12px] text-cloud/88">@{user.discordUsername}</Text>
-                </View>
-              ) : null}
-              <View style={styles.identityChip}>
-                <Text className="font-body text-[12px] text-aqua/88">
-                  {notificationIntensityLabel(currentIntensity)} energy
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.photoActionsRow}>
-              <Pressable onPress={() => void handleChangePhoto()}>
-                <Text className="font-body text-sm text-cloud/84">Change photo</Text>
-              </Pressable>
-              {user?.photoUrl ? (
-                <Pressable onPress={() => void handleRemovePhoto()}>
-                  <Text className="font-body text-sm text-cloud/56">Remove</Text>
+              <View style={styles.photoActionsRow}>
+                <Pressable onPress={() => void handleChangePhoto()}>
+                  <Text className="font-body text-sm text-cloud/84">Change photo</Text>
                 </Pressable>
-              ) : null}
-            </View>
-          </LinearGradient>
+                {user?.photoUrl ? (
+                  <Pressable onPress={() => void handleRemovePhoto()}>
+                    <Text className="font-body text-sm text-cloud/56">Remove</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={["rgba(9,16,34,0.84)", "rgba(13,28,50,0.74)", "rgba(8,12,24,0.88)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.heroShell, styles.profileSignalPanel]}
+            >
+              <View style={styles.profileSignalOrb} pointerEvents="none" />
+              <Text className="font-body text-[12px] uppercase tracking-[2px] text-aqua/76">
+                PROFILE SIGNAL
+              </Text>
+              <Text className="mt-2 font-display text-[23px] leading-[28px] text-cloud">
+                {notificationIntensityLabel(currentIntensity)} energy right now
+              </Text>
+              <Text className="mt-2 font-body text-sm leading-6 text-white/66">
+                Your page is your social pulse. Keep this tuned and everything downstream feels cleaner.
+              </Text>
+
+              <View className="mt-6 gap-3">
+                <View style={styles.signalRow}>
+                  <Text className="font-body text-[11px] uppercase tracking-[1.6px] text-cloud/52">NOW MODE</Text>
+                  <Text className="font-body text-[13px] text-cloud/86">{activeSignal?.state ?? "FREE_LATER"}</Text>
+                </View>
+                <View style={styles.signalRow}>
+                  <Text className="font-body text-[11px] uppercase tracking-[1.6px] text-cloud/52">LIVE NOW</Text>
+                  <Text className="font-body text-[13px] text-cloud/86">{radar?.rhythm.activeNowCount ?? 0} friends</Text>
+                </View>
+                <View style={styles.signalRow}>
+                  <Text className="font-body text-[11px] uppercase tracking-[1.6px] text-cloud/52">OVERLAP</Text>
+                  <Text className="font-body text-[13px] text-cloud/86">{scheduledOverlaps.length} windows ahead</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(120).duration(420)}>
@@ -557,7 +496,7 @@ export default function ProfileScreen() {
             <Text className="mt-2 font-display text-[22px] leading-[26px] text-cloud">
               Tune how live Nowly feels around you
             </Text>
-            <Text className="mt-2 font-body text-sm leading-6 text-white/64">
+            <Text className="mt-2 font-body text-sm leading-6 text-white/66">
               Slide between quiet, balanced, and live. The glow shifts as soon as it lands.
             </Text>
 
@@ -588,6 +527,12 @@ export default function ProfileScreen() {
               <Animated.View style={[styles.sliderThumb, sliderThumbStyle]}>
                 <View style={styles.sliderThumbCore} />
               </Animated.View>
+            </View>
+
+            <View className="mt-4 self-start rounded-full bg-aqua/12 px-3 py-1.5">
+              <Text className="font-body text-[11px] uppercase tracking-[1.5px] text-aqua/86">
+                Active profile vibe: {notificationIntensityLabel(activeSliderLabel)}
+              </Text>
             </View>
 
             <View className="mt-5 flex-row justify-between">
@@ -627,30 +572,69 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
-          <Animated.ScrollView
-            horizontal
-            decelerationRate="fast"
-            disableIntervalMomentum
-            onScroll={momentumScrollHandler}
-            scrollEventThrottle={16}
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={momentumCardWidth + MOMENTUM_GAP}
-            contentContainerStyle={{
-              paddingRight: 12,
-            }}
-          >
-            <View className="flex-row gap-[14px]">
-              {momentumCards.map((card, index) => (
-                <MomentumCard
-                  key={card.key}
-                  card={card}
-                  cardWidth={momentumCardWidth}
-                  index={index}
-                  scrollX={momentumScrollX}
-                />
+          <View style={[styles.momentumGrid, layout.isDesktop ? styles.momentumGridDesktop : null]}>
+            <Pressable
+              onPress={leadMomentumCard?.onPress}
+              disabled={!leadMomentumCard?.onPress}
+              style={[styles.momentumLeadWrap, layout.isDesktop ? styles.momentumLeadWrapDesktop : null]}
+            >
+              <LinearGradient
+                colors={["rgba(9,14,27,0.88)", "rgba(16,36,56,0.78)", "rgba(7,11,22,0.9)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.momentumLeadCard}
+              >
+                <View style={styles.momentumLeadGlow} pointerEvents="none" />
+                <View className="flex-row items-start justify-between">
+                  <View className="gap-1">
+                    <Text className="font-body text-[11px] uppercase tracking-[1.8px] text-cloud/56">
+                      {leadMomentumCard?.eyebrow}
+                    </Text>
+                    <Text className="font-display text-[38px] leading-[40px] text-cloud">
+                      {leadMomentumCard?.value}
+                    </Text>
+                  </View>
+                  <View style={styles.momentumIconBubble}>
+                    <MaterialCommunityIcons name={leadMomentumCard?.icon ?? "flash-outline"} size={18} color="#E0F2FE" />
+                  </View>
+                </View>
+
+                <View className="mt-6 gap-1.5">
+                  <Text className="font-display text-[20px] leading-[24px] text-cloud">
+                    {leadMomentumCard?.title}
+                  </Text>
+                  <Text className="font-body text-sm leading-6 text-white/68">{leadMomentumCard?.detail}</Text>
+                </View>
+              </LinearGradient>
+            </Pressable>
+
+            <View style={[styles.momentumSecondaryStack, layout.isDesktop ? styles.momentumSecondaryStackDesktop : null]}>
+              {secondaryMomentumCards.map((card) => (
+                <Pressable key={card.key} onPress={card.onPress} disabled={!card.onPress} style={styles.momentumSecondaryWrap}>
+                  <LinearGradient
+                    colors={["rgba(9,14,26,0.84)", "rgba(15,32,51,0.72)", "rgba(7,11,22,0.88)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.momentumSecondaryCard}
+                  >
+                    <View className="flex-row items-start justify-between">
+                      <Text className="font-body text-[11px] uppercase tracking-[1.7px] text-cloud/52">
+                        {card.eyebrow}
+                      </Text>
+                      <MaterialCommunityIcons name={card.icon} size={16} color="rgba(224,242,254,0.9)" />
+                    </View>
+                    <Text className="mt-2 font-display text-[28px] leading-[30px] text-cloud">
+                      {card.value}
+                    </Text>
+                    <Text className="mt-3 font-display text-[17px] leading-[21px] text-cloud">
+                      {card.title}
+                    </Text>
+                    <Text className="mt-1.5 font-body text-sm leading-6 text-white/64">{card.detail}</Text>
+                  </LinearGradient>
+                </Pressable>
               ))}
             </View>
-          </Animated.ScrollView>
+          </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(240).duration(420)}>
@@ -760,22 +744,54 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  heroGrid: {
+    gap: 14,
+  },
+  heroGridDesktop: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
   heroShell: {
     overflow: "hidden",
     borderRadius: 30,
-    alignItems: "center",
+    alignItems: "flex-start",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 20,
     shadowColor: "#020617",
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.12,
     shadowRadius: 18,
     shadowOffset: {
       width: 0,
       height: 10,
     },
-    elevation: 7,
+    elevation: 6,
+  },
+  heroIdentityPanel: {
+    flex: 1.1,
+  },
+  profileSignalPanel: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  profileSignalOrb: {
+    position: "absolute",
+    top: -26,
+    right: -18,
+    height: 122,
+    width: 122,
+    borderRadius: 122,
+    backgroundColor: "rgba(34,211,238,0.09)",
+  },
+  signalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    backgroundColor: "rgba(255,255,255,0.035)",
   },
   heroGlowLarge: {
     position: "absolute",
@@ -821,7 +837,7 @@ const styles = StyleSheet.create({
   photoActionsRow: {
     marginTop: 14,
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 20,
   },
   identityChip: {
@@ -834,12 +850,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 18,
     shadowColor: "#67E8F9",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 18,
     shadowOffset: {
       width: 0,
@@ -905,13 +921,27 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#0F172A",
   },
-  momentumCard: {
-    minHeight: 184,
+  momentumGrid: {
+    gap: 12,
+  },
+  momentumGridDesktop: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  momentumLeadWrap: {
+    flex: 1,
+  },
+  momentumLeadWrapDesktop: {
+    minWidth: 330,
+  },
+  momentumLeadCard: {
+    minHeight: 212,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    borderColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    overflow: "hidden",
     shadowColor: "#020617",
     shadowOpacity: 0.12,
     shadowRadius: 14,
@@ -920,6 +950,32 @@ const styles = StyleSheet.create({
       height: 8,
     },
     elevation: 6,
+  },
+  momentumLeadGlow: {
+    position: "absolute",
+    right: -36,
+    top: -28,
+    height: 128,
+    width: 128,
+    borderRadius: 128,
+    backgroundColor: "rgba(56,189,248,0.1)",
+  },
+  momentumSecondaryStack: {
+    gap: 10,
+  },
+  momentumSecondaryStackDesktop: {
+    flex: 0.9,
+  },
+  momentumSecondaryWrap: {
+    flex: 1,
+  },
+  momentumSecondaryCard: {
+    minHeight: 100,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   momentumIconBubble: {
     height: 36,
@@ -933,7 +989,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 16,

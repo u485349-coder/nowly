@@ -17,7 +17,7 @@ import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
-import { disconnectSocket, getSocket } from "../../lib/socket";
+import { getSocket } from "../../lib/socket";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import type { DirectChat, DirectMessage } from "../../types";
@@ -205,9 +205,13 @@ export default function DirectChatScreen() {
   );
 
   useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+
     let active = true;
 
-    if (!chat) {
+    if (!useAppStore.getState().directChats.some((item) => item.id === chatId)) {
       api.fetchDirectChat(token, chatId).then((nextChat) => {
         if (!active) {
           return;
@@ -228,9 +232,13 @@ export default function DirectChatScreen() {
     return () => {
       active = false;
     };
-  }, [chat, chatId, setDirectMessages, token, upsertDirectChat]);
+  }, [chatId, setDirectMessages, token, upsertDirectChat]);
 
   useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+
     const socket = getSocket(token);
 
     if (!socket) {
@@ -248,12 +256,17 @@ export default function DirectChatScreen() {
       createdAt: string;
       sender?: { name?: string | null };
     }) => {
+      if (message.threadId !== chatId) {
+        return;
+      }
+
       const nextMessage = normalizeIncomingMessage(message);
       appendDirectMessage(chatId, nextMessage);
 
-      if (chat) {
+      const latestChat = useAppStore.getState().directChats.find((item) => item.id === chatId);
+      if (latestChat) {
         upsertDirectChat({
-          ...chat,
+          ...latestChat,
           lastMessageAt: nextMessage.createdAt,
           lastMessageText: nextMessage.text,
         });
@@ -264,9 +277,8 @@ export default function DirectChatScreen() {
 
     return () => {
       socket.off("chat:message", handleIncoming);
-      disconnectSocket();
     };
-  }, [appendDirectMessage, chat, chatId, token, upsertDirectChat]);
+  }, [appendDirectMessage, chatId, token, upsertDirectChat]);
 
   const handleSend = async (presetText?: string) => {
     const nextText = (presetText ?? text).trim();

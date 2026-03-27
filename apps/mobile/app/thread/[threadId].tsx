@@ -7,7 +7,7 @@ import { PillButton } from "../../components/ui/PillButton";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
-import { disconnectSocket, getSocket } from "../../lib/socket";
+import { getSocket } from "../../lib/socket";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import { ThreadMessage } from "../../types";
@@ -51,7 +51,7 @@ export default function ThreadScreen() {
   }, [hangout?.id, isCompleted]);
 
   useEffect(() => {
-    if (isCompleted) {
+    if (!threadId || isCompleted) {
       return;
     }
 
@@ -61,7 +61,7 @@ export default function ThreadScreen() {
   }, [isCompleted, setThreadMessages, threadId, token]);
 
   useEffect(() => {
-    if (isCompleted) {
+    if (!threadId || isCompleted) {
       return;
     }
 
@@ -83,6 +83,9 @@ export default function ThreadScreen() {
       senderName?: string;
       sender?: { name?: string | null };
     }) => {
+      if (message.threadId !== threadId) {
+        return;
+      }
       appendMessage(threadId, normalizeIncomingMessage(message));
     };
 
@@ -94,7 +97,6 @@ export default function ThreadScreen() {
       socket.off("thread:message", handleIncoming);
       socket.off("thread:reaction", handleIncoming);
       socket.off("thread:poll", handleIncoming);
-      disconnectSocket();
     };
   }, [appendMessage, isCompleted, threadId, token]);
 

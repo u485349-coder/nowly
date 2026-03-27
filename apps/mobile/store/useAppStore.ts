@@ -337,12 +337,19 @@ export const useAppStore = create<AppState>()(
           };
         }),
       appendMessage: (threadId, message) =>
-        set((state) => ({
-          threadMessages: {
-            ...state.threadMessages,
-            [threadId]: [...(state.threadMessages[threadId] ?? []), message],
-          },
-        })),
+        set((state) => {
+          const existing = state.threadMessages[threadId] ?? [];
+          if (existing.some((item) => item.id === message.id)) {
+            return state;
+          }
+
+          return {
+            threadMessages: {
+              ...state.threadMessages,
+              [threadId]: [...existing, message],
+            },
+          };
+        }),
       setDirectChats: (chats) =>
         set(() => ({
           directChats: chats,
@@ -362,12 +369,19 @@ export const useAppStore = create<AppState>()(
           },
         })),
       appendDirectMessage: (chatId, message) =>
-        set((state) => ({
-          directMessages: {
-            ...state.directMessages,
-            [chatId]: [...(state.directMessages[chatId] ?? []), message],
-          },
-        })),
+        set((state) => {
+          const existing = state.directMessages[chatId] ?? [];
+          if (existing.some((item) => item.id === message.id)) {
+            return state;
+          }
+
+          return {
+            directMessages: {
+              ...state.directMessages,
+              [chatId]: [...existing, message],
+            },
+          };
+        }),
       updateHangoutResponse: (hangoutId, userId, responseStatus, microResponse) =>
         set((state) => ({
           hangouts: state.hangouts.map((hangout) =>

@@ -19,6 +19,7 @@ export default function NewGroupChatScreen() {
   );
   const [title, setTitle] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
 
   const toggleFriend = (friendId: string) => {
     setSelectedIds((current) =>
@@ -29,14 +30,17 @@ export default function NewGroupChatScreen() {
   };
 
   const handleCreate = async () => {
-    if (selectedIds.length < 2) {
+    if (selectedIds.length < 2 || isCreating) {
       return;
     }
 
     try {
+      setIsCreating(true);
+      const idempotencyKey = `group-chat:${token ?? "anon"}:${[...selectedIds].sort().join(",")}:${title.trim().toLowerCase()}`;
       const chat = await api.createGroupChat(token, {
         title: title.trim() || null,
         participantIds: selectedIds,
+        idempotencyKey,
       });
 
       upsertDirectChat(chat);
@@ -49,6 +53,8 @@ export default function NewGroupChatScreen() {
         "Could not create that chat",
         error instanceof Error ? error.message : "Try that again.",
       );
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -147,9 +153,15 @@ export default function NewGroupChatScreen() {
         </View>
 
         <PillButton
-          label={selectedIds.length >= 2 ? `Create chat with ${selectedIds.length} friends` : "Pick 2 friends"}
+          label={
+            selectedIds.length >= 2
+              ? isCreating
+                ? "Creating..."
+                : `Create chat with ${selectedIds.length} friends`
+              : "Pick 2 friends"
+          }
           onPress={() => void handleCreate()}
-          disabled={selectedIds.length < 2}
+          disabled={selectedIds.length < 2 || isCreating}
         />
       </ScrollView>
     </GradientMesh>

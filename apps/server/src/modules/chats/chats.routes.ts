@@ -128,6 +128,12 @@ const getAcceptedFriendIds = async (userId: string) => {
   );
 };
 
+const GROUP_CHAT_IDEMPOTENCY_WINDOW_MS = 2 * 60 * 1000;
+const MAX_GROUP_FRIEND_PARTICIPANTS = 8;
+
+const buildParticipantSignature = (participantIds: string[]) =>
+  [...participantIds].sort().join(":");
+
 export const chatsRouter = Router();
 
 chatsRouter.get(
@@ -199,6 +205,24 @@ chatsRouter.post(
   asyncHandler(async (request, response) => {
     const body = createGroupChatSchema.parse(request.body);
     const uniqueParticipantIds = [...new Set(body.participantIds.filter((id) => id !== request.userId))];
+    const normalizedTitle = body.title?.trim() || null;
+    const participantIdsWithRequester = [request.userId!, ...uniqueParticipantIds];
+    const participantSignature = buildParticipantSignature(participantIdsWithRequester);
+
+    if (uniqueParticipantIds.length < 2) {
+      response.status(400).json({
+        error: "Pick at least 2 accepted friends to start a group chat.",
+      });
+      return;
+    }
+
+    if (uniqueParticipantIds.length > MAX_GROUP_FRIEND_PARTICIPANTS) {
+      response.status(400).json({
+        error: `Group chats can include up to ${MAX_GROUP_FRIEND_PARTICIPANTS} friends.`,
+      });
+      return;
+    }
+
     const acceptedFriendIds = await getAcceptedFriendIds(request.userId!);
 
     if (uniqueParticipantIds.some((userId) => !acceptedFriendIds.has(userId))) {
@@ -206,14 +230,44 @@ chatsRouter.post(
       return;
     }
 
+    const idempotencyKey = request.header("x-idempotency-key")?.trim();
+    if (idempotencyKey) {
+      const recentThreads = await prisma.directThread.findMany({
+        where: {
+          creatorId: request.userId!,
+          title: normalizedTitle,
+          createdAt: {
+            gte: new Date(Date.now() - GROUP_CHAT_IDEMPOTENCY_WINDOW_MS),
+          },
+        },
+        ...directThreadArgs,
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      });
+
+      const existingThread = recentThreads.find((thread) => {
+        const threadSignature = buildParticipantSignature(
+          thread.participants.map((participant) => participant.userId),
+        );
+        return threadSignature === participantSignature;
+      });
+
+      if (existingThread) {
+        response.status(200).json({
+          data: serializeChat(existingThread, request.userId!),
+        });
+        return;
+      }
+    }
+
     const thread = await prisma.directThread.create({
       data: {
-        title: body.title?.trim() || null,
+        title: normalizedTitle,
         creator: {
           connect: { id: request.userId! },
         },
         participants: {
-          create: [request.userId!, ...uniqueParticipantIds].map((userId) => ({ userId })),
+          create: participantIdsWithRequester.map((userId) => ({ userId })),
         },
       },
       ...directThreadArgs,

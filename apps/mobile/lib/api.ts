@@ -570,7 +570,7 @@ export const api = {
 
   async createGroupChat(
     token: string | null,
-    payload: { title?: string | null; participantIds: string[] },
+    payload: { title?: string | null; participantIds: string[]; idempotencyKey?: string },
   ): Promise<DirectChat> {
     if (demoMode) {
       return {
@@ -590,7 +590,15 @@ export const api = {
       {
         method: "POST",
         token,
-        body: JSON.stringify(payload),
+        headers: payload.idempotencyKey
+          ? {
+              "x-idempotency-key": payload.idempotencyKey,
+            }
+          : undefined,
+        body: JSON.stringify({
+          title: payload.title,
+          participantIds: payload.participantIds,
+        }),
       },
     );
 
