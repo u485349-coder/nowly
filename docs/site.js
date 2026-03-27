@@ -8,14 +8,24 @@
   const androidStoreUrl =
     body?.dataset.androidStoreUrl ||
     "https://play.google.com/store/apps/details?id=com.nowly.app";
+  const normalizedBrowserAppUrl = browserAppUrl.replace(/\/+$/, "");
+  const appUrlForPath = (path) => `${normalizedBrowserAppUrl}${path}`;
+  const hasBrowserSession = (() => {
+    try {
+      return window.localStorage.getItem("nowly.browser.session") === "1";
+    } catch (_error) {
+      return false;
+    }
+  })();
+  const openNowlyUrl = hasBrowserSession ? appUrlForPath("/home") : appUrlForPath("/onboarding");
 
   document.querySelectorAll("[data-nowly-open]").forEach((element) => {
-    element.setAttribute("href", browserAppUrl);
+    element.setAttribute("href", openNowlyUrl);
     element.textContent = "Open Nowly";
   });
 
   document.querySelectorAll("[data-nowly-browser]").forEach((element) => {
-    element.setAttribute("href", browserAppUrl);
+    element.setAttribute("href", openNowlyUrl);
     element.textContent = "Open Nowly in your browser";
   });
 

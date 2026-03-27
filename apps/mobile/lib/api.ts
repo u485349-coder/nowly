@@ -86,6 +86,7 @@ const normalizeUser = (
     phone: user.phone,
     name: user.name ?? "Nowly user",
     city: user.city ?? "Somewhere nearby",
+    onboardingCompleted: Boolean((user as Partial<AppUser>).onboardingCompleted),
     communityTag: user.communityTag ?? null,
     photoUrl: user.photoUrl ?? null,
     inviteCode: user.inviteCode,

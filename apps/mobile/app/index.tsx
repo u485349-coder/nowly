@@ -14,10 +14,13 @@ import { useAppStore } from "../store/useAppStore";
 
 export default function IndexScreen() {
   const router = useRouter();
+  const token = useAppStore((state) => state.token);
+  const user = useAppStore((state) => state.user);
   const introSeen = useAppStore((state) => state.introSeen);
   const onboardingComplete = useAppStore((state) => state.onboardingComplete);
   const setIntroSeen = useAppStore((state) => state.setIntroSeen);
   const isWeb = Platform.OS === "web";
+  const canSkipOnboarding = Boolean(token && (onboardingComplete || user?.onboardingCompleted));
 
   const leftX = useSharedValue(introSeen ? -28 : -52);
   const rightX = useSharedValue(introSeen ? 28 : 52);
@@ -31,7 +34,7 @@ export default function IndexScreen() {
     if (isWeb) {
       const timeout = setTimeout(() => {
         setIntroSeen();
-        router.replace(onboardingComplete ? "/home" : "/onboarding");
+        router.replace(canSkipOnboarding ? "/home" : "/onboarding");
       }, 40);
 
       return () => clearTimeout(timeout);
@@ -49,11 +52,11 @@ export default function IndexScreen() {
 
     const timeout = setTimeout(() => {
       setIntroSeen();
-      router.replace(onboardingComplete ? "/home" : "/onboarding");
+      router.replace(canSkipOnboarding ? "/home" : "/onboarding");
     }, introSeen ? 920 : 1700);
 
     return () => clearTimeout(timeout);
-  }, [glowOpacity, introSeen, isWeb, leftX, lockupOpacity, onboardingComplete, pulseOpacity, pulseScale, rightX, router, setIntroSeen, wordmarkY]);
+  }, [canSkipOnboarding, glowOpacity, introSeen, isWeb, leftX, lockupOpacity, pulseOpacity, pulseScale, rightX, router, setIntroSeen, wordmarkY]);
 
   const leftStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: leftX.value }],

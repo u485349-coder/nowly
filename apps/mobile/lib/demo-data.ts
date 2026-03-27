@@ -39,6 +39,7 @@ export const demoUser: AppUser = {
   inviteCode: "invite-avery",
   name: "Avery",
   city: "New York",
+  onboardingCompleted: true,
   photoUrl: null,
   phone: "+15550000001",
   responsivenessScore: 0.89,

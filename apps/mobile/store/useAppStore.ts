@@ -189,13 +189,17 @@ export const useAppStore = create<AppState>()(
         set(() => {
           syncBrowserSessionMarker(token);
           return {
-          token,
-          user,
+            token,
+            user,
+            onboardingComplete: user.onboardingCompleted ?? false,
           };
         }),
       finishOnboarding: (user) =>
         set(() => ({
-          user,
+          user: {
+            ...user,
+            onboardingCompleted: true,
+          },
           onboardingComplete: true,
         })),
       setIntroSeen: () =>
@@ -290,6 +294,10 @@ export const useAppStore = create<AppState>()(
                 ...payload,
               }
             : state.user,
+          onboardingComplete:
+            typeof payload.onboardingCompleted === "boolean"
+              ? payload.onboardingCompleted
+              : state.onboardingComplete,
         })),
       upsertHangout: (hangout) =>
         set((state) => ({

@@ -20,6 +20,7 @@ export type DateSpecificAvailabilityWindow = {
 };
 
 export type AppUser = MobileUser & {
+  onboardingCompleted: boolean;
   streakCount: number;
   invitesSent: number;
   premium: boolean;

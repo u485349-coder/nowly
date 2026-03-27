@@ -79,6 +79,9 @@ export default function OnboardingScreen() {
     : params.referralToken;
   const setSession = useAppStore((state) => state.setSession);
   const finishOnboarding = useAppStore((state) => state.finishOnboarding);
+  const clearSession = useAppStore((state) => state.clearSession);
+  const user = useAppStore((state) => state.user);
+  const onboardingComplete = useAppStore((state) => state.onboardingComplete);
   const token = useAppStore((state) => state.token);
   const { width } = useWindowDimensions();
 
@@ -94,6 +97,8 @@ export default function OnboardingScreen() {
   const [contacts, setContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [inviteStatus, setInviteStatus] = useState("Build your crew immediately.");
   const [isFinishing, setIsFinishing] = useState(false);
+  const [checkingSavedSession, setCheckingSavedSession] = useState(false);
+  const hasSavedSession = Boolean(token && user && (onboardingComplete || user.onboardingCompleted));
 
   const stageIndex = useMemo(
     () =>
@@ -113,6 +118,51 @@ export default function OnboardingScreen() {
 
     api.redeemInvite(token, referralToken).catch(() => undefined);
   }, [referralToken, token]);
+
+  useEffect(() => {
+    if (!hasSavedSession || !token || !user) {
+      return;
+    }
+
+    let active = true;
+    setCheckingSavedSession(true);
+
+    api
+      .fetchDashboard(token, user.id)
+      .then(() => {
+        if (!active) {
+          return;
+        }
+
+        if (bookingInviteCode) {
+          router.replace({
+            pathname: "/booking/[inviteCode]",
+            params: { inviteCode: bookingInviteCode },
+          });
+          return;
+        }
+
+        router.replace(HOME_ROUTE);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        clearSession();
+      })
+      .finally(() => {
+        if (!active) {
+          return;
+        }
+
+        setCheckingSavedSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingInviteCode, clearSession, hasSavedSession, token, user]);
 
   const loadContacts = async () => {
     if (Platform.OS === "web") {
@@ -156,7 +206,7 @@ export default function OnboardingScreen() {
       await api.redeemInvite(session.token, referralToken).catch(() => undefined);
     }
 
-    if ((session.user as { onboardingCompleted?: boolean }).onboardingCompleted) {
+    if (session.user.onboardingCompleted) {
       if (bookingInviteCode) {
         router.replace({
           pathname: "/booking/[inviteCode]",
@@ -298,6 +348,37 @@ export default function OnboardingScreen() {
 
   const renderPhoneStage = () => (
     <View className="gap-5">
+      {hasSavedSession && user ? (
+        <View className="gap-3 rounded-[24px] border border-aqua/25 bg-aqua/10 p-4">
+          <Text className="font-display text-xl text-cloud">Welcome back, {user.name}.</Text>
+          <Text className="font-body text-sm leading-6 text-white/70">
+            You are already signed in on this device. Jump straight in, or switch accounts.
+          </Text>
+          <View className="gap-2">
+            <PillButton
+              label={checkingSavedSession ? "Opening Nowly..." : "Open Nowly"}
+              onPress={() => {
+                if (bookingInviteCode) {
+                  router.replace({
+                    pathname: "/booking/[inviteCode]",
+                    params: { inviteCode: bookingInviteCode },
+                  });
+                  return;
+                }
+
+                router.replace(HOME_ROUTE);
+              }}
+              disabled={checkingSavedSession}
+            />
+            <PillButton
+              label="Use another account"
+              variant="secondary"
+              onPress={clearSession}
+              disabled={checkingSavedSession}
+            />
+          </View>
+        </View>
+      ) : null}
       {isDesktopWeb ? (
         <View className="items-center gap-2">
           <Text className="text-center font-display text-[34px] leading-[38px] text-cloud">

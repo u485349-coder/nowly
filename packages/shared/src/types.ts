@@ -117,6 +117,7 @@ export type MobileUser = {
   communityTag?: string | null;
   photoUrl?: string | null;
   phone: string;
+  onboardingCompleted?: boolean;
   inviteCode?: string;
   responsivenessScore: number;
   discordUsername?: string | null;

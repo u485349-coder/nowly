@@ -43,7 +43,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/favicon.png"
     },
     "splash": {
       "image": "./assets/icon.png",
