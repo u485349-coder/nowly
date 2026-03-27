@@ -43,7 +43,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon-marketing.png"
     },
     "splash": {
       "image": "./assets/icon.png",
@@ -59,3 +59,4 @@
     "owner": "activez"
   }
 }
+

@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import "../global.css";
-import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-google-fonts/space-grotesk";
+import { SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts, } from "@expo-google-fonts/space-grotesk";
 import { Stack, useRouter } from "expo-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -45,6 +45,7 @@ export default function RootLayout() {
     const [inAppToast, setInAppToast] = useState(null);
     const toastTimeoutRef = useRef(null);
     const [fontsLoaded] = useFonts({
+        SpaceGrotesk_400Regular,
         SpaceGrotesk_500Medium,
         SpaceGrotesk_700Bold,
     });

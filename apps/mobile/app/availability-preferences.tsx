@@ -1317,6 +1317,7 @@ export default function AvailabilityPreferencesScreen() {
                     value={hangoutTitle}
                     onChangeText={setHangoutTitle}
                     className="font-body text-base text-cloud"
+                    style={styles.noteInputText}
                     placeholder="Coffee run, quick bite, after class walk..."
                     placeholderTextColor="rgba(248,250,252,0.35)"
                   />
@@ -1329,6 +1330,7 @@ export default function AvailabilityPreferencesScreen() {
                     multiline
                     textAlignVertical="top"
                     className="font-body text-base leading-6 text-cloud"
+                    style={styles.descriptionInputText}
                     placeholder="Say what you're proposing to do and keep the vibe clear."
                     placeholderTextColor="rgba(248,250,252,0.35)"
                   />
@@ -1339,6 +1341,7 @@ export default function AvailabilityPreferencesScreen() {
                     value={hangoutLocation}
                     onChangeText={setHangoutLocation}
                     className="font-body text-base text-cloud"
+                    style={styles.noteInputText}
                     placeholder="Place or platform: St. Marks, Discord, Roblox..."
                     placeholderTextColor="rgba(248,250,252,0.35)"
                   />
@@ -2234,6 +2237,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  descriptionInputText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_500Medium",
+  },
   formatCard: {
     flex: 1,
     borderRadius: 22,
@@ -2548,6 +2555,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 16,
     paddingVertical: 14,
+  },
+  noteInputText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_500Medium",
   },
   addWindowPill: {
     flexDirection: "row",
