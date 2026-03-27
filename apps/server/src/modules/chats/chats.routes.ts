@@ -11,6 +11,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { normalizeFriendPair } from "../../utils/friends.js";
 import { sendPushToUser } from "../notifications/push.service.js";
+import { broadcastDirectChatInboxRefresh, broadcastDirectChatMessage } from "../sockets/socket.server.js";
 
 const createDirectChatSchema = z.object({
   userId: z.string().min(1),
@@ -69,6 +70,7 @@ const directThreadArgs = Prisma.validator<Prisma.DirectThreadDefaultArgs>()({
 const serializeChat = (
   thread: Prisma.DirectThreadGetPayload<typeof directThreadArgs>,
   currentUserId: string,
+  unreadCount = 0,
 ) => {
   const otherParticipants = thread.participants
     .filter((entry) => entry.userId !== currentUserId)
@@ -77,12 +79,15 @@ const serializeChat = (
 
   return {
     id: thread.id,
+    type: thread.type,
     title: thread.title,
+    imageUrl: thread.imageUrl,
     isGroup: thread.participants.length > 2 || Boolean(thread.title),
     memberCount: thread.participants.length,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     lastMessageAt: thread.lastMessageAt,
+    unreadCount,
     participants: otherParticipants,
     latestMessage: latestMessage
       ? {
@@ -107,6 +112,19 @@ const canAccessChat = async (chatId: string, userId: string) =>
       },
     },
     select: { id: true },
+  });
+
+const markChatRead = async (chatId: string, userId: string) =>
+  prisma.directThreadParticipant.update({
+    where: {
+      threadId_userId: {
+        threadId: chatId,
+        userId,
+      },
+    },
+    data: {
+      lastReadAt: new Date(),
+    },
   });
 
 const getAcceptedFriendIds = async (userId: string) => {
@@ -152,8 +170,29 @@ chatsRouter.get(
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
     });
 
+    const unreadCounts = await Promise.all(
+      threads.map(async (thread) => {
+        const membership = thread.participants.find(
+          (participant) => participant.userId === request.userId,
+        );
+        return prisma.directMessage.count({
+          where: {
+            threadId: thread.id,
+            senderId: { not: request.userId! },
+            ...(membership?.lastReadAt
+              ? {
+                  createdAt: {
+                    gt: membership.lastReadAt,
+                  },
+                }
+              : {}),
+          },
+        });
+      }),
+    );
+
     response.json({
-      data: threads.map((thread) => serializeChat(thread, request.userId!)),
+      data: threads.map((thread, index) => serializeChat(thread, request.userId!, unreadCounts[index] ?? 0)),
     });
   }),
 );
@@ -182,6 +221,7 @@ chatsRouter.post(
       where: { participantKey },
       update: {},
       create: {
+        type: "direct",
         participantKey,
         creator: {
           connect: { id: request.userId! },
@@ -194,7 +234,7 @@ chatsRouter.post(
     });
 
     response.status(201).json({
-      data: serializeChat(thread, request.userId!),
+      data: serializeChat(thread, request.userId!, 0),
     });
   }),
 );
@@ -254,7 +294,7 @@ chatsRouter.post(
 
       if (existingThread) {
         response.status(200).json({
-          data: serializeChat(existingThread, request.userId!),
+          data: serializeChat(existingThread, request.userId!, 0),
         });
         return;
       }
@@ -262,6 +302,7 @@ chatsRouter.post(
 
     const thread = await prisma.directThread.create({
       data: {
+        type: "group",
         title: normalizedTitle,
         creator: {
           connect: { id: request.userId! },
@@ -274,7 +315,7 @@ chatsRouter.post(
     });
 
     response.status(201).json({
-      data: serializeChat(thread, request.userId!),
+      data: serializeChat(thread, request.userId!, 0),
     });
   }),
 );
@@ -291,12 +332,13 @@ chatsRouter.get(
       return;
     }
 
-    const thread = await prisma.directThread.findUniqueOrThrow({
+    await markChatRead(chatId, request.userId!);
+    const refreshedThread = await prisma.directThread.findUniqueOrThrow({
       where: { id: chatId },
       ...directThreadArgs,
     });
 
-    response.json({ data: serializeChat(thread, request.userId!) });
+    response.json({ data: serializeChat(refreshedThread, request.userId!, 0) });
   }),
 );
 
@@ -326,6 +368,7 @@ chatsRouter.get(
       orderBy: { createdAt: "asc" },
     });
 
+    await markChatRead(chatId, request.userId!);
     response.json({ data: messages });
   }),
 );
@@ -361,10 +404,24 @@ chatsRouter.post(
       },
     });
 
-    await prisma.directThread.update({
-      where: { id: chatId },
-      data: { lastMessageAt: new Date() },
-    });
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.directThread.update({
+        where: { id: chatId },
+        data: { lastMessageAt: now },
+      }),
+      prisma.directThreadParticipant.update({
+        where: {
+          threadId_userId: {
+            threadId: chatId,
+            userId: request.userId!,
+          },
+        },
+        data: {
+          lastReadAt: now,
+        },
+      }),
+    ]);
 
     const recipients = await prisma.directThreadParticipant.findMany({
       where: {
@@ -373,6 +430,11 @@ chatsRouter.post(
       },
       select: { userId: true },
     });
+
+    broadcastDirectChatMessage(chatId, message);
+    broadcastDirectChatInboxRefresh(
+      [request.userId!, ...recipients.map((recipient) => recipient.userId)],
+    );
 
     await Promise.all(
       recipients.map((recipient) =>
@@ -391,5 +453,23 @@ chatsRouter.post(
     );
 
     response.status(201).json({ data: message });
+  }),
+);
+
+chatsRouter.post(
+  "/:chatId/read",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const chatId = String(request.params.chatId);
+    const authorized = await canAccessChat(chatId, request.userId!);
+
+    if (!authorized) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    await markChatRead(chatId, request.userId!);
+
+    response.json({ data: { ok: true } });
   }),
 );

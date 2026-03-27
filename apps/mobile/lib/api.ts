@@ -233,11 +233,14 @@ const normalizeMessage = (message: {
 const normalizeDirectChat = (
   chat: {
     id: string;
+    type?: string;
     title?: string | null;
+    imageUrl?: string | null;
     isGroup?: boolean;
     memberCount?: number;
     createdAt: string;
     lastMessageAt?: string | null;
+    unreadCount?: number;
     participants?: Array<Partial<AppFriend>> | null;
     latestMessage?: {
       text?: string | null;
@@ -246,12 +249,15 @@ const normalizeDirectChat = (
   },
 ): DirectChat => ({
   id: chat.id,
+  type: chat.type === "group" ? "group" : "direct",
   title: chat.title ?? null,
+  imageUrl: chat.imageUrl ?? null,
   isGroup: Boolean(chat.isGroup),
   memberCount: chat.memberCount ?? ((chat.participants?.length ?? 0) + 1),
   createdAt: chat.createdAt,
   lastMessageAt: chat.lastMessageAt ?? chat.latestMessage?.createdAt ?? null,
   lastMessageText: chat.latestMessage?.text ?? null,
+  unreadCount: Math.max(0, chat.unreadCount ?? 0),
   participants: (chat.participants ?? []).map((participant, index) =>
     normalizeUser({
       id: participant.id ?? `participant-${index}`,
@@ -550,9 +556,10 @@ export const api = {
           memberCount: 2,
           participants: [demoFriends.find((friend) => friend.id === userId) ?? demoFriends[0]],
           createdAt: new Date().toISOString(),
-          lastMessageAt: null,
-          lastMessageText: null,
-        }
+        lastMessageAt: null,
+        lastMessageText: null,
+        unreadCount: 0,
+      }
       );
     }
 
@@ -597,6 +604,7 @@ export const api = {
         createdAt: new Date().toISOString(),
         lastMessageAt: null,
         lastMessageText: null,
+        unreadCount: 0,
       };
     }
 
@@ -669,6 +677,19 @@ export const api = {
     );
 
     return normalizeDirectMessage(response.data);
+  },
+
+  async markDirectChatRead(token: string | null, chatId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    const response = await request<{ data: { ok: boolean } }>(`/chats/${chatId}/read`, {
+      method: "POST",
+      token,
+    });
+
+    return response.data;
   },
 
   async sendInvite(token: string | null, phoneNumbers: string[]) {

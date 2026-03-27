@@ -55,6 +55,20 @@ type SchedulingMessagePayload = {
 let realtimeServer: Server | null = null;
 
 const getSchedulingRoom = (shareCode: string) => `schedule:${shareCode}`;
+const getUserRoom = (userId: string) => `user:${userId}`;
+
+export const broadcastDirectChatMessage = (chatId: string, message: unknown) => {
+  realtimeServer?.to(chatId).emit("chat:message", message);
+};
+
+export const broadcastDirectChatInboxRefresh = (userIds: string[]) => {
+  userIds.forEach((userId) => {
+    realtimeServer?.to(getUserRoom(userId)).emit("chat:inbox-update", {
+      userId,
+      at: new Date().toISOString(),
+    });
+  });
+};
 
 export const broadcastSchedulingSessionUpdate = (shareCode: string, session: unknown) => {
   realtimeServer?.to(getSchedulingRoom(shareCode)).emit("schedule:update", session);
@@ -128,6 +142,7 @@ export const createSocketServer = (server: HttpServer) => {
 
   io.on("connection", (socket) => {
     logger.info(`Socket connected: ${socket.data.userId}`);
+    socket.join(getUserRoom(socket.data.userId));
 
     socket.on("thread:join", async ({ threadId }: { threadId: string }) => {
       const thread = await canAccessThread(threadId, socket.data.userId);
@@ -251,12 +266,26 @@ export const createSocketServer = (server: HttpServer) => {
         },
       });
 
-      await prisma.directThread.update({
-        where: { id: payload.chatId },
-        data: { lastMessageAt: new Date() },
-      });
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.directThread.update({
+          where: { id: payload.chatId },
+          data: { lastMessageAt: now },
+        }),
+        prisma.directThreadParticipant.update({
+          where: {
+            threadId_userId: {
+              threadId: payload.chatId,
+              userId: socket.data.userId,
+            },
+          },
+          data: {
+            lastReadAt: now,
+          },
+        }),
+      ]);
 
-      io.to(payload.chatId).emit("chat:message", message);
+      broadcastDirectChatMessage(payload.chatId, message);
 
       const recipients = await prisma.directThreadParticipant.findMany({
         where: {
@@ -265,6 +294,10 @@ export const createSocketServer = (server: HttpServer) => {
         },
         select: { userId: true },
       });
+
+      broadcastDirectChatInboxRefresh(
+        [socket.data.userId, ...recipients.map((recipient) => recipient.userId)],
+      );
 
       await Promise.all(
         recipients.map((recipient) =>

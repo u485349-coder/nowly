@@ -65,12 +65,15 @@ export type ThreadMessage = {
 
 export type DirectChat = {
   id: string;
+  type?: "direct" | "group";
   title?: string | null;
+  imageUrl?: string | null;
   isGroup: boolean;
   memberCount: number;
   participants: MobileUser[];
   lastMessageText?: string | null;
   lastMessageAt?: string | null;
+  unreadCount?: number;
   createdAt: string;
 };
 

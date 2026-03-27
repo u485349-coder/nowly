@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -7,6 +7,8 @@ import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
+import { formatTime } from "../../lib/format";
+import { getSocket } from "../../lib/socket";
 import { createSmartOpenUrl } from "../../lib/smart-links";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
@@ -58,6 +60,7 @@ export default function FriendsScreen() {
   const removeSuggestion = useAppStore((state) => state.removeSuggestion);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const layout = useResponsiveLayout();
+  const inboxRefreshingRef = useRef(false);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
@@ -72,22 +75,66 @@ export default function FriendsScreen() {
       api.fetchFriends(token, user.id),
       api.fetchFriendSuggestions(token),
       api.fetchDirectChats(token),
-    ]).then(([nextFriends, nextSuggestions, nextChats]) => {
-      if (!active) {
-        return;
-      }
+    ])
+      .then(([nextFriends, nextSuggestions, nextChats]) => {
+        if (!active) {
+          return;
+        }
 
-      startTransition(() => {
-        setFriends(nextFriends);
-        setSuggestions(nextSuggestions);
-        setDirectChats(nextChats);
+        startTransition(() => {
+          setFriends(nextFriends);
+          setSuggestions(nextSuggestions);
+          setDirectChats(nextChats);
+        });
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        Alert.alert("Could not load chats", error instanceof Error ? error.message : "Try again.");
       });
-    });
 
     return () => {
       active = false;
     };
   }, [setDirectChats, setFriends, setSuggestions, token, user]);
+
+  useEffect(() => {
+    const socket = getSocket(token);
+    if (!socket) {
+      return;
+    }
+
+    const refreshInbox = async () => {
+      if (inboxRefreshingRef.current) {
+        return;
+      }
+
+      inboxRefreshingRef.current = true;
+      try {
+        const chats = await api.fetchDirectChats(token);
+        setDirectChats(chats);
+      } finally {
+        inboxRefreshingRef.current = false;
+      }
+    };
+
+    const onInboxUpdate = () => {
+      void refreshInbox();
+    };
+
+    const onChatMessage = () => {
+      void refreshInbox();
+    };
+
+    socket.on("chat:inbox-update", onInboxUpdate);
+    socket.on("chat:message", onChatMessage);
+
+    return () => {
+      socket.off("chat:inbox-update", onInboxUpdate);
+      socket.off("chat:message", onChatMessage);
+    };
+  }, [setDirectChats, token]);
 
   const normalizedSearch = deferredSearch.trim().toLowerCase();
 
@@ -213,7 +260,7 @@ export default function FriendsScreen() {
                 <Text style={styles.eyebrow}>YOUR PEOPLE</Text>
                 <Text style={styles.heroTitle}>Signals feel stronger together.</Text>
                 <Text style={styles.heroHint}>
-                  {(radar?.localDensity.activeNowCount ?? 0).toString()} active now ·{" "}
+                  {(radar?.localDensity.activeNowCount ?? 0).toString()} active now -{" "}
                   {(radar?.localDensity.nearbyFriendsCount ?? acceptedFriends.length).toString()} nearby in
                   your graph
                 </Text>
@@ -348,7 +395,7 @@ export default function FriendsScreen() {
                     <View style={{ flex: 1, gap: 4 }}>
                       <Text style={styles.rowName}>{friend.name}</Text>
                       <Text style={styles.rowMeta}>
-                        {friend.communityTag || friend.city} · {Math.round(friend.responsivenessScore * 100)}%
+                        {friend.communityTag || friend.city} - {Math.round(friend.responsivenessScore * 100)}%
                         response
                       </Text>
                       <Text style={styles.rowInsight}>
@@ -414,6 +461,18 @@ export default function FriendsScreen() {
                     <View style={{ flex: 1, gap: 4 }}>
                       <Text style={styles.rowName}>{chatDisplayName(chat)}</Text>
                       <Text style={styles.rowInsight}>{chatSubline(chat)}</Text>
+                    </View>
+                    <View style={styles.chatMeta}>
+                      <Text style={styles.chatTime}>
+                        {chat.lastMessageAt ? formatTime(chat.lastMessageAt) : ""}
+                      </Text>
+                      {chat.unreadCount && chat.unreadCount > 0 ? (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>
+                            {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </Pressable>
                 ))
@@ -489,6 +548,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 18,
     paddingVertical: 16,
+  },
+  chatMeta: {
+    alignItems: "flex-end",
+    gap: 8,
+    minWidth: 44,
+  },
+  chatTime: {
+    color: "rgba(247,251,255,0.5)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
   },
   clusterAvatarWrap: {
     position: "absolute",
@@ -719,4 +788,21 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 26,
   },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139,234,255,0.94)",
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: "#081120",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 11,
+    lineHeight: 13,
+  },
 });
+
+

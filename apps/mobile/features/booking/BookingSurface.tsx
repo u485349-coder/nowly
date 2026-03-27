@@ -464,6 +464,103 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
     : token
       ? "Lock it in"
       : "Sign in to lock it in";
+  const calendarCard = (
+    <View style={styles.previewCompositeCard}>
+      <View className="gap-1.5">
+        <Text className="font-display text-lg text-cloud">Choose a day</Text>
+        <Text className="font-body text-[13px] leading-5 text-white/58">
+          Use the calendar first, then pick a time below.
+        </Text>
+      </View>
+
+      <View className="flex-row items-center justify-between">
+        <Pressable
+          onPress={() => {
+            if (currentMonthIndex <= 0) return;
+            const previousMonth = monthGroups[currentMonthIndex - 1];
+            setSelectedMonthKey(previousMonth.key);
+            setSelectedDayKey(dayGroups.find((group) => group.monthKey === previousMonth.key)?.key ?? null);
+          }}
+          style={styles.monthAction}
+        >
+          <MaterialCommunityIcons name="chevron-left" size={18} color="#E2E8F0" />
+        </Pressable>
+        <Text className="font-display text-[15px] text-white/88">
+          {selectedMonthDate ? formatMonthLabel(selectedMonthDate) : "Choose a month"}
+        </Text>
+        <Pressable
+          onPress={() => {
+            if (currentMonthIndex < 0 || currentMonthIndex >= monthGroups.length - 1) return;
+            const nextMonth = monthGroups[currentMonthIndex + 1];
+            setSelectedMonthKey(nextMonth.key);
+            setSelectedDayKey(dayGroups.find((group) => group.monthKey === nextMonth.key)?.key ?? null);
+          }}
+          style={styles.monthAction}
+        >
+          <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
+        </Pressable>
+      </View>
+
+      <View className="flex-row gap-2">
+        {weekdayHeaders.map((label) => (
+          <Text key={label} style={styles.weekdayLabel}>
+            {label}
+          </Text>
+        ))}
+      </View>
+
+      <View className="flex-row flex-wrap gap-2">
+        {calendarDays.map((cell) => {
+          const active = cell.group?.key === selectedDayKey;
+          const available = Boolean(cell.group);
+
+          return (
+            <Pressable
+              key={cell.key}
+              disabled={!available}
+              onPress={() => cell.group && setSelectedDayKey(cell.group.key)}
+              style={({ pressed }) => [
+                styles.calendarCell,
+                active ? styles.calendarCellActive : null,
+                !available ? styles.calendarCellDisabled : null,
+                pressed && available ? styles.interactivePressed : null,
+              ]}
+            >
+              {active ? (
+                <LinearGradient
+                  colors={["rgba(247,251,255,0.98)", "rgba(231,217,255,0.94)", "rgba(196,181,253,0.9)"]}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              ) : null}
+              {active ? <View pointerEvents="none" style={styles.calendarActiveBlueTint} /> : null}
+              <Text
+                style={[
+                  styles.calendarText,
+                  !available ? styles.calendarTextInactive : null,
+                  active ? styles.calendarTextActive : null,
+                ]}
+              >
+                {cell.dayNumber ?? ""}
+              </Text>
+              {cell.group?.recommended ? (
+                <View style={[styles.dot, active ? styles.dotActive : null]} />
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {selectedDayLabel && selectedDayTimeRange ? (
+        <View style={styles.previewSelectedRow}>
+          <Text style={styles.previewSelectedDay}>{selectedDayLabel}</Text>
+          <Text style={styles.previewSelectedTime}>{selectedDayTimeRange}</Text>
+          <Text style={styles.previewSelectedHint}>
+            Pick one or more times from the right panel.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
   return (
     <GradientMesh>
       <View className="flex-1">
@@ -606,95 +703,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                     />
                   </View>
                 </View>
-              ) : (
-                <View style={styles.previewCompositeCard}>
-                  <View className="gap-1.5">
-                    <Text className="font-display text-lg text-cloud">Choose a day</Text>
-                    <Text className="font-body text-[13px] leading-5 text-white/58">
-                      Use the calendar first, then pick a time below.
-                    </Text>
-                  </View>
-
-                  <View className="flex-row items-center justify-between">
-                    <Pressable
-                      onPress={() => {
-                        if (currentMonthIndex <= 0) return;
-                        const previousMonth = monthGroups[currentMonthIndex - 1];
-                        setSelectedMonthKey(previousMonth.key);
-                        setSelectedDayKey(dayGroups.find((group) => group.monthKey === previousMonth.key)?.key ?? null);
-                      }}
-                      style={styles.monthAction}
-                    >
-                      <MaterialCommunityIcons name="chevron-left" size={18} color="#E2E8F0" />
-                    </Pressable>
-                    <Text className="font-display text-[15px] text-white/88">
-                      {selectedMonthDate ? formatMonthLabel(selectedMonthDate) : "Choose a month"}
-                    </Text>
-                    <Pressable
-                      onPress={() => {
-                        if (currentMonthIndex < 0 || currentMonthIndex >= monthGroups.length - 1) return;
-                        const nextMonth = monthGroups[currentMonthIndex + 1];
-                        setSelectedMonthKey(nextMonth.key);
-                        setSelectedDayKey(dayGroups.find((group) => group.monthKey === nextMonth.key)?.key ?? null);
-                      }}
-                      style={styles.monthAction}
-                    >
-                      <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
-                    </Pressable>
-                  </View>
-
-                  <View className="flex-row gap-2">
-                    {weekdayHeaders.map((label) => (
-                      <Text key={label} className="flex-1 text-center font-body text-[11px] text-white/42">
-                        {label}
-                      </Text>
-                    ))}
-                  </View>
-
-                  <View className="flex-row flex-wrap gap-2">
-                    {calendarDays.map((cell) => {
-                      const active = cell.group?.key === selectedDayKey;
-                      const available = Boolean(cell.group);
-
-                      return (
-                        <Pressable
-                          key={cell.key}
-                          disabled={!available}
-                          onPress={() => cell.group && setSelectedDayKey(cell.group.key)}
-                          style={[
-                            styles.calendarCell,
-                            active ? styles.calendarCellActive : null,
-                            !available ? styles.calendarCellDisabled : null,
-                          ]}
-                        >
-                          {active ? (
-                            <LinearGradient
-                              colors={["rgba(247,251,255,0.98)", "rgba(231,217,255,0.94)", "rgba(196,181,253,0.9)"]}
-                              style={StyleSheet.absoluteFillObject}
-                            />
-                          ) : null}
-                          <Text style={[styles.calendarText, active ? styles.calendarTextActive : null]}>
-                            {cell.dayNumber ?? ""}
-                          </Text>
-                          {cell.group?.recommended ? (
-                            <View style={[styles.dot, active ? styles.dotActive : null]} />
-                          ) : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  {selectedDayLabel && selectedDayTimeRange ? (
-                    <View style={styles.previewSelectedRow}>
-                      <Text style={styles.previewSelectedDay}>{selectedDayLabel}</Text>
-                      <Text style={styles.previewSelectedTime}>{selectedDayTimeRange}</Text>
-                      <Text style={styles.previewSelectedHint}>
-                        Pick one or more times from the right panel.
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
+              ) : null}
             </View>
 
             {!loading && !errorMessage && !emptyState ? (
@@ -721,11 +730,12 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                           key={slot.id}
                           disabled={isPreview}
                           onPress={() => toggleSlot(slot)}
-                          style={[
+                          style={({ pressed }) => [
                             styles.timePill,
                             { width: timePillWidth },
                             active ? styles.timePillActive : styles.timePillIdle,
                             isPreview ? styles.timePillPreview : null,
+                            pressed && !isPreview ? styles.interactivePressed : null,
                           ]}
                         >
                           {active ? (
@@ -765,6 +775,8 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                     </Pressable>
                   ) : null}
                 </View>
+
+                {calendarCard}
               </View>
             ) : null}
           </View>
@@ -847,21 +859,30 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   calendarCellActive: {
-    shadowColor: nowlyColors.glow,
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: "#4DA6FF",
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    borderWidth: 1,
+    borderColor: "rgba(77,166,255,0.38)",
   },
   calendarCellDisabled: {
-    opacity: 0.22,
+    opacity: 0.58,
+  },
+  calendarActiveBlueTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(77,166,255,0.15)",
   },
   calendarText: {
-    color: "rgba(247,251,255,0.7)",
+    color: "#FFFFFF",
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 15,
   },
+  calendarTextInactive: {
+    color: "rgba(255,255,255,0.74)",
+  },
   calendarTextActive: {
-    color: "#081120",
+    color: "#FFFFFF",
     fontFamily: "SpaceGrotesk_700Bold",
   },
   dot: {
@@ -1010,10 +1031,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   timePillActive: {
-    shadowColor: nowlyColors.glow,
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    shadowColor: "#4DA6FF",
+    shadowOpacity: 0.58,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    backgroundColor: "rgba(77,166,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(77,166,255,0.34)",
   },
   timePillIdle: {
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -1026,6 +1050,16 @@ const styles = StyleSheet.create({
     color: "rgba(247,251,255,0.88)",
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
+  },
+  weekdayLabel: {
+    flex: 1,
+    textAlign: "center",
+    color: "rgba(255,255,255,0.78)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+  },
+  interactivePressed: {
+    transform: [{ scale: 1.02 }],
   },
   timeTextActive: {
     color: "#081120",

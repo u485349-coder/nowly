@@ -248,6 +248,10 @@ export default function RootLayout() {
       return;
     }
 
+    if (typeof document !== "undefined") {
+      document.title = "Nowly | Don't grow apart";
+    }
+
     const prefetch = (router as { prefetch?: (href: string) => void }).prefetch;
     if (!prefetch) {
       return;

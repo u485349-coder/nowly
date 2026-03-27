@@ -115,16 +115,14 @@ export default function ProfileScreen() {
   };
 
   const handleToggleLive = () => {
-    setIsLive((current) => {
-      const next = !current;
-      setFriendsLiveCount(next ? mockFriendsLive : 0);
-      return next;
-    });
+    setIsLive(true);
+    setFriendsLiveCount(mockFriendsLive);
+    triggerRipple();
+    router.push("/now-mode");
   };
 
   const handleStartHang = () => {
-    Alert.alert("Start Hang", "Hang composer placeholder.");
-    console.log("Start Hang pressed");
+    router.push("/availability-preferences");
   };
 
   const handleChangePhoto = async () => {
@@ -210,13 +208,25 @@ export default function ProfileScreen() {
             </View>
 
             <View style={[styles.actionRow, layout.isDesktop ? styles.actionRowDesktop : null]}>
-              <Pressable onPress={handleToggleLive} style={styles.actionButtonWrap}>
+              <Pressable
+                onPress={handleToggleLive}
+                style={({ pressed }) => [
+                  styles.actionButtonWrap,
+                  pressed ? styles.actionButtonWrapPressed : null,
+                ]}
+              >
                 <LinearGradient colors={["rgba(103,232,249,0.38)", "rgba(38,99,235,0.36)", "rgba(15,23,42,0.92)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionButtonPrimary}>
                   <MaterialCommunityIcons name={isLive ? "lightning-bolt" : "lightning-bolt-outline"} size={17} color="#E2E8F0" />
                   <Text style={styles.actionPrimaryText}>Go Live</Text>
                 </LinearGradient>
               </Pressable>
-              <Pressable onPress={handleStartHang} style={styles.actionButtonWrap}>
+              <Pressable
+                onPress={handleStartHang}
+                style={({ pressed }) => [
+                  styles.actionButtonWrap,
+                  pressed ? styles.actionButtonWrapPressed : null,
+                ]}
+              >
                 <LinearGradient colors={["rgba(59,130,246,0.18)", "rgba(30,41,59,0.78)", "rgba(8,12,24,0.9)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionButtonSecondary}>
                   <MaterialCommunityIcons name="message-plus-outline" size={17} color="#E2E8F0" />
                   <Text style={styles.actionSecondaryText}>Start Hang</Text>
@@ -401,6 +411,7 @@ const styles = StyleSheet.create({
   actionRow: { marginTop: 12, gap: 10 },
   actionRowDesktop: { flexDirection: "row" },
   actionButtonWrap: { flex: 1, borderRadius: 999, overflow: "hidden" },
+  actionButtonWrapPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   actionButtonPrimary: { minHeight: 50, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#67E8F9", shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
   actionButtonSecondary: { minHeight: 50, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   actionPrimaryText: { color: "#E2E8F0", fontFamily: "SpaceGrotesk_700Bold", fontSize: 15 },

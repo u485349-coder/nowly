@@ -151,6 +151,7 @@ type AppState = {
   appendMessage: (threadId: string, message: ThreadMessage) => void;
   setDirectChats: (chats: DirectChat[]) => void;
   upsertDirectChat: (chat: DirectChat) => void;
+  markDirectChatReadLocal: (chatId: string) => void;
   setDirectMessages: (chatId: string, messages: DirectMessage[]) => void;
   appendDirectMessage: (chatId: string, message: DirectMessage) => void;
   updateHangoutResponse: (
@@ -352,14 +353,32 @@ export const useAppStore = create<AppState>()(
         }),
       setDirectChats: (chats) =>
         set(() => ({
-          directChats: chats,
+          directChats: [...chats].sort((a, b) => {
+            const aTs = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const bTs = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            return bTs - aTs;
+          }),
         })),
       upsertDirectChat: (chat) =>
+        set((state) => {
+          const merged = [chat, ...state.directChats.filter((item) => item.id !== chat.id)];
+          merged.sort((a, b) => {
+            const aTs = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const bTs = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            return bTs - aTs;
+          });
+          return { directChats: merged };
+        }),
+      markDirectChatReadLocal: (chatId) =>
         set((state) => ({
-          directChats: [
-            chat,
-            ...state.directChats.filter((item) => item.id !== chat.id),
-          ],
+          directChats: state.directChats.map((chat) =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  unreadCount: 0,
+                }
+              : chat,
+          ),
         })),
       setDirectMessages: (chatId, messages) =>
         set((state) => ({

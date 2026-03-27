@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text as RNText,
+  TextInput,
+  View,
+} from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
@@ -18,6 +27,10 @@ type PromptRecipient = {
   eyebrow: string;
   detail: string;
 };
+
+const Text = (props: ComponentProps<typeof RNText>) => (
+  <RNText {...props} style={[styles.defaultText, props.style]} />
+);
 
 export default function PromptPickerScreen() {
   const { promptKey, recipientId } = useLocalSearchParams<{
@@ -223,6 +236,7 @@ export default function PromptPickerScreen() {
               placeholder={prompt.label}
               placeholderTextColor="rgba(248,250,252,0.4)"
               className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+              style={styles.inputText}
             />
 
             <TextInput
@@ -231,6 +245,7 @@ export default function PromptPickerScreen() {
               placeholder={prompt.detail}
               placeholderTextColor="rgba(248,250,252,0.4)"
               className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+              style={styles.inputText}
             />
 
             <TextInput
@@ -239,6 +254,7 @@ export default function PromptPickerScreen() {
               placeholder={prompt.activity}
               placeholderTextColor="rgba(248,250,252,0.4)"
               className="rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+              style={styles.inputText}
             />
 
             <Text className="font-body text-sm leading-6 text-aqua/80">
@@ -317,3 +333,12 @@ export default function PromptPickerScreen() {
     </GradientMesh>
   );
 }
+
+const styles = StyleSheet.create({
+  defaultText: {
+    color: "#F8FAFC",
+  },
+  inputText: {
+    color: "#F8FAFC",
+  },
+});

@@ -174,11 +174,13 @@ export default function DirectChatScreen() {
   const setDirectMessages = useAppStore((state) => state.setDirectMessages);
   const appendDirectMessage = useAppStore((state) => state.appendDirectMessage);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
+  const markDirectChatReadLocal = useAppStore((state) => state.markDirectChatReadLocal);
   const layout = useResponsiveLayout();
   const inputRef = useRef<TextInput | null>(null);
 
   const [text, setText] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(true);
+  const [isSending, setIsSending] = useState(false);
 
   const chat = directChats.find((item) => item.id === chatId);
   const otherParticipants = useMemo(() => {
@@ -233,13 +235,15 @@ export default function DirectChatScreen() {
         }
 
         setDirectMessages(chatId, messages);
+        markDirectChatReadLocal(chatId);
+        void api.markDirectChatRead(token, chatId);
       })
       .catch(() => undefined);
 
     return () => {
       active = false;
     };
-  }, [chatId, setDirectMessages, token, upsertDirectChat]);
+  }, [chatId, markDirectChatReadLocal, setDirectMessages, token, upsertDirectChat]);
 
   useEffect(() => {
     if (!chatId) {
@@ -290,11 +294,12 @@ export default function DirectChatScreen() {
   const handleSend = async (presetText?: string) => {
     const nextText = (presetText ?? text).trim();
 
-    if (!chatId || !nextText || !user) {
+    if (!chatId || !nextText || !user || isSending) {
       return;
     }
 
     try {
+      setIsSending(true);
       const socket = getSocket(token);
 
       if (socket) {
@@ -309,6 +314,7 @@ export default function DirectChatScreen() {
           ...chat,
           lastMessageAt: new Date().toISOString(),
           lastMessageText: nextText,
+          unreadCount: 0,
         });
       }
 
@@ -319,6 +325,8 @@ export default function DirectChatScreen() {
         "Message failed",
         error instanceof Error ? error.message : "Could not send right now.",
       );
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -551,7 +559,7 @@ export default function DirectChatScreen() {
                 />
                 <Pressable
                   onPress={() => {
-                    setText((current) => `${current}${current ? " " : ""}🙂`);
+                    setText((current) => `${current}${current ? " " : ""}:)`);
                     inputRef.current?.focus();
                   }}
                   style={({ pressed }) => [
@@ -565,12 +573,12 @@ export default function DirectChatScreen() {
 
               <Pressable
                 onPress={() => void handleSend()}
-                disabled={!text.trim()}
+                disabled={!text.trim() || isSending}
                 style={({ pressed }) => [
                   styles.sendButton,
-                  !text.trim() ? styles.sendButtonDisabled : null,
+                  !text.trim() || isSending ? styles.sendButtonDisabled : null,
                   webPressableStyle(pressed, {
-                    disabled: !text.trim(),
+                    disabled: !text.trim() || isSending,
                     pressedOpacity: 0.9,
                     pressedScale: 0.97,
                   }),

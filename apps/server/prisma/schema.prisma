@@ -370,7 +370,9 @@ model HangoutThread {
 model DirectThread {
   id             String                    @id @default(cuid())
   participantKey String?                   @unique
+  type           String                    @default("direct")
   title          String?
+  imageUrl       String?
   creatorId      String?
   lastMessageAt  DateTime?
   createdAt      DateTime                  @default(now())
@@ -386,6 +388,7 @@ model DirectThreadParticipant {
   threadId  String
   userId    String
   joinedAt  DateTime      @default(now())
+  lastReadAt DateTime?
   thread    DirectThread  @relation(fields: [threadId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
 
@@ -432,6 +435,7 @@ model DirectMessage {
   type      MessageType  @default(TEXT)
   metadata  Json?
   createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
   thread    DirectThread @relation(fields: [threadId], references: [id])
   sender    User         @relation("DirectMessageSender", fields: [senderId], references: [id])
 
