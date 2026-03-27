@@ -555,6 +555,7 @@ model SchedulingSession {
   finalizedSlot        SchedulingSessionSlot?   @relation("SchedulingSessionFinalSlot", fields: [finalizedSlotId], references: [id])
   slots                SchedulingSessionSlot[]
   participants         SchedulingSessionParticipant[]
+  votes                SchedulingSessionVote[]
   messages             SchedulingSessionMessage[]
 
   @@index([hostId, createdAt])

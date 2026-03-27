@@ -45,43 +45,6 @@ type CreateGroupSchedulingSessionInput = {
   dateSpecificWindows: DateSpecificWindowInput[];
 };
 
-type SessionGraph = Prisma.SchedulingSessionGetPayload<{
-  include: {
-    host: true;
-    slots: {
-      orderBy: { startsAt: "asc" };
-      include: {
-        votes: {
-          include: {
-            participant: {
-              include: {
-                user: true;
-              };
-            };
-          };
-        };
-      };
-    };
-    participants: {
-      orderBy: { joinedAt: "asc" };
-      include: {
-        user: true;
-      };
-    };
-    messages: {
-      orderBy: { createdAt: "asc" };
-      take: 80;
-      include: {
-        senderParticipant: {
-          include: {
-            user: true;
-          };
-        };
-      };
-    };
-  };
-}>;
-
 const mobileUserSelect = {
   id: true,
   name: true,
@@ -95,6 +58,51 @@ const mobileUserSelect = {
   sharedServerCount: true,
   notificationIntensity: true,
 } satisfies Prisma.UserSelect;
+
+type SessionGraph = Prisma.SchedulingSessionGetPayload<{
+  include: {
+    host: {
+      select: typeof mobileUserSelect;
+    };
+    slots: {
+      orderBy: { startsAt: "asc" };
+      include: {
+        votes: {
+          include: {
+            participant: {
+              include: {
+                user: {
+                  select: typeof mobileUserSelect;
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+    participants: {
+      orderBy: { joinedAt: "asc" };
+      include: {
+        user: {
+          select: typeof mobileUserSelect;
+        };
+      };
+    };
+    messages: {
+      orderBy: { createdAt: "asc" };
+      take: 80;
+      include: {
+        senderParticipant: {
+          include: {
+            user: {
+              select: typeof mobileUserSelect;
+            };
+          };
+        };
+      };
+    };
+  };
+}>;
 
 const startOfPseudoLocalDayMs = (offsetMinutes: number) => {
   const pseudoLocalNow = new Date(Date.now() - offsetMinutes * MINUTE_MS);
