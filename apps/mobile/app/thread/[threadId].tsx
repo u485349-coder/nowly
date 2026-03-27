@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
@@ -11,6 +11,8 @@ import { getSocket } from "../../lib/socket";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import { ThreadMessage } from "../../types";
+
+const EMPTY_THREAD_MESSAGES: ThreadMessage[] = [];
 
 const normalizeIncomingMessage = (message: {
   id: string;
@@ -36,9 +38,11 @@ export default function ThreadScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const hangouts = useAppStore((state) => state.hangouts);
-  const threadMessages = useAppStore((state) => state.threadMessages[threadId] ?? []);
+  const threadMessages = useAppStore((state) => state.threadMessages[threadId] ?? EMPTY_THREAD_MESSAGES);
   const setThreadMessages = useAppStore((state) => state.setThreadMessages);
   const appendMessage = useAppStore((state) => state.appendMessage);
+  const fetchedThreadIdRef = useRef<string | null>(null);
+  const joinedThreadIdRef = useRef<string | null>(null);
 
   const [text, setText] = useState("");
   const hangout = hangouts.find((item) => item.threadId === threadId);
@@ -55,9 +59,12 @@ export default function ThreadScreen() {
       return;
     }
 
-    api.fetchThreadMessages(token, threadId).then((messages) => {
-      setThreadMessages(threadId, messages);
-    });
+    if (fetchedThreadIdRef.current !== threadId) {
+      fetchedThreadIdRef.current = threadId;
+      api.fetchThreadMessages(token, threadId).then((messages) => {
+        setThreadMessages(threadId, messages);
+      });
+    }
   }, [isCompleted, setThreadMessages, threadId, token]);
 
   useEffect(() => {
@@ -71,7 +78,10 @@ export default function ThreadScreen() {
       return;
     }
 
-    socket.emit("thread:join", { threadId });
+    if (joinedThreadIdRef.current !== threadId) {
+      joinedThreadIdRef.current = threadId;
+      socket.emit("thread:join", { threadId });
+    }
 
     const handleIncoming = (message: {
       id: string;
@@ -97,6 +107,9 @@ export default function ThreadScreen() {
       socket.off("thread:message", handleIncoming);
       socket.off("thread:reaction", handleIncoming);
       socket.off("thread:poll", handleIncoming);
+      if (joinedThreadIdRef.current === threadId) {
+        joinedThreadIdRef.current = null;
+      }
     };
   }, [appendMessage, isCompleted, threadId, token]);
 

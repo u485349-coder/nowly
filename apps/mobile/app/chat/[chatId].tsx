@@ -23,6 +23,8 @@ import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
 import type { DirectChat, DirectMessage } from "../../types";
 
+const EMPTY_DIRECT_MESSAGES: DirectMessage[] = [];
+
 const normalizeIncomingMessage = (message: {
   id: string;
   threadId: string;
@@ -170,13 +172,16 @@ export default function DirectChatScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const directChats = useAppStore((state) => state.directChats);
-  const directMessages = useAppStore((state) => state.directMessages[chatId] ?? []);
+  const directMessages = useAppStore((state) => state.directMessages[chatId] ?? EMPTY_DIRECT_MESSAGES);
   const setDirectMessages = useAppStore((state) => state.setDirectMessages);
   const appendDirectMessage = useAppStore((state) => state.appendDirectMessage);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const markDirectChatReadLocal = useAppStore((state) => state.markDirectChatReadLocal);
   const layout = useResponsiveLayout();
   const inputRef = useRef<TextInput | null>(null);
+  const fetchedChatIdRef = useRef<string | null>(null);
+  const fetchedMessagesChatIdRef = useRef<string | null>(null);
+  const joinedChatIdRef = useRef<string | null>(null);
 
   const [text, setText] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(true);
@@ -216,7 +221,11 @@ export default function DirectChatScreen() {
 
     let active = true;
 
-    if (!useAppStore.getState().directChats.some((item) => item.id === chatId)) {
+    if (
+      fetchedChatIdRef.current !== chatId &&
+      !useAppStore.getState().directChats.some((item) => item.id === chatId)
+    ) {
+      fetchedChatIdRef.current = chatId;
       api.fetchDirectChat(token, chatId)
         .then((nextChat) => {
           if (!active) {
@@ -228,17 +237,20 @@ export default function DirectChatScreen() {
         .catch(() => undefined);
     }
 
-    api.fetchDirectMessages(token, chatId)
-      .then((messages) => {
-        if (!active) {
-          return;
-        }
+    if (fetchedMessagesChatIdRef.current !== chatId) {
+      fetchedMessagesChatIdRef.current = chatId;
+      api.fetchDirectMessages(token, chatId)
+        .then((messages) => {
+          if (!active) {
+            return;
+          }
 
-        setDirectMessages(chatId, messages);
-        markDirectChatReadLocal(chatId);
-        void api.markDirectChatRead(token, chatId);
-      })
-      .catch(() => undefined);
+          setDirectMessages(chatId, messages);
+          markDirectChatReadLocal(chatId);
+          void api.markDirectChatRead(token, chatId);
+        })
+        .catch(() => undefined);
+    }
 
     return () => {
       active = false;
@@ -256,7 +268,10 @@ export default function DirectChatScreen() {
       return;
     }
 
-    socket.emit("chat:join", { chatId });
+    if (joinedChatIdRef.current !== chatId) {
+      joinedChatIdRef.current = chatId;
+      socket.emit("chat:join", { chatId });
+    }
 
     const handleIncoming = (message: {
       id: string;
@@ -280,6 +295,7 @@ export default function DirectChatScreen() {
           ...latestChat,
           lastMessageAt: nextMessage.createdAt,
           lastMessageText: nextMessage.text,
+          unreadCount: message.senderId === user?.id ? 0 : latestChat.unreadCount ?? 0,
         });
       }
     };
@@ -288,8 +304,11 @@ export default function DirectChatScreen() {
 
     return () => {
       socket.off("chat:message", handleIncoming);
+      if (joinedChatIdRef.current === chatId) {
+        joinedChatIdRef.current = null;
+      }
     };
-  }, [appendDirectMessage, chatId, token, upsertDirectChat]);
+  }, [appendDirectMessage, chatId, token, upsertDirectChat, user?.id]);
 
   const handleSend = async (presetText?: string) => {
     const nextText = (presetText ?? text).trim();

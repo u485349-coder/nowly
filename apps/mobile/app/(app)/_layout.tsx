@@ -21,14 +21,17 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (
-      pathname.startsWith("/friends") ||
-      pathname.startsWith("/chat") ||
-      pathname.startsWith("/proposal") ||
-      pathname.startsWith("/thread")
+      crewUnreadCount > 0 &&
+      (
+        pathname.startsWith("/friends") ||
+        pathname.startsWith("/chat") ||
+        pathname.startsWith("/proposal") ||
+        pathname.startsWith("/thread")
+      )
     ) {
       consumeCrewUnread();
     }
-  }, [consumeCrewUnread, pathname]);
+  }, [consumeCrewUnread, crewUnreadCount, pathname]);
 
   return (
     <Tabs

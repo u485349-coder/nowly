@@ -252,7 +252,7 @@ const normalizeDirectChat = (
   type: chat.type === "group" ? "group" : "direct",
   title: chat.title ?? null,
   imageUrl: chat.imageUrl ?? null,
-  isGroup: Boolean(chat.isGroup),
+  isGroup: chat.type === "group" || Boolean(chat.isGroup),
   memberCount: chat.memberCount ?? ((chat.participants?.length ?? 0) + 1),
   createdAt: chat.createdAt,
   lastMessageAt: chat.lastMessageAt ?? chat.latestMessage?.createdAt ?? null,
