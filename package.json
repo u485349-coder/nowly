@@ -7,10 +7,11 @@
     "packages/*"
   ],
   "scripts": {
+    "build:shared": "npm --workspace @nowly/shared run build",
     "dev:mobile": "npm --workspace @nowly/mobile run start",
     "dev:server": "npm --workspace @nowly/server run dev",
     "dev": "npm run dev:server",
-    "build:server": "npm --workspace @nowly/server run build",
+    "build:server": "npm run build:shared && npm --workspace @nowly/server run build",
     "start:server": "npm --workspace @nowly/server run start",
     "db:generate": "npm --workspace @nowly/server run prisma:generate",
     "db:migrate": "npm --workspace @nowly/server run prisma:migrate",

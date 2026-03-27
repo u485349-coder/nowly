@@ -4,8 +4,8 @@ import type {
   SchedulingType,
   SchedulingVisibilityMode,
   SchedulingVoteState,
-} from "./group-scheduling";
-import type { SignalCrowdMode, SignalMeetMode } from "./live-signal";
+} from "./group-scheduling.js";
+import type { SignalCrowdMode, SignalMeetMode } from "./live-signal.js";
 
 export const availabilityStates = [
   "FREE_NOW",
