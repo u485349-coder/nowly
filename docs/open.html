@@ -117,12 +117,12 @@
 
       <h1>Opening Nowly...</h1>
       <p id="status">
-        We’ll try the app first. If it’s not installed, we’ll send you to the best next place.
+        We'll try the app first. If it's not installed, we'll send you to the best next place.
       </p>
 
       <div class="actions">
         <a class="button button-primary" id="open-app" href="nowly://onboarding">Open the app</a>
-        <a class="button button-secondary" id="open-browser" href="https://nowly-webapp.vercel.app/app">Open in browser</a>
+        <a class="button button-secondary" id="open-browser" href="https://nowly-webapp.vercel.app/">Open in browser</a>
         <a class="button button-secondary" id="download-app" href="https://play.google.com/store/apps/details?id=com.nowly.app">Get the app</a>
       </div>
 
@@ -133,7 +133,7 @@
       (function () {
         const params = new URLSearchParams(window.location.search);
         const appUrl = params.get("app") || "nowly://onboarding";
-        const browserUrl = params.get("browser") || "https://nowly-webapp.vercel.app/app";
+        const browserUrl = params.get("browser") || "https://nowly-webapp.vercel.app/";
         const iosStoreUrl = params.get("ios") || "https://apps.apple.com/us/search?term=Nowly";
         const androidStoreUrl =
           params.get("android") ||
@@ -180,3 +180,4 @@
     </script>
   </body>
 </html>
+

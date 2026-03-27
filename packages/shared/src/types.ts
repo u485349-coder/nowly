@@ -1,3 +1,12 @@
+import type {
+  GroupSchedulingHighlightLabel,
+  SchedulingDecisionMode,
+  SchedulingType,
+  SchedulingVisibilityMode,
+  SchedulingVoteState,
+} from "./group-scheduling";
+import type { SignalCrowdMode, SignalMeetMode } from "./live-signal";
+
 export const availabilityStates = [
   "FREE_NOW",
   "FREE_LATER",
@@ -61,6 +70,9 @@ export type MatchReason = {
   sharedVibe?: Vibe | null;
   sharedIntent?: HangoutIntent | null;
   travelMinutes?: number | null;
+  meetingStyle?: SignalMeetMode | null;
+  crowdMode?: SignalCrowdMode | null;
+  onlineVenue?: string | null;
   discordBonus?: number;
   overlapMinutes: number;
   relationshipScore?: number;
@@ -116,6 +128,9 @@ export type MobileAvailabilitySignal = {
   id: string;
   state: AvailabilityState;
   label?: string | null;
+  meetMode?: SignalMeetMode | null;
+  crowdMode?: SignalCrowdMode | null;
+  onlineVenue?: string | null;
   radiusKm: number;
   showLocation?: boolean;
   locationLabel?: string | null;
@@ -171,11 +186,116 @@ export type MobileBookableSlot = {
   score?: number | null;
 };
 
-export type MobileBookingProfile = {
+export type MobileGroupSchedulingParticipant = {
+  id: string;
+  user: MobileUser;
+  isHost: boolean;
+  collaborationColor: string;
+  collaborationVariant: number;
+  hasSubmittedAvailability: boolean;
+  submittedAt?: string | null;
+  lastActiveAt?: string | null;
+};
+
+export type MobileGroupSchedulingVote = {
+  participantId: string;
+  userId: string;
+  name: string;
+  photoUrl?: string | null;
+  collaborationColor: string;
+  collaborationVariant: number;
+  status: SchedulingVoteState;
+};
+
+export type MobileGroupSchedulingSlot = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  label: string;
+  totalScore: number;
+  yesCount: number;
+  maybeCount: number;
+  noCount: number;
+  eligible: boolean;
+  isFinal: boolean;
+  rank: number;
+  highlightLabel?: GroupSchedulingHighlightLabel | null;
+  voters: MobileGroupSchedulingVote[];
+};
+
+export type MobileGroupSchedulingMessage = {
+  id: string;
+  text: string;
+  type: "TEXT" | "SYSTEM";
+  createdAt: string;
+  sender?: {
+    id: string;
+    name: string;
+    photoUrl?: string | null;
+  } | null;
+  collaborationColor?: string | null;
+  collaborationVariant?: number | null;
+};
+
+export type MobileGroupSchedulingProgress = {
+  respondedCount: number;
+  participantCap: number;
+  waitingCount: number;
+  minimumConfirmations: number;
+  responseDeadline?: string | null;
+  deadlinePassed: boolean;
+  summary: string;
+  decisionHint: string;
+};
+
+export type MobileGroupSchedulingSession = {
+  id: string;
+  shareCode: string;
+  schedulingType: SchedulingType;
+  title: string;
+  description: string;
+  locationName: string;
+  durationMinutes: number;
+  timezone: string;
+  participantCap: number;
+  minimumConfirmations: number;
+  decisionMode: SchedulingDecisionMode;
+  visibilityMode: SchedulingVisibilityMode;
+  responseDeadline?: string | null;
+  editingLocked: boolean;
+  hostLocked: boolean;
+  finalizedAt?: string | null;
+  finalHangoutId?: string | null;
+  finalSlotId?: string | null;
+  participantCount: number;
+  participants: MobileGroupSchedulingParticipant[];
+  slots: MobileGroupSchedulingSlot[];
+  bestFits: MobileGroupSchedulingSlot[];
+  progress: MobileGroupSchedulingProgress;
+  messages: MobileGroupSchedulingMessage[];
+  currentUserParticipantId?: string | null;
+  currentUserHasSubmittedAvailability: boolean;
+  currentUserCanEdit: boolean;
+  currentUserCanFinalize: boolean;
+  currentUserIsHost: boolean;
+  canFinalize: boolean;
+};
+
+export type MobileOneOnOneBookingProfile = {
+  type: "ONE_ON_ONE";
   host: MobileUser;
   slots: MobileBookableSlot[];
   viewerHasRecurringSchedule: boolean;
 };
+
+export type MobileGroupBookingProfile = {
+  type: "GROUP";
+  host: MobileUser;
+  session: MobileGroupSchedulingSession;
+  viewerHasRecurringSchedule: boolean;
+};
+
+export type MobileBookingProfile = MobileOneOnOneBookingProfile | MobileGroupBookingProfile;
 
 export type MobileMatch = {
   id: string;

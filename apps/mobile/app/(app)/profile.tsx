@@ -39,6 +39,30 @@ type MomentumCardData = {
 const progressForIntensity = (intensity: (typeof intensityOptions)[number]) =>
   intensityOptions.indexOf(intensity) / (intensityOptions.length - 1);
 
+const signalPresetForIntensity = (intensity: (typeof intensityOptions)[number]) => {
+  if (intensity === "QUIET") {
+    return {
+      state: "BUSY" as const,
+      label: "Quiet mode",
+      durationHours: 2,
+    };
+  }
+
+  if (intensity === "LIVE") {
+    return {
+      state: "FREE_NOW" as const,
+      label: "Live mode",
+      durationHours: 3,
+    };
+  }
+
+  return {
+    state: "FREE_LATER" as const,
+    label: "Balanced mode",
+    durationHours: 3,
+  };
+};
+
 const rhythmPeriod = (startMinute: number) => {
   if (startMinute < 12 * 60) {
     return "mornings";
@@ -158,17 +182,21 @@ const MomentumCard = ({
 export default function ProfileScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
+  const activeSignal = useAppStore((state) => state.activeSignal);
+  const liveSignalPreferences = useAppStore((state) => state.liveSignalPreferences);
   const radar = useAppStore((state) => state.radar);
   const recaps = useAppStore((state) => state.recaps);
   const recurringWindows = useAppStore((state) => state.recurringWindows);
   const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const setNotificationsEnabled = useAppStore((state) => state.setNotificationsEnabled);
   const updateUser = useAppStore((state) => state.updateUser);
+  const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const clearSession = useAppStore((state) => state.clearSession);
   const { width } = useWindowDimensions();
   const currentIntensity = user?.notificationIntensity ?? "BALANCED";
   const [sliderWidth, setSliderWidth] = useState(0);
   const [previewIntensity, setPreviewIntensity] = useState<(typeof intensityOptions)[number] | null>(null);
+  const [pendingIntensity, setPendingIntensity] = useState<(typeof intensityOptions)[number] | null>(null);
   const sliderProgress = useSharedValue(progressForIntensity(currentIntensity));
   const rippleOpacity = useSharedValue(0);
   const rippleScale = useSharedValue(0.82);
@@ -178,13 +206,14 @@ export default function ProfileScreen() {
     () => rhythmSummaryLabel(recurringWindows, radar),
     [radar, recurringWindows],
   );
-  const activeSliderLabel = previewIntensity ?? currentIntensity;
+  const activeSliderLabel = previewIntensity ?? pendingIntensity ?? currentIntensity;
 
   useEffect(() => {
     sliderProgress.value = withTiming(progressForIntensity(currentIntensity), {
       duration: 220,
     });
     setPreviewIntensity(null);
+    setPendingIntensity(null);
   }, [currentIntensity, sliderProgress]);
 
   const triggerRipple = () => {
@@ -269,12 +298,44 @@ export default function ProfileScreen() {
     }
   };
 
+  const syncLiveSignalFromIntensity = async (intensity: (typeof intensityOptions)[number]) => {
+    const preset = signalPresetForIntensity(intensity);
+    const locationLabel = liveSignalPreferences?.locationLabel?.trim() ?? "";
+    const showLocation = liveSignalPreferences?.showLocation ?? false;
+
+    const nextSignal = await api.setAvailability(token, {
+      state: preset.state,
+      label: preset.label,
+      radiusKm: activeSignal?.radiusKm ?? 5,
+      durationHours: preset.durationHours,
+      showLocation,
+      locationLabel: showLocation ? locationLabel || null : null,
+      vibe: activeSignal?.vibe ?? null,
+      energyLevel: activeSignal?.energyLevel ?? null,
+      budgetMood: activeSignal?.budgetMood ?? null,
+      socialBattery: activeSignal?.socialBattery ?? null,
+      hangoutIntent: activeSignal?.hangoutIntent ?? null,
+    });
+
+    setActiveSignal({
+      ...nextSignal,
+      showLocation,
+      locationLabel: showLocation ? locationLabel || null : null,
+    });
+  };
+
   const commitIntensity = async (intensity: (typeof intensityOptions)[number]) => {
     if (intensity === currentIntensity) {
       triggerRipple();
+      void syncLiveSignalFromIntensity(intensity).catch(() => undefined);
       return;
     }
 
+    const previousIntensity = currentIntensity;
+    setPendingIntensity(intensity);
+    updateUser({
+      notificationIntensity: intensity,
+    });
     setNotificationsEnabled(intensity !== "QUIET");
     triggerRipple();
 
@@ -283,12 +344,27 @@ export default function ProfileScreen() {
       updateUser({
         notificationIntensity: nextUser.notificationIntensity,
       });
+
+      try {
+        await syncLiveSignalFromIntensity(nextUser.notificationIntensity ?? intensity);
+      } catch (error) {
+        Alert.alert(
+          "Energy updated",
+          error instanceof Error && error.message
+            ? `${error.message} Your social energy saved, but we couldn't sync the live signal right now.`
+            : "Your social energy saved, but we couldn't sync the live signal right now.",
+        );
+      }
     } catch (error) {
-      setNotificationsEnabled(currentIntensity !== "QUIET");
-      sliderProgress.value = withTiming(progressForIntensity(currentIntensity), {
+      updateUser({
+        notificationIntensity: previousIntensity,
+      });
+      setNotificationsEnabled(previousIntensity !== "QUIET");
+      sliderProgress.value = withTiming(progressForIntensity(previousIntensity), {
         duration: 220,
       });
       setPreviewIntensity(null);
+      setPendingIntensity(null);
 
       const message =
         error instanceof Error && error.message
@@ -321,7 +397,7 @@ export default function ProfileScreen() {
     sliderProgress.value = withTiming(progressForIntensity(nextIntensity), {
       duration: 160,
     });
-    setPreviewIntensity(null);
+    setPreviewIntensity(nextIntensity);
     void commitIntensity(nextIntensity);
   };
 
@@ -515,7 +591,7 @@ export default function ProfileScreen() {
                       sliderProgress.value = withTiming(progressForIntensity(option), {
                         duration: 180,
                       });
-                      setPreviewIntensity(null);
+                      setPreviewIntensity(option);
                       void commitIntensity(option);
                     }}
                   >
@@ -643,10 +719,28 @@ export default function ProfileScreen() {
           </Pressable>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300).duration(420)} className="items-center pt-2">
-          <Pressable onPress={handleLogout} style={styles.logoutAction}>
-            <MaterialCommunityIcons name="logout-variant" size={15} color="rgba(248,250,252,0.62)" />
-            <Text className="font-body text-sm text-white/62">Log out</Text>
+        <Animated.View entering={FadeInDown.delay(300).duration(420)} className="pt-2">
+          <Pressable
+            onPress={handleLogout}
+            style={({ pressed }) => [styles.logoutAction, pressed ? styles.logoutActionPressed : null]}
+          >
+            <LinearGradient
+              colors={["rgba(91,33,182,0.26)", "rgba(30,64,175,0.24)", "rgba(7,17,37,0.92)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoutGradient}
+            >
+              <View style={styles.logoutIconBubble}>
+                <MaterialCommunityIcons name="logout-variant" size={18} color="#F8FAFC" />
+              </View>
+
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.logoutTitle}>Log out</Text>
+                <Text style={styles.logoutSubtitle}>Sign out of this account</Text>
+              </View>
+
+              <MaterialCommunityIcons name="chevron-right" size={18} color="rgba(248,250,252,0.68)" />
+            </LinearGradient>
           </Pressable>
         </Animated.View>
       </ScrollView>
@@ -875,11 +969,48 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
   },
   logoutAction: {
+    overflow: "hidden",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#60A5FA",
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 6,
+  },
+  logoutActionPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  logoutGradient: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  logoutIconBubble: {
+    height: 34,
+    width: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239,68,68,0.42)",
+  },
+  logoutTitle: {
+    color: "#F8FAFC",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  logoutSubtitle: {
+    color: "rgba(248,250,252,0.66)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

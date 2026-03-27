@@ -452,7 +452,7 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
                         </View>
                       ) : (
                         <View style={styles.systemIconShell}>
-                          <MaterialCommunityIcons name="sparkles" size={14} color="#C4B5FD" />
+                          <MaterialCommunityIcons name="star-four-points" size={14} color="#C4B5FD" />
                         </View>
                       )}
 

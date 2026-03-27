@@ -12,6 +12,12 @@ import {
   SocialBattery,
   Vibe,
 } from "@prisma/client";
+import {
+  parseSignalLabelMetadata,
+  schedulingDecisionModes,
+  schedulingVisibilityModes,
+  schedulingVoteStates,
+} from "@nowly/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db/prisma.js";
@@ -21,7 +27,16 @@ import { asyncHandler } from "../../utils/async-handler.js";
 import { normalizeFriendPair } from "../../utils/friends.js";
 import { trackEvent } from "../analytics/analytics.service.js";
 import { sendPushToUser } from "../notifications/push.service.js";
+import { broadcastSchedulingSessionUpdate } from "../sockets/socket.server.js";
 import { getBookableAvailability } from "./booking.service.js";
+import {
+  createGroupSchedulingSession,
+  fetchGroupSchedulingProfile,
+  finalizeGroupSchedulingSession,
+  lockGroupSchedulingPoll,
+  postGroupSchedulingMessage,
+  submitGroupSchedulingAvailability,
+} from "./group-scheduling.service.js";
 
 const durationByState: Record<AvailabilityState, number> = {
   FREE_NOW: 3,
@@ -56,26 +71,48 @@ const humanizeIntent = (value: HangoutIntent | null | undefined) =>
 const buildFriendLiveBody = ({
   intent,
   locationLabel,
+  meetMode,
+  onlineVenue,
+  crowdMode,
 }: {
   intent?: HangoutIntent | null;
   locationLabel?: string | null;
+  meetMode?: "IN_PERSON" | "ONLINE" | "EITHER" | null;
+  onlineVenue?: string | null;
+  crowdMode?: "ONE_ON_ONE" | "GROUP" | "EITHER" | null;
 }) => {
   const suffix = livePromptSuffixes[Math.floor(Math.random() * livePromptSuffixes.length)];
-  const intro = intent ? `They look open for ${humanizeIntent(intent)}.` : "They just opened up a live window.";
-  const area = locationLabel ? ` Around ${locationLabel}.` : "";
-  return `${intro}${area} ${suffix}`.trim();
+  const intro =
+    meetMode === "ONLINE"
+      ? `They look open${onlineVenue ? ` on ${onlineVenue}` : " online"}.`
+      : intent
+        ? `They look open for ${humanizeIntent(intent)}.`
+        : "They just opened up a live window.";
+  const crowdLine =
+    crowdMode === "GROUP"
+      ? " They are open to a small group too."
+      : crowdMode === "ONE_ON_ONE"
+        ? " They are looking for one clean 1:1 link."
+        : "";
+  const area =
+    meetMode === "ONLINE"
+      ? ""
+      : locationLabel
+        ? ` Around ${locationLabel}.`
+        : "";
+  return `${intro}${crowdLine}${area} ${suffix}`.trim();
 };
 
 const createSignalSchema = z.object({
   state: z.nativeEnum(AvailabilityState),
-  label: z.string().min(2).max(40).nullable().optional(),
+  label: z.string().min(2).max(120).nullable().optional(),
   radiusKm: z.number().int().min(1).max(100).default(8),
   vibe: z.nativeEnum(Vibe).nullable().optional(),
   energyLevel: z.nativeEnum(EnergyLevel).nullable().optional(),
   budgetMood: z.nativeEnum(BudgetMood).nullable().optional(),
   socialBattery: z.nativeEnum(SocialBattery).nullable().optional(),
   hangoutIntent: z.nativeEnum(HangoutIntent).nullable().optional(),
-  durationHours: z.number().min(1).max(72).optional()
+  durationHours: z.number().min(0.25).max(72).optional()
 });
 
 const recurringWindowSchema = z
@@ -126,7 +163,115 @@ const bookingSchema = z.object({
   note: z.string().trim().min(2).max(80).optional().nullable(),
 });
 
+const groupSessionSchema = z.object({
+  title: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(240).optional().nullable(),
+  locationName: z.string().trim().min(2).max(120),
+  durationMinutes: z.number().int().min(15).max(360),
+  timezone: z.string().trim().min(2).max(80),
+  participantCap: z.number().int().min(2).max(24),
+  minimumConfirmations: z.number().int().min(2).max(24),
+  decisionMode: z.enum(schedulingDecisionModes.filter((mode) => mode !== "INSTANT_CONFIRM") as [
+    "EVERYONE_AGREES",
+    "MINIMUM_REQUIRED",
+    "HOST_DECIDES",
+  ]),
+  visibilityMode: z.enum(schedulingVisibilityModes),
+  responseDeadline: z.string().datetime().optional().nullable(),
+  dateSpecificWindows: z
+    .array(
+      z.object({
+        dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startMinute: z.number().int().min(0).max(23 * 60 + 59),
+        endMinute: z.number().int().min(1).max(24 * 60),
+      }),
+    )
+    .max(48)
+    .default([]),
+});
+
+const groupVotesSchema = z.object({
+  votes: z
+    .array(
+      z.object({
+        slotId: z.string().min(2),
+        status: z.enum(schedulingVoteStates),
+      }),
+    )
+    .min(1),
+});
+
+const groupMessageSchema = z.object({
+  text: z.string().trim().min(1).max(240),
+});
+
+const groupFinalizeSchema = z.object({
+  slotId: z.string().min(2),
+});
+
 export const availabilityRouter = Router();
+
+availabilityRouter.get(
+  "/group-sessions/:shareCode",
+  asyncHandler(async (request, response) => {
+    const shareCode = String(request.params.shareCode);
+    const authHeader = request.headers.authorization;
+    let viewerId: string | null = null;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const payload = verifyAccessToken(authHeader.replace("Bearer ", ""));
+        viewerId = payload.sub;
+      } catch {
+        viewerId = null;
+      }
+    }
+
+    const profile = await fetchGroupSchedulingProfile(shareCode, viewerId);
+
+    if (!profile) {
+      response.status(404).json({ error: "Group scheduling link not found" });
+      return;
+    }
+
+    response.json({ data: profile });
+  }),
+);
+
+availabilityRouter.post(
+  "/share/:inviteCode/group-session",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const inviteCode = String(request.params.inviteCode);
+    const body = groupSessionSchema.parse(request.body);
+    const host = await prisma.user.findUnique({
+      where: { inviteCode },
+      select: { id: true },
+    });
+
+    if (!host || host.id !== request.userId) {
+      response.status(403).json({ error: "You can only create a group link for your own booking page." });
+      return;
+    }
+
+    const session = await createGroupSchedulingSession({
+      hostId: request.userId!,
+      title: body.title,
+      description: body.description ?? null,
+      locationName: body.locationName,
+      durationMinutes: body.durationMinutes,
+      timezone: body.timezone,
+      participantCap: body.participantCap,
+      minimumConfirmations: Math.min(body.minimumConfirmations, body.participantCap),
+      decisionMode: body.decisionMode,
+      visibilityMode: body.visibilityMode,
+      responseDeadline: body.responseDeadline ? new Date(body.responseDeadline) : null,
+      dateSpecificWindows: body.dateSpecificWindows,
+    });
+
+    response.status(201).json({ data: session });
+  }),
+);
 
 availabilityRouter.get(
   "/share/:inviteCode",
@@ -330,6 +475,60 @@ availabilityRouter.post(
   }),
 );
 
+availabilityRouter.post(
+  "/group-sessions/:shareCode/votes",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const shareCode = String(request.params.shareCode);
+    const body = groupVotesSchema.parse(request.body);
+    const session = await submitGroupSchedulingAvailability(shareCode, request.userId!, body.votes as never);
+    broadcastSchedulingSessionUpdate(shareCode, session);
+
+    response.json({ data: session });
+  }),
+);
+
+availabilityRouter.post(
+  "/group-sessions/:shareCode/messages",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const shareCode = String(request.params.shareCode);
+    const body = groupMessageSchema.parse(request.body);
+    const message = await postGroupSchedulingMessage(shareCode, request.userId!, body.text);
+    const profile = await fetchGroupSchedulingProfile(shareCode, request.userId);
+    if (profile?.type === "GROUP") {
+      broadcastSchedulingSessionUpdate(shareCode, profile.session);
+    }
+
+    response.status(201).json({ data: message });
+  }),
+);
+
+availabilityRouter.post(
+  "/group-sessions/:shareCode/finalize",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const shareCode = String(request.params.shareCode);
+    const body = groupFinalizeSchema.parse(request.body);
+    const session = await finalizeGroupSchedulingSession(shareCode, request.userId!, body.slotId);
+    broadcastSchedulingSessionUpdate(shareCode, session);
+
+    response.json({ data: session });
+  }),
+);
+
+availabilityRouter.post(
+  "/group-sessions/:shareCode/lock",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const shareCode = String(request.params.shareCode);
+    const session = await lockGroupSchedulingPoll(shareCode, request.userId!);
+    broadcastSchedulingSessionUpdate(shareCode, session);
+
+    response.json({ data: session });
+  }),
+);
+
 availabilityRouter.get(
   "/signals",
   requireAuth,
@@ -352,6 +551,7 @@ availabilityRouter.post(
   requireAuth,
   asyncHandler(async (request, response) => {
     const body = createSignalSchema.parse(request.body);
+    const signalMetadata = parseSignalLabelMetadata(body.label ?? null);
     const wantsToShareLocation = request.body?.showLocation === true;
     const requestedLocationLabel = normalizeLocationLabel(request.body?.locationLabel);
     const expiresAt = new Date(
@@ -386,10 +586,13 @@ availabilityRouter.post(
 
     await trackEvent("availability_set", request.userId, {
       state: body.state,
-      label: body.label,
+      label: signalMetadata.label,
       radiusKm: body.radiusKm,
       showLocation: wantsToShareLocation,
       locationLabel: wantsToShareLocation ? requestedLocationLabel : null,
+      meetMode: signalMetadata.meetMode,
+      crowdMode: signalMetadata.crowdMode,
+      onlineVenue: signalMetadata.onlineVenue,
       vibe: body.vibe,
       energyLevel: body.energyLevel,
       budgetMood: body.budgetMood,
@@ -436,6 +639,9 @@ availabilityRouter.post(
           body: buildFriendLiveBody({
             intent: body.hangoutIntent,
             locationLabel,
+            meetMode: signalMetadata.meetMode,
+            onlineVenue: signalMetadata.onlineVenue,
+            crowdMode: signalMetadata.crowdMode,
           }),
           data: {
             screen: "friends",

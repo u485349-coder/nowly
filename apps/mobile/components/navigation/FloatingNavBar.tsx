@@ -7,7 +7,6 @@ import Animated, {
   Easing,
   Extrapolation,
   interpolate,
-  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -55,42 +54,20 @@ const FloatingTabItem = memo(
       });
     }, [focused, progress]);
 
-    const iconStyle = useAnimatedStyle(() => ({
-      color: interpolateColor(
-        progress.value,
-        [0, 1],
-        ["rgba(148,163,184,0.48)", "#FFFFFF"],
-      ),
-      textShadowColor: interpolateColor(
-        progress.value,
-        [0, 1],
-        ["rgba(255,255,255,0)", "rgba(255,255,255,0.82)"],
-      ),
-      textShadowRadius: interpolate(progress.value, [0, 1], [0, 14], Extrapolation.CLAMP),
-      textShadowOffset: { width: 0, height: 0 },
+    const iconMotionStyle = useAnimatedStyle(() => ({
+      opacity: interpolate(progress.value, [0, 1], [0.76, 1], Extrapolation.CLAMP),
       transform: [
         {
-          scale: interpolate(progress.value, [0, 1], [0.98, 1.1], Extrapolation.CLAMP),
+          scale: interpolate(progress.value, [0, 1], [0.96, 1.08], Extrapolation.CLAMP),
         },
       ],
     }));
 
-    const labelStyle = useAnimatedStyle(() => ({
-      color: interpolateColor(
-        progress.value,
-        [0, 1],
-        ["rgba(148,163,184,0.62)", "rgba(255,255,255,0.88)"],
-      ),
-      textShadowColor: interpolateColor(
-        progress.value,
-        [0, 1],
-        ["rgba(255,255,255,0)", "rgba(255,255,255,0.4)"],
-      ),
-      textShadowRadius: interpolate(progress.value, [0, 1], [0, 10], Extrapolation.CLAMP),
-      textShadowOffset: { width: 0, height: 0 },
+    const labelMotionStyle = useAnimatedStyle(() => ({
+      opacity: interpolate(progress.value, [0, 1], [0.72, 1], Extrapolation.CLAMP),
       transform: [
         {
-          translateY: interpolate(progress.value, [0, 1], [0, -1], Extrapolation.CLAMP),
+          translateY: interpolate(progress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
         },
       ],
     }));
@@ -108,8 +85,24 @@ const FloatingTabItem = memo(
           isWeb ? webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.998 }) : null,
         ]}
       >
-        <AnimatedIcon name={icon} size={21} style={iconStyle} />
-        <AnimatedText style={[styles.tabLabel, labelStyle]}>{label}</AnimatedText>
+        <AnimatedIcon
+          name={icon}
+          size={21}
+          style={[
+            styles.tabIcon,
+            focused ? styles.tabIconActive : styles.tabIconInactive,
+            iconMotionStyle,
+          ]}
+        />
+        <AnimatedText
+          style={[
+            styles.tabLabel,
+            focused ? styles.tabLabelActive : styles.tabLabelInactive,
+            labelMotionStyle,
+          ]}
+        >
+          {label}
+        </AnimatedText>
       </Pressable>
     );
   },
@@ -300,5 +293,24 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 10.5,
     includeFontPadding: false,
+  },
+  tabLabelActive: {
+    color: "rgba(255,255,255,0.88)",
+  },
+  tabLabelInactive: {
+    color: "rgba(148,163,184,0.62)",
+  },
+  tabIcon: {
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  tabIconActive: {
+    color: "#FFFFFF",
+    textShadowColor: "rgba(255,255,255,0.7)",
+    textShadowRadius: 12,
+  },
+  tabIconInactive: {
+    color: "rgba(148,163,184,0.46)",
+    textShadowColor: "rgba(255,255,255,0)",
+    textShadowRadius: 0,
   },
 });

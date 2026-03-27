@@ -406,9 +406,11 @@ hangoutsRouter.post(
     const acceptedCount = hangout.participants.filter(
       (entry) => entry.responseStatus === ParticipantResponse.ACCEPTED
     ).length;
+    const confirmationThreshold = hangout.participants.length <= 2 ? 2 : 3;
 
     const nextStatus =
-      acceptedCount >= 2 && nextResponseStatus !== ParticipantResponse.DECLINED
+      acceptedCount >= confirmationThreshold &&
+      nextResponseStatus !== ParticipantResponse.DECLINED
         ? "CONFIRMED"
         : hangout.status;
 

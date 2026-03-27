@@ -148,6 +148,37 @@ enum MatchStatus {
   EXPIRED
 }
 
+enum SchedulingType {
+  ONE_ON_ONE
+  GROUP
+}
+
+enum SchedulingDecisionMode {
+  INSTANT_CONFIRM
+  EVERYONE_AGREES
+  MINIMUM_REQUIRED
+  HOST_DECIDES
+}
+
+enum SchedulingVisibilityMode {
+  PUBLIC
+  ANONYMOUS
+}
+
+enum SchedulingSessionStatus {
+  OPEN
+  LOCKED
+  FINALIZED
+  EXPIRED
+  CANCELLED
+}
+
+enum SchedulingVoteState {
+  AVAILABLE
+  MAYBE
+  UNAVAILABLE
+}
+
 model User {
   id                  String                    @id @default(cuid())
   phone               String                    @unique
@@ -193,6 +224,8 @@ model User {
   matchedInOverlaps   OverlapMatch[]            @relation("OverlapMatchMatchedUser")
   discordConnections  DiscordServerConnection[]
   recapMemories       RecapMemory[]             @relation("RecapOwner")
+  hostedSchedulingSessions SchedulingSession[]  @relation("SchedulingSessionHost")
+  schedulingSessionParticipants SchedulingSessionParticipant[]
 }
 
 model OtpCode {
@@ -318,6 +351,7 @@ model Hangout {
   participants HangoutParticipant[]
   thread       HangoutThread?
   recapMemory  RecapMemory?
+  finalizedFromSessions SchedulingSession[] @relation("SchedulingSessionFinalHangout")
 
   @@index([creatorId, status])
   @@index([scheduledFor])
@@ -488,4 +522,101 @@ model RecapMemory {
   createdAt    DateTime @default(now())
   hangout      Hangout  @relation(fields: [hangoutId], references: [id])
   owner        User     @relation("RecapOwner", fields: [ownerId], references: [id])
+}
+
+model SchedulingSession {
+  id                   String                   @id @default(cuid())
+  shareCode            String                   @unique @default(cuid())
+  hostId               String
+  schedulingType       SchedulingType           @default(GROUP)
+  status               SchedulingSessionStatus  @default(OPEN)
+  title                String
+  description          String                   @default("")
+  locationName         String
+  durationMinutes      Int
+  timezone             String
+  participantCap       Int                      @default(4)
+  minimumConfirmations Int                      @default(3)
+  decisionMode         SchedulingDecisionMode   @default(MINIMUM_REQUIRED)
+  visibilityMode       SchedulingVisibilityMode @default(PUBLIC)
+  responseDeadline     DateTime?
+  pollLockedAt         DateTime?
+  finalizedAt          DateTime?
+  finalizedSlotId      String?
+  finalHangoutId       String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  host                 User                     @relation("SchedulingSessionHost", fields: [hostId], references: [id])
+  finalHangout         Hangout?                 @relation("SchedulingSessionFinalHangout", fields: [finalHangoutId], references: [id])
+  finalizedSlot        SchedulingSessionSlot?   @relation("SchedulingSessionFinalSlot", fields: [finalizedSlotId], references: [id])
+  slots                SchedulingSessionSlot[]
+  participants         SchedulingSessionParticipant[]
+  messages             SchedulingSessionMessage[]
+
+  @@index([hostId, createdAt])
+  @@index([shareCode, status])
+}
+
+model SchedulingSessionSlot {
+  id                 String                @id @default(cuid())
+  sessionId          String
+  startsAt           DateTime
+  endsAt             DateTime
+  sortOrder          Int                   @default(0)
+  createdAt          DateTime              @default(now())
+  session            SchedulingSession     @relation(fields: [sessionId], references: [id])
+  votes              SchedulingSessionVote[]
+  finalizedInSession SchedulingSession[]   @relation("SchedulingSessionFinalSlot")
+
+  @@unique([sessionId, startsAt, endsAt])
+  @@index([sessionId, startsAt])
+}
+
+model SchedulingSessionParticipant {
+  id                     String                    @id @default(cuid())
+  sessionId              String
+  userId                 String
+  isHost                 Boolean                   @default(false)
+  collaborationIndex     Int                       @default(0)
+  hasSubmittedAvailability Boolean                 @default(false)
+  submittedAt            DateTime?
+  joinedAt               DateTime                  @default(now())
+  lastActiveAt           DateTime?
+  session                SchedulingSession         @relation(fields: [sessionId], references: [id])
+  user                   User                      @relation(fields: [userId], references: [id])
+  votes                  SchedulingSessionVote[]
+  messages               SchedulingSessionMessage[]
+
+  @@unique([sessionId, userId])
+  @@index([userId, joinedAt])
+}
+
+model SchedulingSessionVote {
+  id            String                       @id @default(cuid())
+  sessionId     String
+  slotId        String
+  participantId String
+  status        SchedulingVoteState
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  session       SchedulingSession            @relation(fields: [sessionId], references: [id])
+  slot          SchedulingSessionSlot        @relation(fields: [slotId], references: [id])
+  participant   SchedulingSessionParticipant @relation(fields: [participantId], references: [id])
+
+  @@unique([slotId, participantId])
+  @@index([sessionId, slotId])
+}
+
+model SchedulingSessionMessage {
+  id                  String                       @id @default(cuid())
+  sessionId           String
+  senderParticipantId String?
+  text                String
+  type                MessageType                 @default(TEXT)
+  metadata            Json?
+  createdAt           DateTime                    @default(now())
+  session             SchedulingSession           @relation(fields: [sessionId], references: [id])
+  senderParticipant   SchedulingSessionParticipant? @relation(fields: [senderParticipantId], references: [id])
+
+  @@index([sessionId, createdAt])
 }

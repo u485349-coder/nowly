@@ -224,6 +224,23 @@ export default function AvailabilityPreferencesScreen() {
   const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const setScheduledOverlaps = useAppStore((state) => state.setScheduledOverlaps);
   const layout = useResponsiveLayout();
+  const safeBookingSetup = bookingSetup ?? {
+    format: "ONE_ON_ONE" as const,
+    title: "Quick catch-up",
+    description: "Pick an easy time and we can lock something in.",
+    locationName: "",
+    durationMinutes: 60,
+    participantCap: 5,
+    minimumConfirmations: 3,
+    decisionMode: "MINIMUM_REQUIRED" as const,
+    visibilityMode: "PUBLIC" as const,
+    responseDeadlineHours: 24,
+    lastGroupSession: null,
+  };
+  const safeLiveSignalPreferences = liveSignalPreferences ?? {
+    showLocation: false,
+    locationLabel: "",
+  };
   const initialDrafts = useMemo(
     () =>
       recurringWindows.length
@@ -240,11 +257,11 @@ export default function AvailabilityPreferencesScreen() {
   const [selectedSpecificDateKey, setSelectedSpecificDateKey] = useState<string | null>(null);
   const [specificMonth, setSpecificMonth] = useState(() => new Date());
   const [hangoutFormat, setHangoutFormat] = useState<"ONE_ON_ONE" | "GROUP">(
-    bookingSetup.format,
+    safeBookingSetup.format,
   );
-  const [hangoutTitle, setHangoutTitle] = useState(bookingSetup.title);
-  const [hangoutDescription, setHangoutDescription] = useState(bookingSetup.description);
-  const [hangoutLocation, setHangoutLocation] = useState(bookingSetup.locationName);
+  const [hangoutTitle, setHangoutTitle] = useState(safeBookingSetup.title);
+  const [hangoutDescription, setHangoutDescription] = useState(safeBookingSetup.description);
+  const [hangoutLocation, setHangoutLocation] = useState(safeBookingSetup.locationName);
   const [savingLiveStatus, setSavingLiveStatus] = useState(false);
   const [clearingLiveStatus, setClearingLiveStatus] = useState(false);
 
@@ -287,11 +304,16 @@ export default function AvailabilityPreferencesScreen() {
   }, [storedDateSpecificWindows]);
 
   useEffect(() => {
-    setHangoutFormat(bookingSetup.format);
-    setHangoutTitle(bookingSetup.title);
-    setHangoutDescription(bookingSetup.description);
-    setHangoutLocation(bookingSetup.locationName);
-  }, [bookingSetup.description, bookingSetup.format, bookingSetup.locationName, bookingSetup.title]);
+    setHangoutFormat(safeBookingSetup.format);
+    setHangoutTitle(safeBookingSetup.title);
+    setHangoutDescription(safeBookingSetup.description);
+    setHangoutLocation(safeBookingSetup.locationName);
+  }, [
+    safeBookingSetup.description,
+    safeBookingSetup.format,
+    safeBookingSetup.locationName,
+    safeBookingSetup.title,
+  ]);
 
   const weeklyRows = useMemo(
     () =>
@@ -1114,7 +1136,7 @@ export default function AvailabilityPreferencesScreen() {
                 <AvailabilityComposer
                   activeSignal={activeSignal}
                   defaultLocationLabel={user?.communityTag || user?.city || null}
-                  signalPreferences={liveSignalPreferences}
+                  signalPreferences={safeLiveSignalPreferences}
                   onSignalPreferencesChange={setLiveSignalPreferences}
                   onSave={(payload) => void handleSaveLiveStatus(payload)}
                 />

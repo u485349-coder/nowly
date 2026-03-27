@@ -50,6 +50,10 @@ export default function NowModeScreen() {
   const layout = useResponsiveLayout();
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const safeLiveSignalPreferences = liveSignalPreferences ?? {
+    showLocation: false,
+    locationLabel: "",
+  };
   const [matchToast, setMatchToast] = useState<{
     id: string;
     label: string;
@@ -107,7 +111,7 @@ export default function NowModeScreen() {
   );
 
   const locationShareLabel =
-    liveSignalPreferences.locationLabel.trim() ||
+    safeLiveSignalPreferences.locationLabel.trim() ||
     user?.communityTag ||
     user?.city ||
     "your area";
@@ -317,7 +321,7 @@ export default function NowModeScreen() {
                     {radar?.suggestionLine ||
                       "Free now, free later, busy, or weekend plans. This is the fast layer that helps you overlap with someone else in the moment."}
                   </Text>
-                  {liveSignalPreferences.showLocation ? (
+                  {safeLiveSignalPreferences.showLocation ? (
                     <Text style={styles.heroLocationTag}>Sharing location: {locationShareLabel}</Text>
                   ) : null}
                 </View>
@@ -344,7 +348,7 @@ export default function NowModeScreen() {
             <AvailabilityComposer
               activeSignal={activeSignal}
               defaultLocationLabel={user?.communityTag || user?.city || null}
-              signalPreferences={liveSignalPreferences}
+              signalPreferences={safeLiveSignalPreferences}
               onSignalPreferencesChange={setLiveSignalPreferences}
               onSave={(payload) => void handleSaveStatus(payload)}
             />

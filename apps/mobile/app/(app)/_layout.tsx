@@ -7,7 +7,7 @@ import { nowlyColors } from "../../constants/theme";
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 const tabIcons: Record<"home" | "friends" | "profile", IconName> = {
-  home: "lightning-bolt-circle",
+  home: "lightning-bolt",
   friends: "account-group",
   profile: "star-four-points",
 };

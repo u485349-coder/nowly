@@ -53,27 +53,50 @@ const syncBrowserSessionMarker = (token: string | null) => {
   }
 };
 
+type BookingSetupState = {
+  format: "ONE_ON_ONE" | "GROUP";
+  title: string;
+  description: string;
+  locationName: string;
+  durationMinutes: number;
+  participantCap: number;
+  minimumConfirmations: number;
+  decisionMode: SchedulingDecisionMode;
+  visibilityMode: SchedulingVisibilityMode;
+  responseDeadlineHours: number;
+  lastGroupSession: {
+    shareCode: string;
+    signature: string;
+  } | null;
+};
+
+type LiveSignalPreferencesState = {
+  showLocation: boolean;
+  locationLabel: string;
+};
+
+const defaultBookingSetup: BookingSetupState = {
+  format: "ONE_ON_ONE",
+  title: "Quick catch-up",
+  description: "Pick an easy time and we can lock something in.",
+  locationName: "",
+  durationMinutes: 60,
+  participantCap: 5,
+  minimumConfirmations: 3,
+  decisionMode: "MINIMUM_REQUIRED",
+  visibilityMode: "PUBLIC",
+  responseDeadlineHours: 24,
+  lastGroupSession: null,
+};
+
+const defaultLiveSignalPreferences: LiveSignalPreferencesState = {
+  showLocation: false,
+  locationLabel: "",
+};
+
 type AppState = {
-  bookingSetup: {
-    format: "ONE_ON_ONE" | "GROUP";
-    title: string;
-    description: string;
-    locationName: string;
-    durationMinutes: number;
-    participantCap: number;
-    minimumConfirmations: number;
-    decisionMode: SchedulingDecisionMode;
-    visibilityMode: SchedulingVisibilityMode;
-    responseDeadlineHours: number;
-    lastGroupSession: {
-      shareCode: string;
-      signature: string;
-    } | null;
-  };
-  liveSignalPreferences: {
-    showLocation: boolean;
-    locationLabel: string;
-  };
+  bookingSetup: BookingSetupState;
+  liveSignalPreferences: LiveSignalPreferencesState;
   token: string | null;
   user: AppUser | null;
   introSeen: boolean;
@@ -144,23 +167,8 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       token: null,
       user: null,
-      bookingSetup: {
-        format: "ONE_ON_ONE",
-        title: "Quick catch-up",
-        description: "Pick an easy time and we can lock something in.",
-        locationName: "",
-        durationMinutes: 60,
-        participantCap: 5,
-        minimumConfirmations: 3,
-        decisionMode: "MINIMUM_REQUIRED",
-        visibilityMode: "PUBLIC",
-        responseDeadlineHours: 24,
-        lastGroupSession: null,
-      },
-      liveSignalPreferences: {
-        showLocation: false,
-        locationLabel: "",
-      },
+      bookingSetup: defaultBookingSetup,
+      liveSignalPreferences: defaultLiveSignalPreferences,
       introSeen: false,
       onboardingComplete: false,
       notificationsEnabled: true,
@@ -448,7 +456,42 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "nowly-app-store",
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
+      merge: (persistedState, currentState) => {
+        const incoming = (persistedState as Partial<AppState>) ?? {};
+        const incomingBookingSetup = (incoming.bookingSetup ?? {}) as Partial<BookingSetupState>;
+        const incomingSignalPreferences = (incoming.liveSignalPreferences ??
+          {}) as Partial<LiveSignalPreferencesState>;
+        const incomingSignal = incoming.activeSignal ?? null;
+
+        return {
+          ...currentState,
+          ...incoming,
+          bookingSetup: {
+            ...defaultBookingSetup,
+            ...currentState.bookingSetup,
+            ...incomingBookingSetup,
+            lastGroupSession:
+              incomingBookingSetup.lastGroupSession ??
+              currentState.bookingSetup.lastGroupSession ??
+              null,
+          },
+          liveSignalPreferences: {
+            ...defaultLiveSignalPreferences,
+            ...currentState.liveSignalPreferences,
+            ...incomingSignalPreferences,
+          },
+          activeSignal: incomingSignal
+            ? {
+                ...incomingSignal,
+                showLocation: incomingSignal.showLocation ?? false,
+                locationLabel: incomingSignal.locationLabel ?? null,
+              }
+            : null,
+          dateSpecificWindows: incoming.dateSpecificWindows ?? currentState.dateSpecificWindows,
+        } as AppState;
+      },
       partialize: (state) => ({
         token: state.token,
         user: state.user,

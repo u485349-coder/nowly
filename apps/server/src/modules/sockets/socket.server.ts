@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 import { prisma } from "../../db/prisma.js";
 import { verifyAccessToken } from "../../lib/jwt.js";
 import { logger } from "../../lib/logger.js";
+import { postGroupSchedulingMessage } from "../availability/group-scheduling.service.js";
 import { sendPushToUser } from "../notifications/push.service.js";
 
 type ThreadMessagePayload = {
@@ -40,6 +41,23 @@ type PollPayload = {
   threadId: string;
   question: string;
   options: string[];
+};
+
+type SchedulingJoinPayload = {
+  shareCode: string;
+};
+
+type SchedulingMessagePayload = {
+  shareCode: string;
+  text: string;
+};
+
+let realtimeServer: Server | null = null;
+
+const getSchedulingRoom = (shareCode: string) => `schedule:${shareCode}`;
+
+export const broadcastSchedulingSessionUpdate = (shareCode: string, session: unknown) => {
+  realtimeServer?.to(getSchedulingRoom(shareCode)).emit("schedule:update", session);
 };
 
 const getParticipantIds = async (hangoutId: string) => {
@@ -90,6 +108,7 @@ export const createSocketServer = (server: HttpServer) => {
       origin: "*"
     }
   });
+  realtimeServer = io;
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token as string | undefined;
@@ -128,6 +147,29 @@ export const createSocketServer = (server: HttpServer) => {
       }
 
       socket.join(chatId);
+    });
+
+    socket.on("schedule:join", async ({ shareCode }: SchedulingJoinPayload) => {
+      const session = await prisma.schedulingSession.findUnique({
+        where: { shareCode },
+        select: { id: true },
+      });
+
+      if (!session) {
+        return;
+      }
+
+      socket.join(getSchedulingRoom(shareCode));
+    });
+
+    socket.on("schedule:message", async (payload: SchedulingMessagePayload) => {
+      const message = await postGroupSchedulingMessage(
+        payload.shareCode,
+        socket.data.userId,
+        payload.text,
+      );
+
+      io.to(getSchedulingRoom(payload.shareCode)).emit("schedule:message", message);
     });
 
     socket.on("thread:message", async (payload: ThreadMessagePayload) => {

@@ -5,6 +5,13 @@ import {
   Prisma,
   User,
 } from "@prisma/client";
+import {
+  crowdModesAreCompatible,
+  parseSignalLabelMetadata,
+  signalSupportsInPerson,
+  signalSupportsOnline,
+  type SignalCrowdMode,
+} from "@nowly/shared";
 import { prisma } from "../../db/prisma.js";
 import { distanceInKm } from "../../utils/geo.js";
 import {
@@ -110,6 +117,40 @@ const computeIdentityScore = (left: SignalWithUser, right: SignalWithUser) => {
   return score / factors;
 };
 
+const resolveCrowdMode = (
+  left: SignalCrowdMode,
+  right: SignalCrowdMode,
+): SignalCrowdMode => {
+  if (left === right) {
+    return left;
+  }
+
+  if (left === "EITHER") {
+    return right;
+  }
+
+  if (right === "EITHER") {
+    return left;
+  }
+
+  return "EITHER";
+};
+
+const resolveOnlineVenue = (leftVenue?: string | null, rightVenue?: string | null) => {
+  const normalizedLeft = leftVenue?.trim() || null;
+  const normalizedRight = rightVenue?.trim() || null;
+
+  if (
+    normalizedLeft &&
+    normalizedRight &&
+    normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+  ) {
+    return normalizedLeft;
+  }
+
+  return normalizedLeft || normalizedRight || null;
+};
+
 const computeScore = (
   left: SignalWithUser,
   right: SignalWithUser,
@@ -127,18 +168,41 @@ const computeScore = (
     return null;
   }
 
+  const leftMetadata = parseSignalLabelMetadata(left.label);
+  const rightMetadata = parseSignalLabelMetadata(right.label);
+
+  if (!crowdModesAreCompatible(leftMetadata.crowdMode, rightMetadata.crowdMode)) {
+    return null;
+  }
+
   const distanceKm = distanceInKm(
     { lat: left.user.lat, lng: left.user.lng },
     { lat: right.user.lat, lng: right.user.lng },
   );
+  const maxDistanceKm = Math.max(left.radiusKm, right.radiusKm) + 3;
+  const inPersonPossible =
+    signalSupportsInPerson(leftMetadata.meetMode) &&
+    signalSupportsInPerson(rightMetadata.meetMode);
+  const onlinePossible =
+    signalSupportsOnline(leftMetadata.meetMode) &&
+    signalSupportsOnline(rightMetadata.meetMode);
+  const withinDistance = distanceKm === null || distanceKm <= maxDistanceKm;
+  const meetingStyle =
+    inPersonPossible && withinDistance
+      ? "IN_PERSON"
+      : onlinePossible
+        ? "ONLINE"
+        : null;
 
-  if (distanceKm !== null && distanceKm > Math.max(left.radiusKm, right.radiusKm) + 3) {
+  if (!meetingStyle) {
     return null;
   }
 
   const timeOverlapWeight = Math.min(overlapMinutes / 180, 1);
   const distanceWeight =
-    distanceKm === null
+    meetingStyle === "ONLINE"
+      ? 1
+      : distanceKm === null
       ? 0.7
       : Math.max(0, 1 - distanceKm / Math.max(left.radiusKm, right.radiusKm, 1));
   const responsivenessWeight =
@@ -147,7 +211,12 @@ const computeScore = (
     discordBonusByPresence[right.user.discordPresence ?? DiscordPresence.UNKNOWN] *
     0.05;
   const identityScore = computeIdentityScore(left, right);
-  const localDensityBonus = localDensityLabel ? 0.04 : 0;
+  const localDensityBonus = meetingStyle === "IN_PERSON" && localDensityLabel ? 0.04 : 0;
+  const onlineVenue = meetingStyle === "ONLINE"
+    ? resolveOnlineVenue(leftMetadata.onlineVenue, rightMetadata.onlineVenue)
+    : null;
+  const onlineVenueBonus = meetingStyle === "ONLINE" && onlineVenue ? 0.04 : 0.01;
+  const crowdMode = resolveCrowdMode(leftMetadata.crowdMode, rightMetadata.crowdMode);
 
   const score =
     timeOverlapWeight * 0.33 +
@@ -156,12 +225,19 @@ const computeScore = (
     relationshipScore * 0.16 +
     identityScore * 0.12 +
     discordPresenceWeight +
-    localDensityBonus;
+    localDensityBonus +
+    onlineVenueBonus;
 
   return {
     score: Number(score.toFixed(3)),
     overlapMinutes,
-    distanceKm: distanceKm ? Number(distanceKm.toFixed(1)) : null,
+    distanceKm:
+      meetingStyle === "ONLINE" || distanceKm === null
+        ? null
+        : Number(distanceKm.toFixed(1)),
+    meetingStyle,
+    crowdMode,
+    onlineVenue,
     sharedVibe:
       left.vibe && right.vibe && left.vibe === right.vibe ? left.vibe : null,
     sharedIntent:
@@ -194,10 +270,26 @@ const buildOverlapNotification = (
   const area = signal.user.communityTag ?? signal.user.city ?? "near you";
 
   if (rankedMatches.length >= 3) {
+    if (top.meetingStyle === "ONLINE") {
+      return {
+        title: "Your crew is live online",
+        body: `${rankedMatches.length} friends look open${top.onlineVenue ? ` on ${top.onlineVenue}` : " online"} right now.`,
+        dedupeKey: `overlap:crew-online:${signal.userId}:${rankedMatches.length}`,
+      };
+    }
+
     return {
       title: "Your crew is active right now",
       body: `${rankedMatches.length} friends look open around ${area}. Best hangout window is happening now.`,
       dedupeKey: `overlap:crew:${signal.userId}:${rankedMatches.length}`,
+    };
+  }
+
+  if (top.meetingStyle === "ONLINE") {
+    return {
+      title: top.onlineVenue ? `${top.onlineVenue} hang looks easy` : "An online hang looks easy",
+      body: `${top.friendSignal.user.name ?? "A friend"} looks open${top.onlineVenue ? ` on ${top.onlineVenue}` : " online"} and usually ${top.insight.reliabilityLabel}.`,
+      dedupeKey: `overlap:online:${[signal.userId, top.friendSignal.userId].sort().join(":")}:${top.onlineVenue ?? "generic"}`,
     };
   }
 
@@ -296,9 +388,12 @@ export const runMatchingCycle = async () => {
           reason: {
             overlapMinutes: ranked.overlapMinutes,
             travelMinutes:
-              ranked.distanceKm === null
+              ranked.meetingStyle === "ONLINE" || ranked.distanceKm === null
                 ? null
                 : Math.round((ranked.distanceKm / 25) * 60),
+            meetingStyle: ranked.meetingStyle,
+            crowdMode: ranked.crowdMode,
+            onlineVenue: ranked.onlineVenue,
             sharedVibe: ranked.sharedVibe,
             sharedIntent: ranked.sharedIntent,
             discordBonus: ranked.discordBonus,
@@ -320,9 +415,12 @@ export const runMatchingCycle = async () => {
           reason: {
             overlapMinutes: ranked.overlapMinutes,
             travelMinutes:
-              ranked.distanceKm === null
+              ranked.meetingStyle === "ONLINE" || ranked.distanceKm === null
                 ? null
                 : Math.round((ranked.distanceKm / 25) * 60),
+            meetingStyle: ranked.meetingStyle,
+            crowdMode: ranked.crowdMode,
+            onlineVenue: ranked.onlineVenue,
             sharedVibe: ranked.sharedVibe,
             sharedIntent: ranked.sharedIntent,
             discordBonus: ranked.discordBonus,
