@@ -28,7 +28,7 @@ type Stage = "phone" | "otp" | "profile";
 
 const HOME_ROUTE = "/home";
 const QR_GRID_SIZE = 23;
-const DESKTOP_AUTH_CARD_WIDTH = 560;
+const DESKTOP_AUTH_LAYOUT_MAX_WIDTH = 960;
 const DESKTOP_PROFILE_WIDTH = 820;
 
 const qrCells = Array.from({ length: QR_GRID_SIZE * QR_GRID_SIZE }, (_, index) => {
@@ -111,6 +111,7 @@ export default function OnboardingScreen() {
     [stage],
   );
   const isDesktopWeb = Platform.OS === "web" && width >= 1180;
+  const desktopAuthLayoutWidth = Math.min(width - 96, DESKTOP_AUTH_LAYOUT_MAX_WIDTH);
 
   useEffect(() => {
     if (!token || !referralToken) {
@@ -665,7 +666,7 @@ export default function OnboardingScreen() {
               <View
                 style={{
                   width: "100%",
-                  maxWidth: stage === "profile" ? DESKTOP_PROFILE_WIDTH : DESKTOP_AUTH_CARD_WIDTH,
+                  maxWidth: stage === "profile" ? DESKTOP_PROFILE_WIDTH : desktopAuthLayoutWidth,
                   alignSelf: "center",
                   paddingBottom: 18,
                 }}
@@ -679,31 +680,64 @@ export default function OnboardingScreen() {
                   {renderInvitePeople()}
                 </>
               ) : (
-                <View className="gap-5">
-                  <View style={{ width: "100%", maxWidth: DESKTOP_AUTH_CARD_WIDTH, alignSelf: "center" }}>
-                    <GlassCard className="p-8">
-                      <View className="gap-5">
-                        <View className="flex-row gap-2">
-                          {[1, 2, 3].map((step) => (
-                            <View
-                              key={step}
-                              className={`h-1.5 flex-1 rounded-full ${
-                                step <= stageIndex ? "bg-aqua" : "bg-white/12"
-                              }`}
-                            />
-                          ))}
+                <View style={{ width: "100%", maxWidth: desktopAuthLayoutWidth, alignSelf: "center" }}>
+                  <GlassCard className="self-center overflow-hidden border-white/7 bg-[#1A1F2B]/88 p-0">
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        minHeight: 520,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flex: 1,
+                          flexDirection: "row",
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: "52%",
+                            paddingHorizontal: 32,
+                            paddingVertical: 34,
+                            justifyContent: "center",
+                          }}
+                        >
+                          <View className="gap-5">
+                            <View className="flex-row gap-2">
+                              {[1, 2, 3].map((step) => (
+                                <View
+                                  key={step}
+                                  className={`h-1.5 flex-1 rounded-full ${
+                                    step <= stageIndex ? "bg-aqua" : "bg-white/12"
+                                  }`}
+                                />
+                              ))}
+                            </View>
+
+                            {stage === "phone" ? renderPhoneStage() : renderOtpStage()}
+                          </View>
                         </View>
 
-                        {stage === "phone" ? renderPhoneStage() : renderOtpStage()}
-                      </View>
-                    </GlassCard>
-                  </View>
+                        <View
+                          style={{
+                            width: 1,
+                            backgroundColor: "rgba(255,255,255,0.06)",
+                          }}
+                        />
 
-                  <View style={{ width: "100%", maxWidth: DESKTOP_AUTH_CARD_WIDTH, alignSelf: "center" }}>
-                    <GlassCard className="p-6">
-                      {renderDesktopAside()}
-                    </GlassCard>
-                  </View>
+                        <View
+                          style={{
+                            flex: 1,
+                            paddingHorizontal: 26,
+                            paddingVertical: 28,
+                            justifyContent: "center",
+                          }}
+                        >
+                          {renderDesktopAside()}
+                        </View>
+                      </View>
+                    </View>
+                  </GlassCard>
                 </View>
               )}
             </>
