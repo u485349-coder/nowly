@@ -556,16 +556,31 @@ export const api = {
       );
     }
 
-    const response = await request<{ data: Parameters<typeof normalizeDirectChat>[0] }>(
-      "/chats/direct",
-      {
-        method: "POST",
-        token,
-        body: JSON.stringify({ userId }),
-      },
-    );
+    try {
+      const response = await request<{ data: Parameters<typeof normalizeDirectChat>[0] }>(
+        "/chats/direct",
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ userId }),
+        },
+      );
 
-    return normalizeDirectChat(response.data);
+      return normalizeDirectChat(response.data);
+    } catch (error) {
+      const existingChats = await this.fetchDirectChats(token);
+      const existingOneOnOne = existingChats.find(
+        (chat) =>
+          !chat.isGroup &&
+          chat.participants.some((participant) => participant.id === userId),
+      );
+
+      if (existingOneOnOne) {
+        return existingOneOnOne;
+      }
+
+      throw error;
+    }
   },
 
   async createGroupChat(

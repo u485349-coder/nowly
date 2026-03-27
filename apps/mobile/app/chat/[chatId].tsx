@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -163,7 +164,9 @@ const HeaderAvatarStack = ({ participants }: { participants: DirectChat["partici
 };
 
 export default function DirectChatScreen() {
-  const { chatId } = useLocalSearchParams<{ chatId: string }>();
+  const params = useLocalSearchParams<{ chatId?: string | string[] }>();
+  const rawChatId = params.chatId;
+  const chatId = Array.isArray(rawChatId) ? rawChatId[0] : rawChatId ?? "";
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const directChats = useAppStore((state) => state.directChats);
@@ -212,22 +215,26 @@ export default function DirectChatScreen() {
     let active = true;
 
     if (!useAppStore.getState().directChats.some((item) => item.id === chatId)) {
-      api.fetchDirectChat(token, chatId).then((nextChat) => {
+      api.fetchDirectChat(token, chatId)
+        .then((nextChat) => {
+          if (!active) {
+            return;
+          }
+
+          upsertDirectChat(nextChat);
+        })
+        .catch(() => undefined);
+    }
+
+    api.fetchDirectMessages(token, chatId)
+      .then((messages) => {
         if (!active) {
           return;
         }
 
-        upsertDirectChat(nextChat);
-      });
-    }
-
-    api.fetchDirectMessages(token, chatId).then((messages) => {
-      if (!active) {
-        return;
-      }
-
-      setDirectMessages(chatId, messages);
-    });
+        setDirectMessages(chatId, messages);
+      })
+      .catch(() => undefined);
 
     return () => {
       active = false;
@@ -283,29 +290,36 @@ export default function DirectChatScreen() {
   const handleSend = async (presetText?: string) => {
     const nextText = (presetText ?? text).trim();
 
-    if (!nextText || !user) {
+    if (!chatId || !nextText || !user) {
       return;
     }
 
-    const socket = getSocket(token);
+    try {
+      const socket = getSocket(token);
 
-    if (socket) {
-      socket.emit("chat:message", { chatId, text: nextText });
-    } else {
-      const message = await api.sendDirectMessage(token, chatId, nextText);
-      appendDirectMessage(chatId, message);
+      if (socket) {
+        socket.emit("chat:message", { chatId, text: nextText });
+      } else {
+        const message = await api.sendDirectMessage(token, chatId, nextText);
+        appendDirectMessage(chatId, message);
+      }
+
+      if (chat) {
+        upsertDirectChat({
+          ...chat,
+          lastMessageAt: new Date().toISOString(),
+          lastMessageText: nextText,
+        });
+      }
+
+      void track(token, "message_sent", { threadKind: "direct", chatId });
+      setText("");
+    } catch (error) {
+      Alert.alert(
+        "Message failed",
+        error instanceof Error ? error.message : "Could not send right now.",
+      );
     }
-
-    if (chat) {
-      upsertDirectChat({
-        ...chat,
-        lastMessageAt: new Date().toISOString(),
-        lastMessageText: nextText,
-      });
-    }
-
-    void track(token, "message_sent", { threadKind: "direct", chatId });
-    setText("");
   };
 
   const openCrewSurface = () => {
@@ -313,6 +327,17 @@ export default function DirectChatScreen() {
   };
 
   const contentWidth = layout.isDesktop ? Math.min(layout.shellWidth, 720) : layout.shellWidth;
+
+  if (!chatId) {
+    return (
+      <GradientMesh>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Chat not found</Text>
+          <Text style={styles.emptyCopy}>That private thread link is missing a chat id.</Text>
+        </View>
+      </GradientMesh>
+    );
+  }
 
   if (!chat) {
     return (

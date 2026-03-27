@@ -1,5 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
@@ -13,14 +13,12 @@ import { useAppStore } from "../../store/useAppStore";
 import { AppFriend, DirectChat } from "../../types";
 
 const Avatar = ({ name, photoUrl }: { name: string; photoUrl?: string | null }) => (
-  <View className="h-14 w-14 overflow-hidden rounded-full border border-white/12 bg-white/8">
+  <View style={styles.avatarShell}>
     {photoUrl ? (
-      <Image source={{ uri: photoUrl }} className="h-full w-full" resizeMode="cover" />
+      <Image source={{ uri: photoUrl }} style={styles.avatarImage} resizeMode="cover" />
     ) : (
-      <View className="h-full w-full items-center justify-center">
-        <Text className="font-display text-xl text-white/70">
-          {(name[0] ?? "N").toUpperCase()}
-        </Text>
+      <View style={styles.avatarFallback}>
+        <Text style={styles.avatarInitial}>{(name[0] ?? "N").toUpperCase()}</Text>
       </View>
     )}
   </View>
@@ -170,12 +168,20 @@ export default function FriendsScreen() {
   };
 
   const handleOpenChat = async (friendId: string) => {
-    const chat = await api.openDirectChat(token, friendId);
-    upsertDirectChat(chat);
-    router.push({
-      pathname: "/chat/[chatId]",
-      params: { chatId: chat.id },
-    });
+    try {
+      const chat = await api.openDirectChat(token, friendId);
+      upsertDirectChat(chat);
+      router.push({
+        pathname: "/chat/[chatId]",
+        params: { chatId: chat.id },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't open that private thread right now.";
+      Alert.alert("Private DM failed", message);
+    }
   };
 
   const handleOpenGroupBuilder = () => {
@@ -401,8 +407,14 @@ export default function FriendsScreen() {
                       webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
                     ]}
                   >
-                    <Text style={styles.rowName}>{chatDisplayName(chat)}</Text>
-                    <Text style={styles.rowInsight}>{chatSubline(chat)}</Text>
+                    <Avatar
+                      name={chat.participants[0]?.name ?? chatDisplayName(chat)}
+                      photoUrl={chat.participants[0]?.photoUrl ?? null}
+                    />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.rowName}>{chatDisplayName(chat)}</Text>
+                      <Text style={styles.rowInsight}>{chatSubline(chat)}</Text>
+                    </View>
                   </Pressable>
                 ))
               ) : (
@@ -445,12 +457,38 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
+  avatarShell: {
+    width: 56,
+    height: 56,
+    overflow: "hidden",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarFallback: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    color: "rgba(247,251,255,0.7)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 20,
+  },
   chatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     borderRadius: 24,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 18,
     paddingVertical: 16,
-    gap: 4,
   },
   clusterAvatarWrap: {
     position: "absolute",
