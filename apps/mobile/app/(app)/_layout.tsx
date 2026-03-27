@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { Tabs, usePathname } from "expo-router";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { FloatingNavBar } from "../../components/navigation/FloatingNavBar";
 import { nowlyColors } from "../../constants/theme";
@@ -16,6 +16,7 @@ const tabIcons: Record<"home" | "friends" | "profile", IconName> = {
 
 export default function AppLayout() {
   const pathname = usePathname();
+  const router = useRouter();
   const crewUnreadCount = useAppStore((state) => state.crewUnreadCount);
   const consumeCrewUnread = useAppStore((state) => state.consumeCrewUnread);
 
@@ -45,6 +46,11 @@ export default function AppLayout() {
           fabAccentColor={nowlyColors.violet}
           fabIcon="lightning-bolt"
           icons={tabIcons}
+          onFabPress={() => {
+            if (!pathname.startsWith("/now-mode")) {
+              router.push("/now-mode");
+            }
+          }}
         />
       )}
     >

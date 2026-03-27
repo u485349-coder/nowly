@@ -28,6 +28,7 @@ type FloatingNavBarProps = BottomTabBarProps & {
   fabIcon?: IconName;
   icons: Record<string, IconName>;
   badges?: Partial<Record<string, number>>;
+  onFabPress?: () => void;
 };
 
 const FloatingTabItem = memo(
@@ -125,6 +126,7 @@ const FloatingNavBarComponent = ({
   badges = {},
   icons,
   navigation,
+  onFabPress,
   state,
 }: FloatingNavBarProps) => {
   const { width } = useWindowDimensions();
@@ -252,7 +254,10 @@ const FloatingNavBarComponent = ({
         accentColor={fabAccentColor}
         bottom={toggleBottom}
         icon={fabIcon}
-        onPress={() => setOpen((current) => !current)}
+        onPress={() => {
+          setOpen(false);
+          onFabPress?.();
+        }}
         open={open}
         progress={menuProgress}
       />

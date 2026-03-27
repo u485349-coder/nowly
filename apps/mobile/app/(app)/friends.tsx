@@ -61,6 +61,7 @@ export default function FriendsScreen() {
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const layout = useResponsiveLayout();
   const inboxRefreshingRef = useRef(false);
+  const openChatPromisesRef = useRef<Record<string, Promise<DirectChat>>>({});
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
@@ -215,14 +216,37 @@ export default function FriendsScreen() {
   };
 
   const handleOpenChat = async (friendId: string) => {
+    const existingDirectChat = directChats.find(
+      (chat) =>
+        !chat.isGroup &&
+        chat.participants.some((participant) => participant.id === friendId),
+    );
+
+    if (existingDirectChat) {
+      router.push({
+        pathname: "/chat/[chatId]",
+        params: { chatId: existingDirectChat.id },
+      });
+      return;
+    }
+
+    const inFlight = openChatPromisesRef.current[friendId];
+    if (inFlight) {
+      return;
+    }
+
     try {
-      const chat = await api.openDirectChat(token, friendId);
+      const pendingChat = api.openDirectChat(token, friendId);
+      openChatPromisesRef.current[friendId] = pendingChat;
+      const chat = await pendingChat;
+      delete openChatPromisesRef.current[friendId];
       upsertDirectChat(chat);
       router.push({
         pathname: "/chat/[chatId]",
         params: { chatId: chat.id },
       });
     } catch (error) {
+      delete openChatPromisesRef.current[friendId];
       const message =
         error instanceof Error && error.message
           ? error.message
@@ -416,7 +440,7 @@ export default function FriendsScreen() {
                           webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
                         ]}
                       >
-                        <MaterialCommunityIcons name="chat-processing-outline" size={20} color="#F8FAFC" />
+                        <MaterialCommunityIcons name="message-text-outline" size={20} color="#F8FAFC" />
                       </Pressable>
                       <Pressable
                         accessibilityLabel={`Share quick invite link with ${friend.name}`}
