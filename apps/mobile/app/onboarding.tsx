@@ -28,7 +28,8 @@ type Stage = "phone" | "otp" | "profile";
 
 const HOME_ROUTE = "/home";
 const QR_GRID_SIZE = 23;
-const DESKTOP_CARD_WIDTH = 820;
+const DESKTOP_AUTH_CARD_WIDTH = 560;
+const DESKTOP_PROFILE_WIDTH = 820;
 
 const qrCells = Array.from({ length: QR_GRID_SIZE * QR_GRID_SIZE }, (_, index) => {
   const x = index % QR_GRID_SIZE;
@@ -109,7 +110,7 @@ export default function OnboardingScreen() {
       })[stage],
     [stage],
   );
-  const isDesktopWeb = Platform.OS === "web" && width >= 1080;
+  const isDesktopWeb = Platform.OS === "web" && width >= 1180;
 
   useEffect(() => {
     if (!token || !referralToken) {
@@ -577,44 +578,46 @@ export default function OnboardingScreen() {
   );
 
   const renderDesktopAside = () => (
-    <View className="flex-1 items-center justify-center gap-6 px-8 py-10">
-      <View className="rounded-[26px] border border-white/8 bg-white/[0.035] p-3">
-        <View className="h-44 w-44 overflow-hidden rounded-[18px] bg-cloud p-3">
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              width: "100%",
-              height: "100%",
-            }}
-          >
-            {qrCells.map((filled, index) => (
-              <View
-                key={index}
-                style={{
-                  width: `${100 / QR_GRID_SIZE}%`,
-                  height: `${100 / QR_GRID_SIZE}%`,
-                  backgroundColor: filled ? "#060B16" : "transparent",
-                }}
-              />
-            ))}
-          </View>
-          <View className="absolute inset-0 items-center justify-center">
-            <View className="rounded-full border border-[#060B16]/10 bg-cloud p-2">
-              <NowlyMark variant="icon" size={34} />
+    <View className="gap-5">
+      <View className="items-center gap-4">
+        <View className="rounded-[26px] border border-white/8 bg-white/[0.035] p-3">
+          <View className="h-44 w-44 overflow-hidden rounded-[18px] bg-cloud p-3">
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              {qrCells.map((filled, index) => (
+                <View
+                  key={index}
+                  style={{
+                    width: `${100 / QR_GRID_SIZE}%`,
+                    height: `${100 / QR_GRID_SIZE}%`,
+                    backgroundColor: filled ? "#060B16" : "transparent",
+                  }}
+                />
+              ))}
+            </View>
+            <View className="absolute inset-0 items-center justify-center">
+              <View className="rounded-full border border-[#060B16]/10 bg-cloud p-2">
+                <NowlyMark variant="icon" size={34} />
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      <View className="items-center gap-2">
-        <Text className="text-center font-display text-[30px] leading-[34px] text-cloud">
-          Keep Nowly in your pocket
-        </Text>
-        <Text className="max-w-[250px] text-center font-body text-sm leading-6 text-white/68">
-          Sign in with your phone here, then pick back up instantly on mobile when the moment goes
-          live.
-        </Text>
+        <View className="items-center gap-2">
+          <Text className="text-center font-display text-[28px] leading-[32px] text-cloud">
+            Keep Nowly in your pocket
+          </Text>
+          <Text className="max-w-[320px] text-center font-body text-sm leading-6 text-white/68">
+            Sign in with your phone here, then pick back up instantly on mobile when the moment goes
+            live.
+          </Text>
+        </View>
       </View>
 
       <View className="w-full gap-3">
@@ -662,38 +665,23 @@ export default function OnboardingScreen() {
               <View
                 style={{
                   width: "100%",
-                  maxWidth: DESKTOP_CARD_WIDTH,
+                  maxWidth: stage === "profile" ? DESKTOP_PROFILE_WIDTH : DESKTOP_AUTH_CARD_WIDTH,
                   alignSelf: "center",
                   paddingBottom: 18,
                 }}
               >
-                <NowlyMark variant="lockup" size={54} />
+                <NowlyMark variant="lockup" size={60} />
               </View>
 
               {stage === "profile" ? (
                 <>
-                  <GlassCard className="p-6" >
-                    {renderProfileStage()}
-                  </GlassCard>
+                  <GlassCard className="p-6">{renderProfileStage()}</GlassCard>
                   {renderInvitePeople()}
                 </>
               ) : (
-                <GlassCard className="self-center overflow-hidden border-white/7 bg-[#1A1F2B]/88 p-0">
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      width: DESKTOP_CARD_WIDTH,
-                      minHeight: 468,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: "54%",
-                        paddingHorizontal: 32,
-                        paddingVertical: 34,
-                        justifyContent: "center",
-                      }}
-                    >
+                <View className="gap-5">
+                  <View style={{ width: "100%", maxWidth: DESKTOP_AUTH_CARD_WIDTH, alignSelf: "center" }}>
+                    <GlassCard className="p-8">
                       <View className="gap-5">
                         <View className="flex-row gap-2">
                           {[1, 2, 3].map((step) => (
@@ -708,19 +696,15 @@ export default function OnboardingScreen() {
 
                         {stage === "phone" ? renderPhoneStage() : renderOtpStage()}
                       </View>
-                    </View>
-
-                    <View
-                      style={{
-                        width: "46%",
-                        borderLeftWidth: 1,
-                        borderLeftColor: "rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {renderDesktopAside()}
-                    </View>
+                    </GlassCard>
                   </View>
-                </GlassCard>
+
+                  <View style={{ width: "100%", maxWidth: DESKTOP_AUTH_CARD_WIDTH, alignSelf: "center" }}>
+                    <GlassCard className="p-6">
+                      {renderDesktopAside()}
+                    </GlassCard>
+                  </View>
+                </View>
               )}
             </>
           ) : (
