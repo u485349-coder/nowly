@@ -4,7 +4,6 @@ import {
   Image,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -25,7 +24,6 @@ import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
 import { parseTimeInput } from "../../lib/recurring-availability";
-import { createSmartOpenUrl } from "../../lib/smart-links";
 import { useAppStore } from "../../store/useAppStore";
 import type { DateSpecificAvailabilityWindow } from "../../types";
 import { GroupSchedulingSurface } from "./GroupSchedulingSurface";
@@ -303,10 +301,28 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
   const currentMonthIndex = monthGroups.findIndex((group) => group.key === selectedMonthKey);
   const selectedDay = dayGroups.find((group) => group.key === selectedDayKey) ?? visibleDays[0] ?? null;
   const selectedDaySlots = selectedDay?.slots ?? [];
+  const selectedDayLabel = selectedDay
+    ? selectedDay.date.toLocaleDateString([], { weekday: "short" })
+    : null;
+  const selectedDayTimeRange = useMemo(() => {
+    if (!selectedDaySlots.length) {
+      return null;
+    }
+
+    const ordered = [...selectedDaySlots].sort(
+      (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+    );
+    const first = ordered[0];
+    const last = ordered[ordered.length - 1];
+
+    return `${formatTimeLabel(first.startsAt)} - ${formatTimeLabel(last.endsAt)}`;
+  }, [selectedDaySlots]);
   const selectedSlots = selectedSlotIds
     .map((id) => allSlots.find((slot) => slot.id === id) ?? null)
     .filter(Boolean) as MobileBookableSlot[];
   const highlightSlot = allSlots[0] ?? null;
+  const oneOnOneLocked =
+    bookingProfile?.type === "ONE_ON_ONE" ? bookingProfile.oneOnOneLocked : false;
   const emptyState = !loading && !errorMessage && !allSlots.length;
   const timezoneLabel = useMemo(buildTimezoneLabel, []);
   const displayFormat = isPreview ? bookingSetup.format : sharedFormat ?? bookingSetup.format;
@@ -391,26 +407,6 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
     );
   };
 
-  const handleShareTimes = async () => {
-    if (!inviteCode) {
-      return;
-    }
-
-    const link = createSmartOpenUrl(`/booking/${inviteCode}`);
-    const text = !selectedSlots.length
-      ? "A few easy Nowly times are open."
-      : selectedSlots.length === 1
-        ? `A good time to catch: ${formatSelectionSummary(selectedSlots[0])}.`
-        : `A couple of easy options: ${selectedSlots
-            .slice(0, 3)
-            .map((slot) => formatSelectionSummary(slot))
-            .join(", ")}.`;
-
-    await Share.share({
-      message: `${text} Pick what works best here: ${link}`,
-    });
-  };
-
   const handleBookSlot = async () => {
     if (!inviteCode || !selectedSlots[0]) {
       Alert.alert("Pick a time first", "Choose a time before locking it in.");
@@ -444,11 +440,6 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
 
   const toggleSlot = (slot: MobileBookableSlot) => {
     if (isPreview) {
-      setSelectedSlotIds((current) =>
-        current.includes(slot.id)
-          ? current.filter((item) => item !== slot.id)
-          : [...current, slot.id],
-      );
       return;
     }
 
@@ -504,17 +495,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                   </Text>
                 </View>
 
-                {isPreview ? (
-                  <Pressable onPress={() => void handleShareTimes()} style={styles.iconButton}>
-                    <MaterialCommunityIcons
-                      name="share-variant-outline"
-                      size={18}
-                      color="rgba(247,251,255,0.76)"
-                    />
-                  </Pressable>
-                ) : (
-                  <View style={styles.iconButton} />
-                )}
+                <View style={styles.iconButton} />
               </View>
 
               <View style={styles.heroShell}>
@@ -596,17 +577,29 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                 </View>
               ) : emptyState ? (
                 <View className="rounded-[24px] bg-white/5 p-4">
-                  <Text className="font-display text-xl text-cloud">Open a hang window</Text>
+                  <Text className="font-display text-xl text-cloud">
+                    {oneOnOneLocked ? "This 1:1 window was already claimed" : "Open a hang window"}
+                  </Text>
                   <Text className="mt-2 font-body text-sm leading-6 text-white/64">
-                    {isPreview
+                    {oneOnOneLocked
+                      ? "This link locks after one booking. Ask the host to share a new window."
+                      : isPreview
                       ? "Add weekly hours or date-based hours in Hang Rhythm so this page becomes bookable."
                       : "This booking link does not have any open hang windows right now."}
                   </Text>
                   <View className="mt-4">
                     <PillButton
-                      label={isPreview ? "Set your hang rhythm" : "Decline invite"}
+                      label={
+                        oneOnOneLocked
+                          ? "Back to home"
+                          : isPreview
+                            ? "Set your hang rhythm"
+                            : "Decline invite"
+                      }
                       onPress={() =>
-                        isPreview
+                        oneOnOneLocked
+                          ? router.replace((token ? "/home" : "/") as never)
+                          : isPreview
                           ? router.push("/availability-preferences")
                           : router.replace((token ? "/home" : "/") as never)
                       }
@@ -614,7 +607,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                   </View>
                 </View>
               ) : (
-                <View className="gap-4">
+                <View style={styles.previewCompositeCard}>
                   <View className="gap-1.5">
                     <Text className="font-display text-lg text-cloud">Choose a day</Text>
                     <Text className="font-body text-[13px] leading-5 text-white/58">
@@ -622,76 +615,84 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                     </Text>
                   </View>
 
-                  <View className="rounded-[28px] bg-white/4 p-[18px]">
-                    <View className="flex-row items-center justify-between">
-                      <Pressable
-                        onPress={() => {
-                          if (currentMonthIndex <= 0) return;
-                          const previousMonth = monthGroups[currentMonthIndex - 1];
-                          setSelectedMonthKey(previousMonth.key);
-                          setSelectedDayKey(dayGroups.find((group) => group.monthKey === previousMonth.key)?.key ?? null);
-                        }}
-                        style={styles.monthAction}
-                      >
-                        <MaterialCommunityIcons name="chevron-left" size={18} color="#E2E8F0" />
-                      </Pressable>
-                      <Text className="font-display text-[15px] text-white/88">
-                        {selectedMonthDate ? formatMonthLabel(selectedMonthDate) : "Choose a month"}
-                      </Text>
-                      <Pressable
-                        onPress={() => {
-                          if (currentMonthIndex < 0 || currentMonthIndex >= monthGroups.length - 1) return;
-                          const nextMonth = monthGroups[currentMonthIndex + 1];
-                          setSelectedMonthKey(nextMonth.key);
-                          setSelectedDayKey(dayGroups.find((group) => group.monthKey === nextMonth.key)?.key ?? null);
-                        }}
-                        style={styles.monthAction}
-                      >
-                        <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
-                      </Pressable>
-                    </View>
-
-                    <View className="mt-4 flex-row gap-2">
-                      {weekdayHeaders.map((label) => (
-                        <Text key={label} className="flex-1 text-center font-body text-[11px] text-white/42">
-                          {label}
-                        </Text>
-                      ))}
-                    </View>
-
-                    <View className="mt-3 flex-row flex-wrap gap-2">
-                      {calendarDays.map((cell) => {
-                        const active = cell.group?.key === selectedDayKey;
-                        const available = Boolean(cell.group);
-
-                        return (
-                          <Pressable
-                            key={cell.key}
-                            disabled={!available}
-                            onPress={() => cell.group && setSelectedDayKey(cell.group.key)}
-                            style={[
-                              styles.calendarCell,
-                              active ? styles.calendarCellActive : null,
-                              !available ? styles.calendarCellDisabled : null,
-                            ]}
-                          >
-                            {active ? (
-                              <LinearGradient
-                                colors={["rgba(247,251,255,0.98)", "rgba(231,217,255,0.94)", "rgba(196,181,253,0.9)"]}
-                                style={StyleSheet.absoluteFillObject}
-                              />
-                            ) : null}
-                            <Text style={[styles.calendarText, active ? styles.calendarTextActive : null]}>
-                              {cell.dayNumber ?? ""}
-                            </Text>
-                            {cell.group?.recommended ? (
-                              <View style={[styles.dot, active ? styles.dotActive : null]} />
-                            ) : null}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                  <View className="flex-row items-center justify-between">
+                    <Pressable
+                      onPress={() => {
+                        if (currentMonthIndex <= 0) return;
+                        const previousMonth = monthGroups[currentMonthIndex - 1];
+                        setSelectedMonthKey(previousMonth.key);
+                        setSelectedDayKey(dayGroups.find((group) => group.monthKey === previousMonth.key)?.key ?? null);
+                      }}
+                      style={styles.monthAction}
+                    >
+                      <MaterialCommunityIcons name="chevron-left" size={18} color="#E2E8F0" />
+                    </Pressable>
+                    <Text className="font-display text-[15px] text-white/88">
+                      {selectedMonthDate ? formatMonthLabel(selectedMonthDate) : "Choose a month"}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (currentMonthIndex < 0 || currentMonthIndex >= monthGroups.length - 1) return;
+                        const nextMonth = monthGroups[currentMonthIndex + 1];
+                        setSelectedMonthKey(nextMonth.key);
+                        setSelectedDayKey(dayGroups.find((group) => group.monthKey === nextMonth.key)?.key ?? null);
+                      }}
+                      style={styles.monthAction}
+                    >
+                      <MaterialCommunityIcons name="chevron-right" size={18} color="#E2E8F0" />
+                    </Pressable>
                   </View>
+
+                  <View className="flex-row gap-2">
+                    {weekdayHeaders.map((label) => (
+                      <Text key={label} className="flex-1 text-center font-body text-[11px] text-white/42">
+                        {label}
+                      </Text>
+                    ))}
+                  </View>
+
+                  <View className="flex-row flex-wrap gap-2">
+                    {calendarDays.map((cell) => {
+                      const active = cell.group?.key === selectedDayKey;
+                      const available = Boolean(cell.group);
+
+                      return (
+                        <Pressable
+                          key={cell.key}
+                          disabled={!available}
+                          onPress={() => cell.group && setSelectedDayKey(cell.group.key)}
+                          style={[
+                            styles.calendarCell,
+                            active ? styles.calendarCellActive : null,
+                            !available ? styles.calendarCellDisabled : null,
+                          ]}
+                        >
+                          {active ? (
+                            <LinearGradient
+                              colors={["rgba(247,251,255,0.98)", "rgba(231,217,255,0.94)", "rgba(196,181,253,0.9)"]}
+                              style={StyleSheet.absoluteFillObject}
+                            />
+                          ) : null}
+                          <Text style={[styles.calendarText, active ? styles.calendarTextActive : null]}>
+                            {cell.dayNumber ?? ""}
+                          </Text>
+                          {cell.group?.recommended ? (
+                            <View style={[styles.dot, active ? styles.dotActive : null]} />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {selectedDayLabel && selectedDayTimeRange ? (
+                    <View style={styles.previewSelectedRow}>
+                      <Text style={styles.previewSelectedDay}>{selectedDayLabel}</Text>
+                      <Text style={styles.previewSelectedTime}>{selectedDayTimeRange}</Text>
+                      <Text style={styles.previewSelectedHint}>
+                        Pick one or more times from the right panel.
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </View>
@@ -701,7 +702,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                 <View className="gap-1.5">
                   <Text className="font-display text-lg text-cloud">Times that could work</Text>
                   <Text className="font-body text-[13px] leading-5 text-white/58">
-                    {isPreview ? "Pick one or a couple to send out." : "Choose one or decline."}
+                    {isPreview ? "Preview only. Share your link to let someone else pick." : "Choose one or decline."}
                   </Text>
                 </View>
 
@@ -713,16 +714,18 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                 >
                   {selectedDaySlots.length ? (
                     selectedDaySlots.map((slot) => {
-                      const active = selectedSlotIds.includes(slot.id);
+                      const active = !isPreview && selectedSlotIds.includes(slot.id);
 
                       return (
                         <Pressable
                           key={slot.id}
+                          disabled={isPreview}
                           onPress={() => toggleSlot(slot)}
                           style={[
                             styles.timePill,
                             { width: timePillWidth },
                             active ? styles.timePillActive : styles.timePillIdle,
+                            isPreview ? styles.timePillPreview : null,
                           ]}
                         >
                           {active ? (
@@ -767,7 +770,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
           </View>
         </ScrollView>
 
-        {!loading && !errorMessage && !emptyState ? (
+        {!loading && !errorMessage && !emptyState && !isPreview ? (
           <View pointerEvents="box-none" style={[styles.footerDockWrap, { paddingHorizontal: layout.screenPadding }]}>
             <View style={{ width: layout.shellWidth, alignItems: layout.isDesktop ? "flex-end" : "center" }}>
               <LinearGradient
@@ -781,10 +784,6 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                   <Pressable
                     onPress={() => {
                       if (!selectedSlots.length || submitting || loading) return;
-                      if (isPreview) {
-                        void handleShareTimes();
-                        return;
-                      }
                       void handleBookSlot();
                     }}
                     disabled={!selectedSlots.length || submitting || loading}
@@ -803,9 +802,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                     </Text>
                   </Pressable>
                   <Text className="pt-[10px] text-center font-body text-xs text-white/50">
-                    {isPreview
-                      ? "They'll pick what works best."
-                      : "Low pressure either way. You can decline the proposal too."}
+                    Low pressure either way. You can decline the proposal too.
                   </Text>
                 </View>
               </LinearGradient>
@@ -918,6 +915,38 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 14 },
   },
+  previewCompositeCard: {
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 14,
+  },
+  previewSelectedDay: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  previewSelectedHint: {
+    color: "rgba(248,250,252,0.52)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  previewSelectedRow: {
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  previewSelectedTime: {
+    color: "rgba(248,250,252,0.9)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -989,6 +1018,9 @@ const styles = StyleSheet.create({
   timePillIdle: {
     backgroundColor: "rgba(255,255,255,0.05)",
     opacity: 0.92,
+  },
+  timePillPreview: {
+    opacity: 0.86,
   },
   timeText: {
     color: "rgba(247,251,255,0.88)",

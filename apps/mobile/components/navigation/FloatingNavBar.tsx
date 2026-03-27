@@ -27,6 +27,7 @@ type FloatingNavBarProps = BottomTabBarProps & {
   fabAccentColor?: string;
   fabIcon?: IconName;
   icons: Record<string, IconName>;
+  badges?: Partial<Record<string, number>>;
 };
 
 const FloatingTabItem = memo(
@@ -35,6 +36,7 @@ const FloatingTabItem = memo(
     focused,
     icon,
     label,
+    badgeCount,
     onLongPress,
     onPress,
   }: {
@@ -42,6 +44,7 @@ const FloatingTabItem = memo(
     focused: boolean;
     icon: IconName;
     label: string;
+    badgeCount?: number;
     onLongPress: () => void;
     onPress: () => void;
   }) => {
@@ -85,15 +88,22 @@ const FloatingTabItem = memo(
           isWeb ? webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.998 }) : null,
         ]}
       >
-        <AnimatedIcon
-          name={icon}
-          size={21}
-          style={[
-            styles.tabIcon,
-            focused ? styles.tabIconActive : styles.tabIconInactive,
-            iconMotionStyle,
-          ]}
-        />
+        <View style={styles.iconWrap}>
+          <AnimatedIcon
+            name={icon}
+            size={21}
+            style={[
+              styles.tabIcon,
+              focused ? styles.tabIconActive : styles.tabIconInactive,
+              iconMotionStyle,
+            ]}
+          />
+          {badgeCount && badgeCount > 0 ? (
+            <View style={styles.badgeDot}>
+              <Text style={styles.badgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
+            </View>
+          ) : null}
+        </View>
         <AnimatedText
           style={[
             styles.tabLabel,
@@ -112,6 +122,7 @@ const FloatingNavBarComponent = ({
   descriptors,
   fabAccentColor = nowlyColors.violet,
   fabIcon = "plus",
+  badges = {},
   icons,
   navigation,
   state,
@@ -208,6 +219,7 @@ const FloatingNavBarComponent = ({
         focused={focused}
         icon={icons[route.name] ?? "circle-outline"}
         label={label}
+        badgeCount={badges[route.name]}
         onLongPress={onLongPress}
         onPress={onPress}
       />
@@ -288,6 +300,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
     paddingVertical: 10,
+  },
+  iconWrap: {
+    position: "relative",
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeDot: {
+    position: "absolute",
+    top: -7,
+    right: -11,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(8,17,32,0.9)",
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 9,
+    lineHeight: 11,
+    includeFontPadding: false,
   },
   tabLabel: {
     fontFamily: "SpaceGrotesk_500Medium",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { GradientMesh } from "../../components/ui/GradientMesh";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { api } from "../../lib/api";
 import { pickAvatarImage } from "../../lib/avatar";
 import { notificationIntensityLabel } from "../../lib/labels";
@@ -192,7 +193,8 @@ export default function ProfileScreen() {
   const updateUser = useAppStore((state) => state.updateUser);
   const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const clearSession = useAppStore((state) => state.clearSession);
-  const { width } = useWindowDimensions();
+  const layout = useResponsiveLayout();
+  const shellWidth = Math.min(layout.shellWidth, layout.isDesktop ? 980 : layout.shellWidth);
   const currentIntensity = user?.notificationIntensity ?? "BALANCED";
   const [sliderWidth, setSliderWidth] = useState(0);
   const [previewIntensity, setPreviewIntensity] = useState<(typeof intensityOptions)[number] | null>(null);
@@ -201,7 +203,10 @@ export default function ProfileScreen() {
   const rippleOpacity = useSharedValue(0);
   const rippleScale = useSharedValue(0.82);
   const momentumScrollX = useSharedValue(0);
-  const momentumCardWidth = Math.min(Math.max(width - 92, 212), 246);
+  const momentumCardWidth = Math.min(
+    Math.max(shellWidth - 92, 216),
+    layout.isDesktop ? 282 : 246,
+  );
   const rhythmSubtitle = useMemo(
     () => rhythmSummaryLabel(recurringWindows, radar),
     [radar, recurringWindows],
@@ -412,7 +417,7 @@ export default function ProfileScreen() {
           recaps[0]?.title ??
           "Quick hangs keep your line warm and your social graph moving.",
         icon: "flash-triangle-outline",
-        colors: ["rgba(17,24,39,0.92)", "rgba(34,211,238,0.22)", "rgba(11,15,26,0.94)"],
+        colors: ["rgba(11,16,30,0.92)", "rgba(18,41,62,0.84)", "rgba(8,12,23,0.94)"],
         onPress: recaps[0] ? () => router.push(`/recap/${recaps[0].hangoutId}`) : undefined,
       },
       {
@@ -424,7 +429,7 @@ export default function ProfileScreen() {
           radar?.suggestionLine ??
           `${notificationIntensityLabel(currentIntensity)} energy keeps Nowly alive without getting loud.`,
         icon: "lightning-bolt-circle",
-        colors: ["rgba(14,23,46,0.94)", "rgba(96,165,250,0.18)", "rgba(8,12,24,0.94)"],
+        colors: ["rgba(10,15,28,0.92)", "rgba(21,44,69,0.84)", "rgba(7,11,22,0.94)"],
       },
       {
         key: "overlap",
@@ -436,7 +441,7 @@ export default function ProfileScreen() {
           radar?.rhythm.detail ??
           "Save a hang rhythm to sharpen the overlap forecast.",
         icon: "orbit-variant",
-        colors: ["rgba(13,18,34,0.92)", "rgba(125,211,252,0.16)", "rgba(8,10,22,0.94)"],
+        colors: ["rgba(9,14,26,0.92)", "rgba(18,39,58,0.84)", "rgba(7,11,22,0.94)"],
       },
     ],
     [currentIntensity, radar, recaps, scheduledOverlaps, user?.streakCount],
@@ -466,17 +471,22 @@ export default function ProfileScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 64,
+          alignItems: "center",
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.isDesktop ? 44 : 64,
           paddingBottom: 136,
-          gap: 28,
         }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ width: shellWidth, gap: 24 }}>
         <Animated.View entering={FadeInDown.delay(60).duration(420)}>
-          <View style={styles.heroShell}>
+          <LinearGradient
+            colors={["rgba(10,15,30,0.92)", "rgba(13,30,47,0.86)", "rgba(8,12,23,0.94)"]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroShell}
+          >
             <View style={styles.heroGlowLarge} pointerEvents="none" />
-            <View style={styles.heroGlowSmall} pointerEvents="none" />
 
             <Pressable onPress={() => void handleChangePhoto()} style={styles.avatarHalo}>
               <View style={styles.avatarWrap}>
@@ -520,7 +530,7 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            <View className="mt-4 flex-row justify-center gap-5">
+            <View style={styles.photoActionsRow}>
               <Pressable onPress={() => void handleChangePhoto()}>
                 <Text className="font-body text-sm text-cloud/84">Change photo</Text>
               </Pressable>
@@ -530,12 +540,12 @@ export default function ProfileScreen() {
                 </Pressable>
               ) : null}
             </View>
-          </View>
+          </LinearGradient>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(120).duration(420)}>
           <LinearGradient
-            colors={["rgba(11,17,30,0.92)", "rgba(18,48,72,0.78)", "rgba(8,12,24,0.92)"]}
+            colors={["rgba(10,14,28,0.92)", "rgba(14,30,50,0.86)", "rgba(8,12,24,0.94)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.energyShell}
@@ -626,7 +636,7 @@ export default function ProfileScreen() {
             showsHorizontalScrollIndicator={false}
             snapToInterval={momentumCardWidth + MOMENTUM_GAP}
             contentContainerStyle={{
-              paddingRight: 20,
+              paddingRight: 12,
             }}
           >
             <View className="flex-row gap-[14px]">
@@ -646,7 +656,7 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(240).duration(420)}>
           <Pressable onPress={() => router.push("/availability-preferences")}>
             <LinearGradient
-              colors={["rgba(10,14,28,0.9)", "rgba(14,35,58,0.82)", "rgba(8,12,24,0.94)"]}
+              colors={["rgba(10,14,28,0.92)", "rgba(13,29,46,0.86)", "rgba(8,12,24,0.94)"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.snapshotShell}
@@ -725,7 +735,7 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.logoutAction, pressed ? styles.logoutActionPressed : null]}
           >
             <LinearGradient
-              colors={["rgba(91,33,182,0.26)", "rgba(30,64,175,0.24)", "rgba(7,17,37,0.92)"]}
+              colors={["rgba(74,29,150,0.28)", "rgba(22,49,122,0.24)", "rgba(7,17,37,0.92)"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.logoutGradient}
@@ -743,6 +753,7 @@ export default function ProfileScreen() {
             </LinearGradient>
           </Pressable>
         </Animated.View>
+        </View>
       </ScrollView>
     </GradientMesh>
   );
@@ -750,88 +761,100 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   heroShell: {
+    overflow: "hidden",
+    borderRadius: 30,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 18,
+    shadowColor: "#020617",
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 7,
   },
   heroGlowLarge: {
     position: "absolute",
-    top: 10,
-    height: 220,
-    width: 220,
-    borderRadius: 220,
-    backgroundColor: "rgba(34,211,238,0.12)",
-  },
-  heroGlowSmall: {
-    position: "absolute",
-    top: 34,
-    right: 34,
-    height: 96,
-    width: 96,
-    borderRadius: 96,
-    backgroundColor: "rgba(96,165,250,0.12)",
+    top: -38,
+    right: -26,
+    height: 160,
+    width: 160,
+    borderRadius: 160,
+    backgroundColor: "rgba(34,211,238,0.08)",
   },
   avatarHalo: {
     position: "relative",
-    marginTop: 12,
+    marginTop: 4,
     shadowColor: "#67E8F9",
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
     shadowOffset: {
       width: 0,
-      height: 12,
+      height: 8,
     },
-    elevation: 10,
+    elevation: 6,
   },
   avatarWrap: {
-    height: 96,
-    width: 96,
+    height: 88,
+    width: 88,
     overflow: "hidden",
-    borderRadius: 48,
+    borderRadius: 44,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   avatarEditBadge: {
     position: "absolute",
-    right: -2,
-    bottom: 2,
-    height: 28,
-    width: 28,
+    right: -4,
+    bottom: 0,
+    height: 26,
+    width: 26,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 13,
     backgroundColor: "#BAE6FD",
+  },
+  photoActionsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 20,
   },
   identityChip: {
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   energyShell: {
     overflow: "hidden",
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 18,
     shadowColor: "#67E8F9",
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     shadowOffset: {
       width: 0,
-      height: 14,
+      height: 10,
     },
-    elevation: 8,
+    elevation: 6,
   },
   energyGlow: {
     position: "absolute",
-    top: -42,
-    right: -16,
-    height: 170,
-    width: 170,
-    borderRadius: 170,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    top: -32,
+    right: -24,
+    height: 138,
+    width: 138,
+    borderRadius: 138,
+    backgroundColor: "rgba(34,211,238,0.07)",
   },
   sliderShell: {
     position: "relative",
@@ -885,16 +908,18 @@ const styles = StyleSheet.create({
   momentumCard: {
     minHeight: 184,
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 18,
     paddingVertical: 18,
     shadowColor: "#020617",
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 8,
     },
-    elevation: 8,
+    elevation: 6,
   },
   momentumIconBubble: {
     height: 36,
@@ -907,26 +932,28 @@ const styles = StyleSheet.create({
   snapshotShell: {
     overflow: "hidden",
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 16,
     shadowColor: "#67E8F9",
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     shadowOffset: {
       width: 0,
-      height: 14,
+      height: 10,
     },
-    elevation: 8,
+    elevation: 6,
   },
   snapshotGlow: {
     position: "absolute",
-    left: -28,
-    bottom: -52,
-    height: 160,
-    width: 160,
-    borderRadius: 160,
-    backgroundColor: "rgba(34,211,238,0.14)",
+    left: -34,
+    bottom: -58,
+    height: 148,
+    width: 148,
+    borderRadius: 148,
+    backgroundColor: "rgba(34,211,238,0.1)",
   },
   snapshotArrow: {
     height: 34,

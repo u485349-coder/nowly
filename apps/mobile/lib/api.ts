@@ -871,6 +871,7 @@ export const api = {
           score: overlap.score,
         })),
         viewerHasRecurringSchedule: true,
+        oneOnOneLocked: false,
       } satisfies MobileBookingProfile;
     }
 

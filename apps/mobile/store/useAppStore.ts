@@ -102,6 +102,7 @@ type AppState = {
   introSeen: boolean;
   onboardingComplete: boolean;
   notificationsEnabled: boolean;
+  crewUnreadCount: number;
   activeSignal: MobileAvailabilitySignal | null;
   recurringWindows: MobileRecurringAvailabilityWindow[];
   dateSpecificWindows: DateSpecificAvailabilityWindow[];
@@ -119,6 +120,9 @@ type AppState = {
   finishOnboarding: (user: AppUser) => void;
   setIntroSeen: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  incrementCrewUnread: (count?: number) => void;
+  consumeCrewUnread: () => void;
+  setCrewUnreadCount: (count: number) => void;
   setBookingSetup: (payload: Partial<AppState["bookingSetup"]>) => void;
   setLiveSignalPreferences: (payload: Partial<AppState["liveSignalPreferences"]>) => void;
   setDashboard: (payload: {
@@ -172,6 +176,7 @@ export const useAppStore = create<AppState>()(
       introSeen: false,
       onboardingComplete: false,
       notificationsEnabled: true,
+      crewUnreadCount: 0,
       activeSignal: null,
       recurringWindows: [],
       dateSpecificWindows: [],
@@ -209,6 +214,18 @@ export const useAppStore = create<AppState>()(
       setNotificationsEnabled: (enabled) =>
         set(() => ({
           notificationsEnabled: enabled,
+        })),
+      incrementCrewUnread: (count = 1) =>
+        set((state) => ({
+          crewUnreadCount: Math.max(0, state.crewUnreadCount + Math.max(1, Math.floor(count))),
+        })),
+      consumeCrewUnread: () =>
+        set(() => ({
+          crewUnreadCount: 0,
+        })),
+      setCrewUnreadCount: (count) =>
+        set(() => ({
+          crewUnreadCount: Math.max(0, Math.floor(count)),
         })),
       setBookingSetup: (payload) =>
         set((state) => ({
@@ -439,6 +456,7 @@ export const useAppStore = create<AppState>()(
           scheduledOverlaps: [],
           introSeen: state.introSeen,
           notificationsEnabled: state.notificationsEnabled,
+          crewUnreadCount: 0,
           };
         }),
       bootstrapDemo: () =>

@@ -2,8 +2,9 @@ import "../global.css";
 
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-google-fonts/space-grotesk";
 import { Stack, useRouter, type ErrorBoundaryProps } from "expo-router";
-import { Suspense, useEffect } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { NowlyToast, type NowlyToastPayload } from "../components/ui/NowlyToast";
 import { api } from "../lib/api";
 import { useAppStore } from "../store/useAppStore";
 
@@ -85,6 +86,10 @@ export default function RootLayout() {
   const router = useRouter();
   const token = useAppStore((state) => state.token);
   const notificationsEnabled = useAppStore((state) => state.notificationsEnabled);
+  const incrementCrewUnread = useAppStore((state) => state.incrementCrewUnread);
+  const consumeCrewUnread = useAppStore((state) => state.consumeCrewUnread);
+  const [inAppToast, setInAppToast] = useState<NowlyToastPayload | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
@@ -134,7 +139,8 @@ export default function RootLayout() {
     }
 
     let active = true;
-    let subscription: { remove: () => void } | null = null;
+    let responseSubscription: { remove: () => void } | null = null;
+    let foregroundSubscription: { remove: () => void } | null = null;
 
     void (async () => {
       const [{ notificationPathFromData }, Notifications] = await Promise.all([
@@ -146,24 +152,90 @@ export default function RootLayout() {
         return;
       }
 
-      subscription = Notifications.addNotificationResponseReceivedListener(
+      responseSubscription = Notifications.addNotificationResponseReceivedListener(
         (response) => {
-          const path = notificationPathFromData(
-            response.notification.request.content.data as Record<string, unknown>,
-          );
+          const data = response.notification.request.content.data as Record<string, unknown>;
+          const path = notificationPathFromData(data);
+          const screen = typeof data.screen === "string" ? data.screen : null;
+
+          if (screen && (screen === "chat" || screen === "friends" || screen === "proposal" || screen === "thread")) {
+            consumeCrewUnread();
+          }
 
           if (path) {
             router.push(path as never);
           }
         },
       );
+
+      foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
+        const data = notification.request.content.data as Record<string, unknown>;
+        const path = notificationPathFromData(data);
+        const screen = typeof data.screen === "string" ? data.screen : null;
+        const isCrewNotification =
+          screen === "chat" || screen === "friends" || screen === "proposal" || screen === "thread";
+
+        if (isCrewNotification) {
+          incrementCrewUnread();
+        }
+
+        const iconByScreen: Record<string, NowlyToastPayload["icon"]> = {
+          chat: "message-badge-outline",
+          friends: "account-plus-outline",
+          proposal: "calendar-clock-outline",
+          thread: "chat-processing-outline",
+          now_mode: "radio-tower",
+          home: "radio-tower",
+        };
+        const fallbackTitleByScreen: Record<string, string> = {
+          chat: "New message",
+          friends: "Friend update",
+          proposal: "New hangout move",
+          thread: "Thread update",
+          now_mode: "Live radar pulse",
+          home: "Live radar pulse",
+        };
+
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const title =
+          notification.request.content.title ??
+          (screen ? fallbackTitleByScreen[screen] : null) ??
+          "Nowly update";
+        const message = notification.request.content.body ?? "Something in your circle just moved.";
+
+        setInAppToast({
+          id,
+          title,
+          message,
+          icon: (screen ? iconByScreen[screen] : null) ?? "bell-ring-outline",
+          ctaLabel: path ? "Open" : undefined,
+          onPress: path
+            ? () => {
+                router.push(path as never);
+                setInAppToast(null);
+              }
+            : undefined,
+        });
+
+        if (toastTimeoutRef.current) {
+          clearTimeout(toastTimeoutRef.current);
+        }
+
+        toastTimeoutRef.current = setTimeout(() => {
+          setInAppToast((current) => (current?.id === id ? null : current));
+        }, 3200);
+      });
     })();
 
     return () => {
       active = false;
-      subscription?.remove();
+      responseSubscription?.remove();
+      foregroundSubscription?.remove();
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
     };
-  }, [router]);
+  }, [consumeCrewUnread, incrementCrewUnread, router]);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -190,14 +262,23 @@ export default function RootLayout() {
 
   return (
     <Suspense fallback={<LoadingShell />}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: {
-            backgroundColor: "#0B1020",
-          },
-        }}
-      />
+      <View style={styles.root}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: {
+              backgroundColor: "#0B1020",
+            },
+          }}
+        />
+        <NowlyToast toast={inAppToast} top={Platform.OS === "web" ? 14 : 12} />
+      </View>
     </Suspense>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

@@ -77,14 +77,8 @@ export default function HomeScreen() {
     () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
     [scheduledOverlaps],
   );
-  const bookingPreviewRoute = user?.inviteCode
-    ? ({
-        pathname: "/booking/[inviteCode]",
-        params: { inviteCode: user.inviteCode },
-      } as const)
-    : ("/availability-preferences" as const);
   const openBookingPreview = () => {
-    router.push(bookingPreviewRoute as never);
+    router.push("/availability-preferences");
   };
 
   useEffect(() => {
@@ -181,12 +175,16 @@ export default function HomeScreen() {
   );
 
   const statusLine = orderedLiveMatches.length
-    ? `${orderedLiveMatches[0].matchedUser.name} is the strongest live match right now.`
+    ? activeSignal
+      ? `${availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
+      : `${orderedLiveMatches[0].matchedUser.name} is the strongest live match right now.`
     : orderedScheduledOverlaps.length
-      ? orderedScheduledOverlaps[0].label
-    : activeSignal
-      ? `Signal live until ${formatDayTime(activeSignal.expiresAt)}`
-      : radar?.rhythm.detail || "No overlap yet.";
+      ? activeSignal
+        ? `${availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
+        : orderedScheduledOverlaps[0].label
+      : activeSignal
+        ? `${availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}`
+        : radar?.rhythm.detail || "No overlap yet.";
 
   const heroSupport = orderedLiveMatches.length
     ? `${orderedLiveMatches.length} ${orderedLiveMatches.length === 1 ? "friend looks" : "friends look"} warm on the line.`
@@ -386,7 +384,7 @@ export default function HomeScreen() {
             >
               <Text style={styles.sectionLabel}>BEST UPCOMING WINDOW</Text>
               <Text style={styles.teaserTitle}>{plannedWindowLine}</Text>
-              <Text style={styles.teaserMeta}>Tap to open the full time picker.</Text>
+              <Text style={styles.teaserMeta}>Tap to open setup and tune your hang rhythm.</Text>
             </Pressable>
 
             <View style={{ gap: 12 }}>

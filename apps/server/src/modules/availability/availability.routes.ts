@@ -6,6 +6,7 @@ import {
   EnergyLevel,
   MessageType,
   HangoutIntent,
+  HangoutStatus,
   MicroCommitment,
   NotificationType,
   ParticipantResponse,
@@ -300,6 +301,7 @@ availabilityRouter.get(
       data: {
         host: booking.host,
         viewerHasRecurringSchedule: booking.viewerHasRecurringSchedule,
+        oneOnOneLocked: booking.oneOnOneLocked,
         slots: booking.slots.map((slot) => ({
           ...slot,
           startsAt: slot.startsAt.toISOString(),
@@ -328,6 +330,13 @@ availabilityRouter.post(
       return;
     }
 
+    if (booking.oneOnOneLocked) {
+      response.status(409).json({
+        error: "This 1:1 booking link is already locked after a confirmed booking.",
+      });
+      return;
+    }
+
     const selectedSlot = booking.slots.find(
       (slot) =>
         slot.startsAt.toISOString() === body.startsAt &&
@@ -336,6 +345,39 @@ availabilityRouter.post(
 
     if (!selectedSlot) {
       response.status(400).json({ error: "That slot is no longer available." });
+      return;
+    }
+
+    const lockedAfterFetch = await prisma.hangout.findFirst({
+      where: {
+        status: {
+          in: [HangoutStatus.PROPOSED, HangoutStatus.CONFIRMED],
+        },
+        participants: {
+          some: {
+            userId: booking.host.id,
+          },
+        },
+        thread: {
+          messages: {
+            some: {
+              type: MessageType.SYSTEM,
+              text: {
+                startsWith: "Booked from availability link:",
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (lockedAfterFetch) {
+      response.status(409).json({
+        error: "This 1:1 booking link was just locked by another booking.",
+      });
       return;
     }
 
@@ -644,7 +686,7 @@ availabilityRouter.post(
             crowdMode: signalMetadata.crowdMode,
           }),
           data: {
-            screen: "friends",
+            screen: "home",
           },
         }),
       ),

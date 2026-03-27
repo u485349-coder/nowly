@@ -1,4 +1,10 @@
-import { HangoutIntent, RecurringAvailabilityWindow, Vibe } from "@prisma/client";
+import {
+  HangoutIntent,
+  HangoutStatus,
+  MessageType,
+  RecurringAvailabilityWindow,
+  Vibe,
+} from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 
 const MINUTE_MS = 60 * 1000;
@@ -167,6 +173,43 @@ export const getBookableAvailability = async (inviteCode: string, viewerId?: str
       host,
       slots: [] as BookableSlot[],
       viewerHasRecurringSchedule: false,
+      oneOnOneLocked: false,
+    };
+  }
+
+  const activeOneOnOneBooking = await prisma.hangout.findFirst({
+    where: {
+      status: {
+        in: [HangoutStatus.PROPOSED, HangoutStatus.CONFIRMED],
+      },
+      participants: {
+        some: {
+          userId: host.id,
+        },
+      },
+      thread: {
+        messages: {
+          some: {
+            type: MessageType.SYSTEM,
+            text: {
+              startsWith: "Booked from availability link:",
+            },
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+  const oneOnOneLocked = Boolean(activeOneOnOneBooking);
+
+  if (oneOnOneLocked) {
+    return {
+      host,
+      slots: [] as BookableSlot[],
+      viewerHasRecurringSchedule: false,
+      oneOnOneLocked: true,
     };
   }
 
@@ -245,5 +288,6 @@ export const getBookableAvailability = async (inviteCode: string, viewerId?: str
     host,
     slots,
     viewerHasRecurringSchedule,
+    oneOnOneLocked: false,
   };
 };

@@ -355,6 +355,8 @@ export default function FriendsScreen() {
 
                     <View style={styles.friendActions}>
                       <Pressable
+                        accessibilityLabel={`Open private chat with ${friend.name}`}
+                        accessibilityRole="button"
                         onPress={() => void handleOpenChat(friend.id)}
                         style={({ pressed }) => [
                           styles.iconButton,
@@ -364,13 +366,15 @@ export default function FriendsScreen() {
                         <MaterialCommunityIcons name="chat-processing-outline" size={20} color="#F8FAFC" />
                       </Pressable>
                       <Pressable
+                        accessibilityLabel={`Share quick invite link with ${friend.name}`}
+                        accessibilityRole="button"
                         onPress={() => void handleDiscordPing(friend.name)}
                         style={({ pressed }) => [
                           styles.iconButton,
                           webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
                         ]}
                       >
-                        <MaterialCommunityIcons name="send-outline" size={18} color="#8BEAFF" />
+                        <MaterialCommunityIcons name="share-variant-outline" size={18} color="#8BEAFF" />
                       </Pressable>
                     </View>
                   </View>

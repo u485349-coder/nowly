@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   hangoutIntentOptions,
   MobileRecurringAvailabilityWindow,
+  SchedulingDecisionMode,
+  SchedulingVisibilityMode,
   vibeOptions,
 } from "@nowly/shared";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -14,10 +16,10 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import { GradientMesh } from "../components/ui/GradientMesh";
+import { NowlyToast, type NowlyToastPayload } from "../components/ui/NowlyToast";
 import { PillButton } from "../components/ui/PillButton";
 import { useResponsiveLayout } from "../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../constants/theme";
-import { AvailabilityComposer } from "../features/availability/AvailabilityComposer";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import {
@@ -28,7 +30,7 @@ import {
   weekdayOptionLabels,
 } from "../lib/recurring-availability";
 import { hangoutIntentLabel, vibeLabel } from "../lib/labels";
-import { createSmartOpenUrl } from "../lib/smart-links";
+import { createBrowserAppUrl, createSmartOpenUrl } from "../lib/smart-links";
 import { webPressableStyle } from "../lib/web-pressable";
 import { useAppStore } from "../store/useAppStore";
 import type { DateSpecificAvailabilityWindow } from "../types";
@@ -129,6 +131,26 @@ const windowDayLabel = (draft: DraftWindow) =>
 const windowTimeLabel = (draft: DraftWindow) =>
   `${formatMinutesOfDay(resolveMinutes(draft.startInput, 18 * 60))} - ${formatMinutesOfDay(resolveMinutes(draft.endInput, 20 * 60))}`;
 
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const groupDecisionModeOptions: Array<{
+  value: SchedulingDecisionMode;
+  label: string;
+}> = [
+  { value: "MINIMUM_REQUIRED", label: "Min required" },
+  { value: "EVERYONE_AGREES", label: "Everyone agrees" },
+  { value: "HOST_DECIDES", label: "Host decides" },
+];
+
+const groupVisibilityModeOptions: Array<{
+  value: SchedulingVisibilityMode;
+  label: string;
+}> = [
+  { value: "PUBLIC", label: "Public votes" },
+  { value: "ANONYMOUS", label: "Anonymous votes" },
+];
+
 const windowMoodSummary = (draft: DraftWindow) => {
   const parts = [
     draft.label.trim() || null,
@@ -174,14 +196,17 @@ const PreferenceChip = ({
   </Pressable>
 );
 
+type BookingLinkSetup = {
+  format: "ONE_ON_ONE" | "GROUP";
+  title: string;
+  description: string;
+  locationName: string;
+  sessionShareCode?: string | null;
+};
+
 const buildBookingSharePath = (
   inviteCode: string,
-  setup: {
-    format: "ONE_ON_ONE" | "GROUP";
-    title: string;
-    description: string;
-    locationName: string;
-  },
+  setup: BookingLinkSetup,
 ) => {
   const searchParams = new URLSearchParams();
   searchParams.set("format", setup.format);
@@ -202,8 +227,54 @@ const buildBookingSharePath = (
     searchParams.set("location", trimmedLocation);
   }
 
+  if (setup.sessionShareCode) {
+    searchParams.set("session", setup.sessionShareCode);
+  }
+
   const query = searchParams.toString();
   return `/booking/${inviteCode}${query ? `?${query}` : ""}`;
+};
+
+const buildGroupSessionSignature = ({
+  title,
+  description,
+  locationName,
+  durationMinutes,
+  participantCap,
+  minimumConfirmations,
+  decisionMode,
+  visibilityMode,
+  responseDeadlineHours,
+  specificWindows,
+}: {
+  title: string;
+  description: string;
+  locationName: string;
+  durationMinutes: number;
+  participantCap: number;
+  minimumConfirmations: number;
+  decisionMode: SchedulingDecisionMode;
+  visibilityMode: SchedulingVisibilityMode;
+  responseDeadlineHours: number;
+  specificWindows: DateSpecificAvailabilityWindow[];
+}) => {
+  const normalizedWindows = [...specificWindows]
+    .map((window) => `${window.dateKey}:${window.startInput.trim()}-${window.endInput.trim()}`)
+    .sort()
+    .join("|");
+
+  return [
+    title.trim(),
+    description.trim(),
+    locationName.trim(),
+    durationMinutes,
+    participantCap,
+    minimumConfirmations,
+    decisionMode,
+    visibilityMode,
+    responseDeadlineHours,
+    normalizedWindows,
+  ].join("::");
 };
 
 export default function AvailabilityPreferencesScreen() {
@@ -211,17 +282,13 @@ export default function AvailabilityPreferencesScreen() {
   const [saving, setSaving] = useState(false);
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
-  const activeSignal = useAppStore((state) => state.activeSignal);
   const bookingSetup = useAppStore((state) => state.bookingSetup);
-  const liveSignalPreferences = useAppStore((state) => state.liveSignalPreferences);
   const setBookingSetup = useAppStore((state) => state.setBookingSetup);
-  const setLiveSignalPreferences = useAppStore((state) => state.setLiveSignalPreferences);
   const recurringWindows = useAppStore((state) => state.recurringWindows);
   const scheduledOverlaps = useAppStore((state) => state.scheduledOverlaps);
   const storedDateSpecificWindows = useAppStore((state) => state.dateSpecificWindows);
   const setRecurringWindows = useAppStore((state) => state.setRecurringWindows);
   const setDateSpecificWindows = useAppStore((state) => state.setDateSpecificWindows);
-  const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const setScheduledOverlaps = useAppStore((state) => state.setScheduledOverlaps);
   const layout = useResponsiveLayout();
   const safeBookingSetup = bookingSetup ?? {
@@ -236,10 +303,6 @@ export default function AvailabilityPreferencesScreen() {
     visibilityMode: "PUBLIC" as const,
     responseDeadlineHours: 24,
     lastGroupSession: null,
-  };
-  const safeLiveSignalPreferences = liveSignalPreferences ?? {
-    showLocation: false,
-    locationLabel: "",
   };
   const initialDrafts = useMemo(
     () =>
@@ -262,8 +325,24 @@ export default function AvailabilityPreferencesScreen() {
   const [hangoutTitle, setHangoutTitle] = useState(safeBookingSetup.title);
   const [hangoutDescription, setHangoutDescription] = useState(safeBookingSetup.description);
   const [hangoutLocation, setHangoutLocation] = useState(safeBookingSetup.locationName);
-  const [savingLiveStatus, setSavingLiveStatus] = useState(false);
-  const [clearingLiveStatus, setClearingLiveStatus] = useState(false);
+  const [groupDurationMinutes, setGroupDurationMinutes] = useState(
+    safeBookingSetup.durationMinutes,
+  );
+  const [groupParticipantCap, setGroupParticipantCap] = useState(safeBookingSetup.participantCap);
+  const [groupMinimumConfirmations, setGroupMinimumConfirmations] = useState(
+    safeBookingSetup.minimumConfirmations,
+  );
+  const [groupDecisionMode, setGroupDecisionMode] = useState<SchedulingDecisionMode>(
+    safeBookingSetup.decisionMode,
+  );
+  const [groupVisibilityMode, setGroupVisibilityMode] = useState<SchedulingVisibilityMode>(
+    safeBookingSetup.visibilityMode,
+  );
+  const [groupResponseDeadlineHours, setGroupResponseDeadlineHours] = useState(
+    safeBookingSetup.responseDeadlineHours,
+  );
+  const [actionToast, setActionToast] = useState<NowlyToastPayload | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -304,15 +383,37 @@ export default function AvailabilityPreferencesScreen() {
   }, [storedDateSpecificWindows]);
 
   useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     setHangoutFormat(safeBookingSetup.format);
     setHangoutTitle(safeBookingSetup.title);
     setHangoutDescription(safeBookingSetup.description);
     setHangoutLocation(safeBookingSetup.locationName);
+    setGroupDurationMinutes(safeBookingSetup.durationMinutes);
+    setGroupParticipantCap(safeBookingSetup.participantCap);
+    setGroupMinimumConfirmations(
+      clampNumber(safeBookingSetup.minimumConfirmations, 2, safeBookingSetup.participantCap),
+    );
+    setGroupDecisionMode(safeBookingSetup.decisionMode);
+    setGroupVisibilityMode(safeBookingSetup.visibilityMode);
+    setGroupResponseDeadlineHours(safeBookingSetup.responseDeadlineHours);
   }, [
     safeBookingSetup.description,
+    safeBookingSetup.decisionMode,
+    safeBookingSetup.durationMinutes,
     safeBookingSetup.format,
     safeBookingSetup.locationName,
+    safeBookingSetup.minimumConfirmations,
+    safeBookingSetup.participantCap,
+    safeBookingSetup.responseDeadlineHours,
     safeBookingSetup.title,
+    safeBookingSetup.visibilityMode,
   ]);
 
   const weeklyRows = useMemo(
@@ -342,7 +443,6 @@ export default function AvailabilityPreferencesScreen() {
         : null,
     [hangoutDescription, hangoutFormat, hangoutLocation, hangoutTitle, user?.inviteCode],
   );
-  const bookingLink = bookingSharePath ? createSmartOpenUrl(bookingSharePath) : null;
   const currentSpecificMonthPrefix = useMemo(
     () => `${specificMonth.getFullYear()}-${padDatePart(specificMonth.getMonth() + 1)}`,
     [specificMonth],
@@ -447,6 +547,19 @@ export default function AvailabilityPreferencesScreen() {
     );
   };
 
+  const showToast = (toast: Omit<NowlyToastPayload, "id">) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setActionToast({ id, ...toast });
+
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setActionToast((current) => (current?.id === id ? null : current));
+    }, 2600);
+  };
+
   useEffect(() => {
     if (
       selectedSpecificDateKey &&
@@ -514,59 +627,6 @@ export default function AvailabilityPreferencesScreen() {
     setDrafts((current) => current.filter((draft) => draft.id !== id));
   };
 
-  const handleSaveLiveStatus = async (
-    payload: Parameters<typeof api.setAvailability>[1],
-  ) => {
-    try {
-      setSavingLiveStatus(true);
-      const nextSignal = await api.setAvailability(token, payload);
-      setActiveSignal({
-        ...nextSignal,
-        showLocation: payload.showLocation ?? false,
-        locationLabel: payload.locationLabel ?? null,
-      });
-      setLiveSignalPreferences({
-        showLocation: payload.showLocation ?? false,
-        locationLabel: payload.locationLabel ?? "",
-      });
-      await track(token, "availability_set", {
-        state: payload.state,
-        durationHours: payload.durationHours ?? null,
-        showLocation: payload.showLocation ?? false,
-      });
-      const overlaps = await api.fetchScheduledOverlaps(token);
-      setScheduledOverlaps(overlaps);
-    } catch (error) {
-      Alert.alert(
-        "Could not update your live status",
-        error instanceof Error ? error.message : "Try that again.",
-      );
-    } finally {
-      setSavingLiveStatus(false);
-    }
-  };
-
-  const handleClearLiveStatus = async () => {
-    if (!activeSignal) {
-      return;
-    }
-
-    try {
-      setClearingLiveStatus(true);
-      await api.clearAvailability(token, activeSignal.id);
-      setActiveSignal(null);
-      const overlaps = await api.fetchScheduledOverlaps(token);
-      setScheduledOverlaps(overlaps);
-    } catch (error) {
-      Alert.alert(
-        "Could not clear your live status",
-        error instanceof Error ? error.message : "Try that again.",
-      );
-    } finally {
-      setClearingLiveStatus(false);
-    }
-  };
-
   const handleSaveRecurringAvailability = async (windows: SaveWindowPayload[]) => {
     const saved = await api.saveRecurringAvailability(token, windows);
     setRecurringWindows(saved);
@@ -631,9 +691,21 @@ export default function AvailabilityPreferencesScreen() {
         description:
           hangoutDescription.trim() || "Pick an easy time and we can see what sticks.",
         locationName: hangoutLocation.trim(),
+        durationMinutes: clampNumber(groupDurationMinutes, 15, 360),
+        participantCap: clampNumber(groupParticipantCap, 2, 24),
+        minimumConfirmations: clampNumber(groupMinimumConfirmations, 2, groupParticipantCap),
+        decisionMode: groupDecisionMode,
+        visibilityMode: groupVisibilityMode,
+        responseDeadlineHours: clampNumber(groupResponseDeadlineHours, 1, 168),
+        lastGroupSession: null,
       });
       setDateSpecificWindows(specificWindows);
       await handleSaveRecurringAvailability(payload);
+      showToast({
+        title: "Hang rhythm saved",
+        message: "Your booking page was updated with these windows.",
+        icon: "calendar-check-outline",
+      });
     } catch (error) {
       Alert.alert(
         "Could not save hang rhythm",
@@ -645,38 +717,205 @@ export default function AvailabilityPreferencesScreen() {
   };
 
   const handleCopyLink = async () => {
-    if (!bookingLink) {
-      Alert.alert("Booking link not ready", "Save your rhythm first and your share link will show up here.");
-      return;
+    const resolveBookingPath = async () => {
+      if (!user?.inviteCode) {
+        return null;
+      }
+
+      if (hangoutFormat === "ONE_ON_ONE") {
+        return buildBookingSharePath(user.inviteCode, {
+          format: hangoutFormat,
+          title: hangoutTitle,
+          description: hangoutDescription,
+          locationName: hangoutLocation,
+        });
+      }
+
+      const signature = buildGroupSessionSignature({
+        title: hangoutTitle,
+        description: hangoutDescription,
+        locationName: hangoutLocation,
+        durationMinutes: groupDurationMinutes,
+        participantCap: groupParticipantCap,
+        minimumConfirmations: groupMinimumConfirmations,
+        decisionMode: groupDecisionMode,
+        visibilityMode: groupVisibilityMode,
+        responseDeadlineHours: groupResponseDeadlineHours,
+        specificWindows,
+      });
+
+      const existingSession = safeBookingSetup.lastGroupSession;
+
+      if (existingSession?.shareCode && existingSession.signature === signature) {
+        return buildBookingSharePath(user.inviteCode, {
+          format: "GROUP",
+          title: hangoutTitle,
+          description: hangoutDescription,
+          locationName: hangoutLocation,
+          sessionShareCode: existingSession.shareCode,
+        });
+      }
+
+      const dateSpecificWindows = specificWindows
+        .map((window) => {
+          const startMinute = parseTimeInput(window.startInput);
+          const endMinute = parseTimeInput(window.endInput);
+          if (startMinute === null || endMinute === null || endMinute <= startMinute) {
+            return null;
+          }
+
+          return {
+            dateKey: window.dateKey,
+            startMinute,
+            endMinute,
+          };
+        })
+        .filter(Boolean) as Array<{ dateKey: string; startMinute: number; endMinute: number }>;
+
+      if (!dateSpecificWindows.length) {
+        Alert.alert(
+          "Group link needs date windows",
+          "Add at least one date-specific window so your group can vote on real slots.",
+        );
+        return null;
+      }
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const responseDeadline = new Date(
+        Date.now() + clampNumber(groupResponseDeadlineHours, 1, 168) * 60 * 60 * 1000,
+      ).toISOString();
+      const session = await api.createGroupSchedulingSession(token, user.inviteCode, {
+        title: hangoutTitle.trim() || "Group hangout",
+        description:
+          hangoutDescription.trim() || "Pick an easy time and let the crew claim what works.",
+        locationName: hangoutLocation.trim() || user.communityTag || user.city || "Nearby",
+        durationMinutes: clampNumber(groupDurationMinutes, 15, 360),
+        timezone,
+        participantCap: clampNumber(groupParticipantCap, 2, 24),
+        minimumConfirmations: clampNumber(groupMinimumConfirmations, 2, groupParticipantCap),
+        decisionMode: groupDecisionMode,
+        visibilityMode: groupVisibilityMode,
+        responseDeadline,
+        dateSpecificWindows,
+      });
+
+      setBookingSetup({
+        lastGroupSession: {
+          shareCode: session.session.shareCode,
+          signature,
+        },
+      });
+
+      return buildBookingSharePath(user.inviteCode, {
+        format: "GROUP",
+        title: hangoutTitle,
+        description: hangoutDescription,
+        locationName: hangoutLocation,
+        sessionShareCode: session.session.shareCode,
+      });
+    };
+
+    try {
+      const bookingPath = await resolveBookingPath();
+
+      if (!bookingPath) {
+        return;
+      }
+
+      const bookingLink = createBrowserAppUrl(bookingPath) ?? createSmartOpenUrl(bookingPath);
+
+      const clipboard = (
+        globalThis.navigator as { clipboard?: { writeText?: (text: string) => Promise<void> } } | undefined
+      )?.clipboard;
+
+      if (clipboard?.writeText) {
+        await clipboard.writeText(bookingLink);
+        showToast({
+          title: "Link copied",
+          message: "Paste it anywhere and people will land on your booking page.",
+          icon: "link-variant",
+        });
+        return;
+      }
+
+      await Share.share({
+        message: bookingLink,
+      });
+      showToast({
+        title: "Share sheet opened",
+        message: "Drop your booking link where your people already talk.",
+        icon: "share-variant-outline",
+      });
+    } catch (error) {
+      Alert.alert(
+        "Could not prepare that link",
+        error instanceof Error ? error.message : "Try again in a second.",
+      );
     }
-
-    const clipboard = (
-      globalThis.navigator as { clipboard?: { writeText?: (text: string) => Promise<void> } } | undefined
-    )?.clipboard;
-
-    if (clipboard?.writeText) {
-      await clipboard.writeText(bookingLink);
-      Alert.alert("Booking link copied", "Share it wherever your people already talk.");
-      return;
-    }
-
-    await Share.share({
-      message: bookingLink,
-    });
   };
 
-  const handlePreviewLink = () => {
-    if (!bookingSharePath) {
-      router.push("/now-mode");
-      return;
-    }
+  const handlePreviewLink = async () => {
+    try {
+      if (!bookingSharePath && hangoutFormat !== "GROUP") {
+        router.push("/now-mode");
+        return;
+      }
 
-    router.push(bookingSharePath as never);
+      if (hangoutFormat === "GROUP") {
+        const sharePath = await (async () => {
+          if (!user?.inviteCode) {
+            return null;
+          }
+          const signature = buildGroupSessionSignature({
+            title: hangoutTitle,
+            description: hangoutDescription,
+            locationName: hangoutLocation,
+            durationMinutes: groupDurationMinutes,
+            participantCap: groupParticipantCap,
+            minimumConfirmations: groupMinimumConfirmations,
+            decisionMode: groupDecisionMode,
+            visibilityMode: groupVisibilityMode,
+            responseDeadlineHours: groupResponseDeadlineHours,
+            specificWindows,
+          });
+          const existingSession = safeBookingSetup.lastGroupSession;
+          if (existingSession?.shareCode && existingSession.signature === signature) {
+            return buildBookingSharePath(user.inviteCode, {
+              format: "GROUP",
+              title: hangoutTitle,
+              description: hangoutDescription,
+              locationName: hangoutLocation,
+              sessionShareCode: existingSession.shareCode,
+            });
+          }
+          return null;
+        })();
+
+        if (!sharePath) {
+          Alert.alert(
+            "Copy the group link first",
+            "Creating a fresh group scheduling session happens when you copy the link.",
+          );
+          return;
+        }
+
+        router.push(sharePath as never);
+        return;
+      }
+
+      router.push(bookingSharePath as never);
+    } catch (error) {
+      Alert.alert(
+        "Could not open preview",
+        error instanceof Error ? error.message : "Try again in a second.",
+      );
+    }
   };
 
   return (
     <GradientMesh>
       <View style={styles.screen}>
+        <NowlyToast toast={actionToast} top={layout.isDesktop ? 22 : 14} />
         <ScrollView
           className="flex-1"
           contentContainerStyle={{
@@ -752,7 +991,7 @@ export default function AvailabilityPreferencesScreen() {
                                   onChangeText={(value) => updateDraft(draft.id, { startInput: value })}
                                   autoCapitalize="characters"
                                   autoCorrect={false}
-                                  className="font-body text-[15px] text-cloud"
+                                  className="font-body text-sm text-cloud"
                                   placeholder="9:00 AM"
                                   placeholderTextColor="rgba(248,250,252,0.35)"
                                 />
@@ -764,7 +1003,7 @@ export default function AvailabilityPreferencesScreen() {
                                   onChangeText={(value) => updateDraft(draft.id, { endInput: value })}
                                   autoCapitalize="characters"
                                   autoCorrect={false}
-                                  className="font-body text-[15px] text-cloud"
+                                  className="font-body text-sm text-cloud"
                                   placeholder="5:00 PM"
                                   placeholderTextColor="rgba(248,250,252,0.35)"
                                 />
@@ -906,7 +1145,7 @@ export default function AvailabilityPreferencesScreen() {
                             }
                             autoCapitalize="characters"
                             autoCorrect={false}
-                            className="font-body text-[15px] text-cloud"
+                            className="font-body text-sm text-cloud"
                             placeholder="9:00 AM"
                             placeholderTextColor="rgba(248,250,252,0.35)"
                           />
@@ -920,7 +1159,7 @@ export default function AvailabilityPreferencesScreen() {
                             }
                             autoCapitalize="characters"
                             autoCorrect={false}
-                            className="font-body text-[15px] text-cloud"
+                            className="font-body text-sm text-cloud"
                             placeholder="5:00 PM"
                             placeholderTextColor="rgba(248,250,252,0.35)"
                           />
@@ -989,7 +1228,7 @@ export default function AvailabilityPreferencesScreen() {
                                 }
                                 autoCapitalize="characters"
                                 autoCorrect={false}
-                                className="font-body text-[15px] text-cloud"
+                                className="font-body text-sm text-cloud"
                                 placeholder="9:00 AM"
                                 placeholderTextColor="rgba(248,250,252,0.35)"
                               />
@@ -1003,7 +1242,7 @@ export default function AvailabilityPreferencesScreen() {
                                 }
                                 autoCapitalize="characters"
                                 autoCorrect={false}
-                                className="font-body text-[15px] text-cloud"
+                                className="font-body text-sm text-cloud"
                                 placeholder="5:00 PM"
                                 placeholderTextColor="rgba(248,250,252,0.35)"
                               />
@@ -1105,6 +1344,150 @@ export default function AvailabilityPreferencesScreen() {
                   />
                 </View>
 
+                {hangoutFormat === "GROUP" ? (
+                  <View style={styles.groupSettingsShell}>
+                    <Text style={styles.groupSettingsTitle}>Group settings</Text>
+                    <Text style={styles.groupSettingsHint}>
+                      Control capacity and decision style for this group booking link.
+                    </Text>
+
+                    <View style={styles.groupMetricGrid}>
+                      <View style={styles.groupMetricCard}>
+                        <Text style={styles.groupMetricLabel}>Duration</Text>
+                        <View style={styles.groupStepRow}>
+                          <Pressable
+                            onPress={() =>
+                              setGroupDurationMinutes((current) =>
+                                clampNumber(current - 15, 15, 360),
+                              )
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="minus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                          <Text style={styles.groupMetricValue}>{groupDurationMinutes} min</Text>
+                          <Pressable
+                            onPress={() =>
+                              setGroupDurationMinutes((current) =>
+                                clampNumber(current + 15, 15, 360),
+                              )
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="plus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      <View style={styles.groupMetricCard}>
+                        <Text style={styles.groupMetricLabel}>Capacity</Text>
+                        <View style={styles.groupStepRow}>
+                          <Pressable
+                            onPress={() =>
+                              setGroupParticipantCap((current) => {
+                                const next = clampNumber(current - 1, 2, 24);
+                                setGroupMinimumConfirmations((minimum) =>
+                                  clampNumber(minimum, 2, next),
+                                );
+                                return next;
+                              })
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="minus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                          <Text style={styles.groupMetricValue}>{groupParticipantCap}</Text>
+                          <Pressable
+                            onPress={() =>
+                              setGroupParticipantCap((current) => {
+                                const next = clampNumber(current + 1, 2, 24);
+                                setGroupMinimumConfirmations((minimum) =>
+                                  clampNumber(minimum, 2, next),
+                                );
+                                return next;
+                              })
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="plus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      <View style={styles.groupMetricCard}>
+                        <Text style={styles.groupMetricLabel}>Min confirmations</Text>
+                        <View style={styles.groupStepRow}>
+                          <Pressable
+                            onPress={() =>
+                              setGroupMinimumConfirmations((current) =>
+                                clampNumber(current - 1, 2, groupParticipantCap),
+                              )
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="minus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                          <Text style={styles.groupMetricValue}>{groupMinimumConfirmations}</Text>
+                          <Pressable
+                            onPress={() =>
+                              setGroupMinimumConfirmations((current) =>
+                                clampNumber(current + 1, 2, groupParticipantCap),
+                              )
+                            }
+                            style={styles.groupStepButton}
+                          >
+                            <MaterialCommunityIcons name="plus" size={16} color="#E2E8F0" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.groupOptionRow}>
+                      {groupDecisionModeOptions.map((option) => (
+                        <Pressable
+                          key={option.value}
+                          onPress={() => setGroupDecisionMode(option.value)}
+                          style={[
+                            styles.groupOptionPill,
+                            groupDecisionMode === option.value ? styles.groupOptionPillActive : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.groupOptionLabel,
+                              groupDecisionMode === option.value ? styles.groupOptionLabelActive : null,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={styles.groupOptionRow}>
+                      {groupVisibilityModeOptions.map((option) => (
+                        <Pressable
+                          key={option.value}
+                          onPress={() => setGroupVisibilityMode(option.value)}
+                          style={[
+                            styles.groupOptionPill,
+                            groupVisibilityMode === option.value ? styles.groupOptionPillActive : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.groupOptionLabel,
+                              groupVisibilityMode === option.value ? styles.groupOptionLabelActive : null,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
                 <View style={styles.linkActions}>
                   <Pressable
                     onPress={() => void handleCopyLink()}
@@ -1127,43 +1510,6 @@ export default function AvailabilityPreferencesScreen() {
                 </View>
               </View>
 
-              <View style={styles.liveStatusShell}>
-                <Text style={styles.moduleLabel}>LIVE STATUS</Text>
-                <Text style={styles.linkHint}>
-                  Go live for a set amount of time so Nowly can match free-time overlap in real time.
-                </Text>
-
-                <AvailabilityComposer
-                  activeSignal={activeSignal}
-                  defaultLocationLabel={user?.communityTag || user?.city || null}
-                  signalPreferences={safeLiveSignalPreferences}
-                  onSignalPreferencesChange={setLiveSignalPreferences}
-                  onSave={(payload) => void handleSaveLiveStatus(payload)}
-                />
-
-                {activeSignal ? (
-                  <Pressable
-                    onPress={() => void handleClearLiveStatus()}
-                    disabled={clearingLiveStatus}
-                    style={({ pressed }) => [
-                      styles.clearLiveButton,
-                      webPressableStyle(pressed, {
-                        disabled: clearingLiveStatus,
-                        pressedOpacity: 0.9,
-                        pressedScale: 0.985,
-                      }),
-                    ]}
-                  >
-                    <Text style={styles.clearLiveText}>
-                      {clearingLiveStatus
-                        ? "Stopping live..."
-                        : savingLiveStatus
-                          ? "Updating live status..."
-                          : "Stop live"}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
             </View>
 
             <View style={{ width: layout.rightColumnWidth, gap: 16 }}>
@@ -1510,18 +1856,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 16,
   },
-  clearLiveButton: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  clearLiveText: {
-    color: "rgba(139,234,255,0.92)",
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 13,
-  },
   linkActions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1545,13 +1879,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   linkStrip: {
-    borderRadius: 28,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 14,
-  },
-  liveStatusShell: {
     borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 18,
@@ -1881,10 +2208,10 @@ const styles = StyleSheet.create({
   dayLabelText: {
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 13,
+    fontSize: 12,
   },
   dayLabelWrap: {
-    width: 44,
+    width: 36,
   },
   dayToggle: {
     width: 20,
@@ -1940,25 +2267,106 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
   },
+  groupMetricCard: {
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+    flex: 1,
+    minWidth: 130,
+  },
+  groupMetricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  groupMetricLabel: {
+    color: "rgba(248,250,252,0.64)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  groupMetricValue: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  groupOptionLabel: {
+    color: "rgba(248,250,252,0.72)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
+  },
+  groupOptionLabelActive: {
+    color: "#081120",
+  },
+  groupOptionPill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  groupOptionPillActive: {
+    backgroundColor: "#E7D9FF",
+  },
+  groupOptionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  groupSettingsHint: {
+    color: "rgba(248,250,252,0.62)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  groupSettingsShell: {
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  groupSettingsTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+  },
+  groupStepButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  groupStepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   hoursRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: 8,
   },
   inlineIconButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   inlineTimeField: {
-    minWidth: 82,
-    borderRadius: 16,
+    minWidth: 0,
+    flex: 1,
+    borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   monthPickerLabel: {
     color: nowlyColors.cloud,
@@ -1973,8 +2381,9 @@ const styles = StyleSheet.create({
   rangeDash: {
     color: "rgba(248,250,252,0.58)",
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 16,
-    paddingTop: 10,
+    fontSize: 14,
+    paddingTop: 0,
+    textAlignVertical: "center",
   },
   specificCalendarCell: {
     width: "13.2%",
@@ -2010,7 +2419,8 @@ const styles = StyleSheet.create({
   timeRangeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    width: "100%",
+    gap: 6,
   },
   unavailableText: {
     color: "rgba(248,250,252,0.48)",

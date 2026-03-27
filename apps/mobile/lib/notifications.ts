@@ -32,6 +32,10 @@ export const notificationPathFromData = (data?: Record<string, unknown>) => {
     return "/home";
   }
 
+  if (data.screen === "now_mode") {
+    return "/home";
+  }
+
   if (data.screen === "friends") {
     return "/friends";
   }

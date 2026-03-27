@@ -1,8 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
+import { useEffect } from "react";
 import { FloatingNavBar } from "../../components/navigation/FloatingNavBar";
 import { nowlyColors } from "../../constants/theme";
+import { useAppStore } from "../../store/useAppStore";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -13,6 +15,21 @@ const tabIcons: Record<"home" | "friends" | "profile", IconName> = {
 };
 
 export default function AppLayout() {
+  const pathname = usePathname();
+  const crewUnreadCount = useAppStore((state) => state.crewUnreadCount);
+  const consumeCrewUnread = useAppStore((state) => state.consumeCrewUnread);
+
+  useEffect(() => {
+    if (
+      pathname.startsWith("/friends") ||
+      pathname.startsWith("/chat") ||
+      pathname.startsWith("/proposal") ||
+      pathname.startsWith("/thread")
+    ) {
+      consumeCrewUnread();
+    }
+  }, [consumeCrewUnread, pathname]);
+
   return (
     <Tabs
       screenOptions={{
@@ -21,6 +38,7 @@ export default function AppLayout() {
       tabBar={(props) => (
         <FloatingNavBar
           {...props}
+          badges={{ friends: crewUnreadCount }}
           fabAccentColor={nowlyColors.violet}
           fabIcon="lightning-bolt"
           icons={tabIcons}

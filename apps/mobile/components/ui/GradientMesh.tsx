@@ -5,11 +5,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { gradients } from "../../constants/theme";
 
 const isWeb = Platform.OS === "web";
+const isAndroid = Platform.OS === "android";
+const shouldAnimateMesh = !isAndroid;
+const shouldRenderBlur = Platform.OS === "ios";
 
 export const GradientMesh = ({ children }: { children: ReactNode }) => {
   const drift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!shouldAnimateMesh) {
+      drift.setValue(0.44);
+      return;
+    }
+
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(drift, {
@@ -37,13 +45,13 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
       {
         translateY: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [-8, 14],
+          outputRange: shouldAnimateMesh ? [-8, 14] : [0, 0],
         }),
       },
       {
         translateX: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [-10, 12],
+          outputRange: shouldAnimateMesh ? [-10, 12] : [0, 0],
         }),
       },
     ],
@@ -54,13 +62,13 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
       {
         translateY: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [16, -14],
+          outputRange: shouldAnimateMesh ? [16, -14] : [0, 0],
         }),
       },
       {
         translateX: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [8, -10],
+          outputRange: shouldAnimateMesh ? [8, -10] : [0, 0],
         }),
       },
     ],
@@ -71,13 +79,13 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
       {
         translateY: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, -10],
+          outputRange: shouldAnimateMesh ? [0, -10] : [0, 0],
         }),
       },
       {
         translateX: drift.interpolate({
           inputRange: [0, 1],
-          outputRange: [-4, 10],
+          outputRange: shouldAnimateMesh ? [-4, 10] : [0, 0],
         }),
       },
     ],
@@ -122,7 +130,7 @@ export const GradientMesh = ({ children }: { children: ReactNode }) => {
           style={styles.verticalLift}
         />
 
-        {!isWeb ? <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
+        {shouldRenderBlur ? <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFillObject} /> : null}
 
         <LinearGradient
           colors={

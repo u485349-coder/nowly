@@ -287,6 +287,7 @@ export type MobileOneOnOneBookingProfile = {
   host: MobileUser;
   slots: MobileBookableSlot[];
   viewerHasRecurringSchedule: boolean;
+  oneOnOneLocked: boolean;
 };
 
 export type MobileGroupBookingProfile = {

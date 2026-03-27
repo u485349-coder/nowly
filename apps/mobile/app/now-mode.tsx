@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import Animated, { FadeInDown, FadeOutUp, LinearTransition } from "react-native-reanimated";
 import { GradientMesh } from "../components/ui/GradientMesh";
+import { NowlyToast, type NowlyToastPayload } from "../components/ui/NowlyToast";
 import { useResponsiveLayout } from "../components/ui/useResponsiveLayout";
 import { AvailabilityComposer } from "../features/availability/AvailabilityComposer";
 import { nowlyColors } from "../constants/theme";
@@ -36,6 +37,16 @@ const liveInsight = (
   return "Go live and let overlap find you.";
 };
 
+const liveUntilLine = (
+  activeSignal: ReturnType<typeof useAppStore.getState>["activeSignal"],
+) => {
+  if (!activeSignal) {
+    return null;
+  }
+
+  return `${availabilityLabel(activeSignal.state)} until ${formatDayTime(activeSignal.expiresAt)}.`;
+};
+
 export default function NowModeScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
@@ -59,8 +70,10 @@ export default function NowModeScreen() {
     label: string;
     route: string;
   } | null>(null);
+  const [actionToast, setActionToast] = useState<NowlyToastPayload | null>(null);
   const previousMatchIdsRef = useRef<string[] | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const orderedLiveMatches = useMemo(
     () => [...matches].sort((left, right) => right.score - left.score),
@@ -70,6 +83,7 @@ export default function NowModeScreen() {
     () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
     [scheduledOverlaps],
   );
+  const activeUntilLine = useMemo(() => liveUntilLine(activeSignal), [activeSignal]);
   const liveMatchRows = useMemo(
     () =>
       orderedLiveMatches.map((match) => ({
@@ -94,20 +108,10 @@ export default function NowModeScreen() {
         detail: overlap.summary,
         action: "Suggest time",
         onPress: () => {
-          if (!user?.inviteCode) {
-            router.push("/availability-preferences");
-            return;
-          }
-
-          router.push(
-            {
-              pathname: "/booking/[inviteCode]",
-              params: { inviteCode: user.inviteCode },
-            } as never,
-          );
+          router.push("/availability-preferences");
         },
       })),
-    [orderedScheduledOverlaps, user?.inviteCode],
+    [orderedScheduledOverlaps],
   );
 
   const locationShareLabel =
@@ -146,8 +150,24 @@ export default function NowModeScreen() {
       if (toastTimeoutRef.current) {
         clearTimeout(toastTimeoutRef.current);
       }
+      if (actionToastTimeoutRef.current) {
+        clearTimeout(actionToastTimeoutRef.current);
+      }
     };
   }, []);
+
+  const showActionToast = (toast: Omit<NowlyToastPayload, "id">) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setActionToast({ id, ...toast });
+
+    if (actionToastTimeoutRef.current) {
+      clearTimeout(actionToastTimeoutRef.current);
+    }
+
+    actionToastTimeoutRef.current = setTimeout(() => {
+      setActionToast((current) => (current?.id === id ? null : current));
+    }, 2400);
+  };
 
   useEffect(() => {
     const nextIds = orderedLiveMatches.map((match) => match.id);
@@ -221,6 +241,11 @@ export default function NowModeScreen() {
         showLocation: payload.showLocation ?? false,
       });
       await refreshDashboard();
+      showActionToast({
+        title: "You're live",
+        message: "Nowly is actively scanning overlap around your signal.",
+        icon: "radio-tower",
+      });
     } catch (error) {
       Alert.alert(
         "Could not update your status",
@@ -252,21 +277,12 @@ export default function NowModeScreen() {
   };
 
   const openBookingPreview = () => {
-    if (!user?.inviteCode) {
-      router.push("/availability-preferences");
-      return;
-    }
-
-    router.push(
-      {
-        pathname: "/booking/[inviteCode]",
-        params: { inviteCode: user.inviteCode },
-      } as never,
-    );
+    router.push("/availability-preferences");
   };
 
   return (
     <GradientMesh>
+      <NowlyToast toast={actionToast} top={layout.isDesktop ? 22 : 14} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -315,11 +331,13 @@ export default function NowModeScreen() {
                 <View style={{ gap: 8 }}>
                   <Text style={styles.heroLabel}>LIVE STATUS</Text>
                   <Text style={styles.heroTitle}>
-                    {activeSignal ? liveInsight(activeSignal, scheduledOverlaps, matches) : "Set a live signal so Nowly can surface overlap."}
+                    {activeUntilLine ?? "Set a live signal so Nowly can surface overlap."}
                   </Text>
                   <Text style={styles.heroSupport}>
-                    {radar?.suggestionLine ||
-                      "Free now, free later, busy, or weekend plans. This is the fast layer that helps you overlap with someone else in the moment."}
+                    {activeSignal
+                      ? liveInsight(activeSignal, scheduledOverlaps, matches)
+                      : radar?.suggestionLine ||
+                        "Free now, free later, busy, or weekend plans. This is the fast layer that helps you overlap with someone else in the moment."}
                   </Text>
                   {safeLiveSignalPreferences.showLocation ? (
                     <Text style={styles.heroLocationTag}>Sharing location: {locationShareLabel}</Text>
@@ -376,7 +394,9 @@ export default function NowModeScreen() {
 
           <View style={{ width: layout.rightColumnWidth, gap: layout.sectionGap }}>
             <View style={styles.insightStrip}>
-              <Text style={styles.insightStripText}>{liveInsight(activeSignal, scheduledOverlaps, matches)}</Text>
+              <Text style={styles.insightStripText}>
+                {activeUntilLine ?? liveInsight(activeSignal, scheduledOverlaps, matches)}
+              </Text>
             </View>
 
             {matchToast ? (
