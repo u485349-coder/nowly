@@ -218,6 +218,202 @@ export default function HomeScreen() {
         gap: layout.splitGap,
       }
     : undefined;
+
+  if (layout.isMobile) {
+    return (
+      <GradientMesh>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingBottom: 160,
+            paddingHorizontal: layout.screenPadding,
+            paddingTop: layout.topPadding + 8,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ width: layout.shellWidth, alignSelf: "center", gap: 14 }}>
+            <View style={styles.heroHeader}>
+              <View style={{ flex: 1, gap: 10 }}>
+                <Text style={styles.eyebrow}>LIVE RADAR</Text>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      fontSize: layout.isCompactPhone ? 30 : 34,
+                      lineHeight: layout.isCompactPhone ? 34 : 38,
+                    },
+                  ]}
+                >
+                  Who can you catch right now?
+                </Text>
+                <Text style={styles.mobileHeaderCopy}>
+                  {radar?.suggestionLine || "One light signal is enough to wake the crew up."}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => router.push("/availability-preferences")}
+                style={({ pressed }) => [
+                  styles.heroUtility,
+                  webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                ]}
+              >
+                <MaterialCommunityIcons name="cog-outline" size={20} color="#F7FBFF" />
+              </Pressable>
+            </View>
+
+            <View style={[styles.heroShell, { borderRadius: 28, minHeight: layout.isCompactPhone ? 330 : 350 }]}>
+              <LinearGradient
+                colors={["rgba(24,17,56,0.95)", "rgba(36,31,90,0.82)", "rgba(8,14,29,0.98)"]}
+                start={{ x: 0.08, y: 0.02 }}
+                end={{ x: 1, y: 1 }}
+                style={[
+                  styles.heroPanel,
+                  {
+                    borderRadius: 28,
+                    paddingHorizontal: layout.isCompactPhone ? 18 : 22,
+                    paddingVertical: layout.isCompactPhone ? 18 : 22,
+                  },
+                ]}
+              >
+                <View style={styles.heroGlowA} pointerEvents="none" />
+                <View style={styles.heroGlowB} pointerEvents="none" />
+                <View style={styles.mobileSignalPill}>
+                  <Text style={styles.mobileSignalPillText}>
+                    {orderedLiveMatches.length
+                      ? `${orderedLiveMatches.length} live ${orderedLiveMatches.length === 1 ? "match" : "matches"}`
+                      : activeSignal
+                        ? "Signal live now"
+                        : "Radar standing by"}
+                  </Text>
+                </View>
+                <View style={{ gap: 12 }}>
+                  <Text style={[styles.heroPanelTitle, styles.mobileHeroPanelTitle]}>
+                    {heroSupport}
+                  </Text>
+                  <Text style={styles.heroSupport}>
+                    {orderedScheduledOverlaps.length
+                      ? orderedScheduledOverlaps[0].summary
+                      : radar?.suggestionLine || "Wake the radar up and let timing do the rest."}
+                  </Text>
+                </View>
+                <View style={styles.mobilePulseWrap}>
+                  <View style={styles.pulseCore} />
+                </View>
+                <View style={styles.mobileHeroActions}>
+                  <PillButton label="Send light signal" onPress={() => router.push("/now-mode")} />
+                  <Pressable
+                    onPress={openBookingPreview}
+                    style={({ pressed }) => [
+                      styles.mobileSecondaryButton,
+                      webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+                    ]}
+                  >
+                    <Text style={styles.mobileSecondaryButtonText}>View best windows</Text>
+                  </Pressable>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <Pressable
+              onPress={openBookingPreview}
+              style={({ pressed }) => [
+                styles.teaserCard,
+                styles.mobilePanelCard,
+                webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
+              ]}
+            >
+              <Text style={styles.sectionLabel}>BEST UPCOMING WINDOW</Text>
+              <Text style={styles.teaserTitle}>{plannedWindowLine}</Text>
+              <Text style={styles.teaserMeta}>Tap to open setup and tune your hang rhythm.</Text>
+            </Pressable>
+
+            <View style={styles.mobilePanelCard}>
+              <Text style={styles.sectionLabel}>LIVE RADAR</Text>
+              {liveRadarRows.length ? (
+                <View style={{ gap: 10 }}>
+                  {liveRadarRows.slice(0, 3).map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={item.onPress}
+                      style={({ pressed }) => [
+                        styles.mobileRadarRow,
+                        webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.99 }),
+                      ]}
+                    >
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={styles.radarName}>{item.name}</Text>
+                        <Text style={styles.radarLine}>{item.line}</Text>
+                        <Text style={styles.radarDetail}>{item.detail}</Text>
+                      </View>
+                      <View style={styles.mobileActionChip}>
+                        <Text style={styles.mobileActionChipText}>{item.action}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.mobileSectionTitle}>
+                    Once your signal is up, your best fits will start stacking here.
+                  </Text>
+                  <Text style={styles.radarEmpty}>
+                    Go live or save a hang rhythm and the radar feed will stack your best fits here.
+                  </Text>
+                </>
+              )}
+            </View>
+
+            <View style={styles.mobilePanelCard}>
+              <Text style={styles.sectionLabel}>LOW PRESSURE PROMPTS</Text>
+              <Text style={styles.mobileSectionTitle}>Start with one clean move.</Text>
+              <View style={styles.mobilePromptWrap}>
+                {quickPrompts.map((prompt) => (
+                  <Pressable
+                    key={prompt.key}
+                    onPress={() => router.push(prompt.route as never)}
+                    style={({ pressed }) => [
+                      styles.mobilePromptInline,
+                      webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
+                    ]}
+                  >
+                    <Text style={styles.promptChipText}>{prompt.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.mobilePanelCard}>
+              <Text style={styles.sectionLabel}>PAST HANGS</Text>
+              {recaps.length ? (
+                <View style={{ gap: 10 }}>
+                  {recaps.slice(0, 2).map((recap) => (
+                    <Pressable
+                      key={recap.id}
+                      onPress={() => router.push(`/recap/${recap.hangoutId}`)}
+                      style={({ pressed }) => [
+                        styles.mobileRecapCard,
+                        webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.99 }),
+                      ]}
+                    >
+                      <Text style={styles.recapBadge}>{recap.badge}</Text>
+                      <Text style={styles.recapTitle}>{recap.title}</Text>
+                      <Text style={styles.recapSummary}>{recap.summary}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.recapSummary}>
+                  Your recent hangs will collect here as soft recaps.
+                </Text>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </GradientMesh>
+    );
+  }
+
   return (
     <GradientMesh>
       <ScrollView
@@ -536,6 +732,100 @@ const styles = StyleSheet.create({
   },
   heroActions: {
     gap: 10,
+  },
+  mobileActionChip: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mobileActionChipText: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
+  },
+  mobileHeaderCopy: {
+    color: "rgba(247,251,255,0.68)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+    maxWidth: 320,
+  },
+  mobileHeroActions: {
+    gap: 10,
+  },
+  mobileHeroPanelTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    maxWidth: 290,
+  },
+  mobilePanelCard: {
+    gap: 10,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  mobilePromptInline: {
+    paddingVertical: 2,
+    paddingRight: 12,
+  },
+  mobilePromptWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 12,
+  },
+  mobilePulseWrap: {
+    paddingTop: 2,
+  },
+  mobileRadarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  mobileRecapCard: {
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  mobileSectionTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    lineHeight: 27,
+  },
+  mobileSecondaryButton: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(7,13,26,0.58)",
+  },
+  mobileSecondaryButtonText: {
+    color: "rgba(247,251,255,0.88)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  mobileSignalPill: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "rgba(139,234,255,0.14)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mobileSignalPillText: {
+    color: "rgba(139,234,255,0.92)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
   },
   heroClusterRow: {
     flexDirection: "row",

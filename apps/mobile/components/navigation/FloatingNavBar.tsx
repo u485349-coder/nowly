@@ -151,6 +151,7 @@ const FloatingNavBarComponent = ({
   const barWidth = Math.min(width - (isCompactPhone ? 20 : 28), width >= 768 ? 430 : width * (isCompactPhone ? 0.94 : 0.9));
   const barLeft = (width - barWidth) / 2;
   const toggleBottom = barBottom + (isCompactPhone ? 14 : 18);
+  const toggleLeft = width / 2;
 
   const splitIndex = Math.max(1, Math.floor(state.routes.length / 2));
   const leftRoutes = useMemo(() => state.routes.slice(0, splitIndex), [splitIndex, state.routes]);
@@ -256,6 +257,7 @@ const FloatingNavBarComponent = ({
         accentColor={fabAccentColor}
         bottom={toggleBottom}
         icon={fabIcon}
+        left={toggleLeft}
         onPress={() => {
           setOpen(false);
           onFabPress?.();

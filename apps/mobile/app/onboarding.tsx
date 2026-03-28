@@ -802,7 +802,34 @@ export default function OnboardingScreen() {
                 {stage === "profile" ? renderProfileStage() : null}
               </GlassCard>
 
-              {stage === "profile" ? renderInvitePeople() : null}
+              {stage === "profile" ? (
+                renderInvitePeople()
+              ) : (
+                <GlassCard className="p-5">
+                  <View className="gap-3">
+                    <Text className="font-display text-[24px] leading-[28px] text-cloud">
+                      Keep Nowly in your pocket
+                    </Text>
+                    <Text className="font-body text-sm leading-6 text-white/68">
+                      Sign in here, then pick back up instantly on mobile when the moment goes live.
+                    </Text>
+                    <View className="gap-3">
+                      <View className="flex-row items-center gap-3 rounded-[20px] border border-white/6 bg-white/[0.03] px-4 py-3.5">
+                        <MaterialCommunityIcons name="calendar-clock-outline" size={20} color="#7DD3FC" />
+                        <Text className="font-body text-sm text-white/80">Book windows and recurring slots</Text>
+                      </View>
+                      <View className="flex-row items-center gap-3 rounded-[20px] border border-white/6 bg-white/[0.03] px-4 py-3.5">
+                        <MaterialCommunityIcons name="chat-processing-outline" size={20} color="#7DD3FC" />
+                        <Text className="font-body text-sm text-white/80">Keep private chats and group threads warm</Text>
+                      </View>
+                      <View className="flex-row items-center gap-3 rounded-[20px] border border-white/6 bg-white/[0.03] px-4 py-3.5">
+                        <MaterialCommunityIcons name="lightning-bolt-circle" size={20} color="#7DD3FC" />
+                        <Text className="font-body text-sm text-white/80">Turn overlap into a real hangout fast</Text>
+                      </View>
+                    </View>
+                  </View>
+                </GlassCard>
+              )}
             </>
           )}
         </View>

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text as RNText, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -375,7 +375,7 @@ export default function ProfileScreen() {
                   <Text className="mt-3 font-display text-[17px] leading-[21px] text-cloud">friends live now</Text>
                   {friendsLiveCount === 0 ? (
                     <View className="mt-2 gap-2">
-                      <Text className="font-body text-sm leading-6 text-white/64">No one live yet — be the first</Text>
+                      <Text className="font-body text-sm leading-6 text-white/64">No one live yet � be the first</Text>
                       <Pressable onPress={handleToggleLive} style={styles.inlineLiveButton}><Text style={styles.inlineLiveButtonText}>Go Live</Text></Pressable>
                     </View>
                   ) : (
@@ -488,6 +488,12 @@ const styles = StyleSheet.create({
   defaultText: {
     color: "#F8FAFC",
   },
+  eyebrowMobile: {
+    color: "rgba(34,211,238,0.76)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 2,
+  },
   heroGrid: { gap: 14 },
   heroGridDesktop: { flexDirection: "row", alignItems: "stretch" },
   heroShell: { overflow: "hidden", borderRadius: 30, alignItems: "flex-start", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", paddingHorizontal: 20, paddingVertical: 22, shadowColor: "#020617", shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 12 }, elevation: 7 },
@@ -496,6 +502,26 @@ const styles = StyleSheet.create({
   profileSignalOrb: { position: "absolute", top: -26, right: -18, height: 122, width: 122, borderRadius: 122, backgroundColor: "rgba(34,211,238,0.09)" },
   signalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 14, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: "rgba(255,255,255,0.035)" },
   heroGlowLarge: { position: "absolute", top: -38, right: -26, height: 160, width: 160, borderRadius: 160, backgroundColor: "rgba(34,211,238,0.08)" },
+  mobileChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  mobileEnergyMeta: { alignSelf: "flex-start", borderRadius: 999, backgroundColor: "rgba(34,211,238,0.12)", paddingHorizontal: 12, paddingVertical: 6 },
+  mobileIdentityRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  mobileMiniCard: { flex: 1, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)", paddingHorizontal: 14, paddingVertical: 14, gap: 4 },
+  mobileMiniCopy: { color: "rgba(248,250,252,0.62)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 12, lineHeight: 18 },
+  mobileMiniGrid: { flexDirection: "row", gap: 10 },
+  mobileMiniLabel: { color: "rgba(248,250,252,0.54)", fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase" },
+  mobileMiniValue: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 24, lineHeight: 28 },
+  mobileMomentumLead: { borderRadius: 20, backgroundColor: "rgba(255,255,255,0.04)", paddingHorizontal: 14, paddingVertical: 14, gap: 6 },
+  mobileMomentumStack: { gap: 10 },
+  mobilePrimaryActions: { gap: 10 },
+  mobileProfileName: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 30, lineHeight: 34 },
+  mobileProfileSubtitle: { color: "rgba(248,250,252,0.68)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 14, lineHeight: 20 },
+  mobileSectionTitle: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 22, lineHeight: 27 },
+  mobileSignalCell: { flex: 1, gap: 4, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.035)", paddingHorizontal: 12, paddingVertical: 12 },
+  mobileSignalLabel: { color: "rgba(248,250,252,0.52)", fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase" },
+  mobileSignalStrip: { flexDirection: "row", gap: 10 },
+  mobileSignalValue: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 13, lineHeight: 18 },
+  mobileTextLinkRow: { flexDirection: "row", gap: 18 },
+  mobileTimeline: { marginTop: 8, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 6 },
   avatarHalo: { position: "relative", marginTop: 4, shadowColor: "#67E8F9", shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
   avatarWrap: { height: 88, width: 88, overflow: "hidden", borderRadius: 44, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.06)" },
   avatarImage: {
@@ -597,5 +623,6 @@ const styles = StyleSheet.create({
   logoutTitle: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 16, lineHeight: 20 },
   logoutSubtitle: { color: "rgba(248,250,252,0.66)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 12, lineHeight: 16 },
 });
+
 
 

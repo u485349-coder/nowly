@@ -792,6 +792,68 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     maxWidth: 400,
   },
+  mobileActionCard: {
+    flex: 1,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  mobileActionTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 21,
+    lineHeight: 25,
+  },
+  mobileChatCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  mobileClusterGrid: {
+    gap: 10,
+  },
+  mobileClusterPerson: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  mobileDualActionRow: {
+    gap: 12,
+  },
+  mobileFriendActions: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    paddingTop: 2,
+  },
+  mobileRequestActions: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  mobileSectionTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 24,
+    lineHeight: 29,
+  },
+  mobileTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    maxWidth: 420,
+  },
   iconButton: {
     width: 40,
     height: 40,
@@ -941,5 +1003,6 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
 });
+
 
 

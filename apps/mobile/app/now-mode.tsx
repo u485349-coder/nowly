@@ -739,6 +739,46 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
+  mobileHeaderCopy: {
+    color: "rgba(247,251,255,0.64)",
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  mobileHeroActions: {
+    gap: 10,
+  },
+  mobileHeroTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 26,
+    lineHeight: 31,
+  },
+  mobileOverlapRow: {
+    gap: 10,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  mobilePageHeader: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  mobileSectionTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    lineHeight: 27,
+  },
+  mobileTitle: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 30,
+    lineHeight: 34,
+  },
   overlapRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -821,3 +861,4 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
 });
+

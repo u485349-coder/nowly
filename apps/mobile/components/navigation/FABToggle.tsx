@@ -24,6 +24,7 @@ const AnimatedIcon = Animated.createAnimatedComponent(MaterialCommunityIcons);
 
 type FABToggleProps = {
   bottom: number;
+  left: number;
   open: boolean;
   onPress: () => void;
   progress: SharedValue<number>;
@@ -34,6 +35,7 @@ type FABToggleProps = {
 
 export const FABToggle = ({
   bottom,
+  left,
   open,
   onPress,
   progress,
@@ -142,6 +144,7 @@ export const FABToggle = ({
         styles.pressable,
         {
           bottom,
+          left,
           width: size,
           height: size,
           marginLeft: -(size / 2),
@@ -222,7 +225,6 @@ export const FABToggle = ({
 const styles = StyleSheet.create({
   pressable: {
     position: "absolute",
-    left: "50%",
     zIndex: 30,
     alignItems: "center",
     justifyContent: "center",
