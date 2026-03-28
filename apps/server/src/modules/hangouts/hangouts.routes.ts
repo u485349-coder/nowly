@@ -19,6 +19,11 @@ import {
 } from "../intelligence/social-intelligence.service.js";
 import { getScheduledOverlapsForUser } from "../matching/scheduled-overlap.service.js";
 import { sendPushToUser } from "../notifications/push.service.js";
+import {
+  broadcastCrewActivity,
+  broadcastThreadMessageDeleted,
+  broadcastThreadMessageUpdated,
+} from "../sockets/socket.server.js";
 
 const createHangoutSchema = z.object({
   activity: z.string().min(2).max(60),
@@ -43,6 +48,10 @@ const respondSchema = z
 const recapSchema = z.object({
   didHang: z.boolean(),
   photoDropUrl: z.string().url().optional().nullable()
+});
+
+const updateThreadMessageSchema = z.object({
+  text: z.string().trim().min(1).max(1000),
 });
 
 const groupQuerySchema = z.object({
@@ -79,6 +88,33 @@ const hangoutInclude = {
 } satisfies Prisma.HangoutInclude;
 
 export const hangoutsRouter = Router();
+
+const canAccessThread = async (threadId: string, userId: string) =>
+  prisma.hangoutThread.findFirst({
+    where: {
+      id: threadId,
+      hangout: {
+        participants: {
+          some: {
+            userId,
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      hangoutId: true,
+      hangout: {
+        select: {
+          participants: {
+            select: {
+              userId: true,
+            },
+          },
+        },
+      },
+    },
+  });
 
 const resolveResponseStatus = (
   responseStatus?: ParticipantResponse,
@@ -251,20 +287,7 @@ hangoutsRouter.get(
   requireAuth,
   asyncHandler(async (request, response) => {
     const threadId = String(request.params.threadId);
-
-    const authorized = await prisma.hangoutThread.findFirst({
-      where: {
-        id: threadId,
-        hangout: {
-          participants: {
-            some: {
-              userId: request.userId
-            }
-          }
-        }
-      },
-      select: { id: true }
-    });
+    const authorized = await canAccessThread(threadId, request.userId!);
 
     if (!authorized) {
       response.status(403).json({ error: "Forbidden" });
@@ -289,6 +312,116 @@ hangoutsRouter.get(
 
     response.json({ data: messages });
   })
+);
+
+hangoutsRouter.patch(
+  "/threads/:threadId/messages/:messageId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const threadId = String(request.params.threadId);
+    const messageId = String(request.params.messageId);
+    const body = updateThreadMessageSchema.parse(request.body);
+    const authorized = await canAccessThread(threadId, request.userId!);
+
+    if (!authorized) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const existingMessage = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        threadId,
+      },
+      select: {
+        id: true,
+        senderId: true,
+      },
+    });
+
+    if (!existingMessage) {
+      response.status(404).json({ error: "Message not found." });
+      return;
+    }
+
+    if (existingMessage.senderId !== request.userId) {
+      response.status(403).json({ error: "You can only edit your own messages." });
+      return;
+    }
+
+    const message = await prisma.message.update({
+      where: { id: messageId },
+      data: { text: body.text },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            photoUrl: true,
+          },
+        },
+      },
+    });
+
+    broadcastThreadMessageUpdated(threadId, message);
+    response.json({ data: message });
+  }),
+);
+
+hangoutsRouter.delete(
+  "/threads/:threadId/messages/:messageId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const threadId = String(request.params.threadId);
+    const messageId = String(request.params.messageId);
+    const authorized = await canAccessThread(threadId, request.userId!);
+
+    if (!authorized) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const existingMessage = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        threadId,
+      },
+      select: {
+        id: true,
+        senderId: true,
+      },
+    });
+
+    if (!existingMessage) {
+      response.status(404).json({ error: "Message not found." });
+      return;
+    }
+
+    if (existingMessage.senderId !== request.userId) {
+      response.status(403).json({ error: "You can only delete your own messages." });
+      return;
+    }
+
+    await prisma.message.delete({
+      where: { id: messageId },
+    });
+
+    const latestThreadMessage = await prisma.message.findFirst({
+      where: { threadId },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+
+    await prisma.hangoutThread.update({
+      where: { id: threadId },
+      data: {
+        lastMessageAt: latestThreadMessage?.createdAt ?? null,
+      },
+    });
+
+    broadcastThreadMessageDeleted(threadId, { threadId, messageId });
+    response.json({ data: { ok: true } });
+  }),
 );
 
 hangoutsRouter.post(
@@ -344,8 +477,16 @@ hangoutsRouter.post(
     await Promise.all(
       participantIds
         .filter((participantId) => participantId !== request.userId)
-        .map((participantId) =>
-          sendPushToUser({
+        .map(async (participantId) => {
+          broadcastCrewActivity([participantId], {
+            actorId: request.userId!,
+            screen: "proposal",
+            title: "New hangout proposal",
+            body: `${hangout.creator.name ?? "A friend"} wants to ${body.activity}.`,
+            hangoutId: hangout.id,
+          });
+
+          return sendPushToUser({
             userId: participantId,
             type: NotificationType.PROPOSAL_RECEIVED,
             dedupeKey: `hangout:${hangout.id}:proposal`,
@@ -356,7 +497,7 @@ hangoutsRouter.post(
               hangoutId: hangout.id
             }
           })
-        )
+        })
     );
 
     if (participantIds.length > 2) {

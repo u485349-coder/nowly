@@ -1,4 +1,4 @@
-import { InviteChannel, Prisma } from "@prisma/client";
+import { InviteChannel, NotificationType, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
@@ -8,6 +8,8 @@ import { asyncHandler } from "../../utils/async-handler.js";
 import { normalizeFriendPair } from "../../utils/friends.js";
 import { createSmartOpenLinkForTargets } from "../../utils/links.js";
 import { trackEvent } from "../analytics/analytics.service.js";
+import { sendPushToUser } from "../notifications/push.service.js";
+import { broadcastCrewActivity } from "../sockets/socket.server.js";
 import {
   deriveFriendInsight,
   loadSocialContext,
@@ -236,6 +238,30 @@ friendsRouter.post(
       include: friendshipInclude
     });
 
+    const requester =
+      friendship.userAId === request.userId ? friendship.userA : friendship.userB;
+    const targetUserId = friendship.userAId === request.userId ? friendship.userBId : friendship.userAId;
+
+    if (friendship.initiatedBy === request.userId) {
+      broadcastCrewActivity([targetUserId], {
+        actorId: request.userId!,
+        screen: "friends",
+        title: requester.name ? `${requester.name} sent a friend request` : "New friend request",
+        body: "Open Crew to respond.",
+      });
+
+      await sendPushToUser({
+        userId: targetUserId,
+        type: NotificationType.GROUP_UPDATE,
+        dedupeKey: `friend-request:${friendship.id}`,
+        title: requester.name ? `${requester.name} sent a friend request` : "New friend request",
+        body: "Open Crew to respond.",
+        data: {
+          screen: "friends",
+        },
+      });
+    }
+
     response.status(201).json({ data: friendship });
   })
 );
@@ -323,4 +349,26 @@ friendsRouter.post(
 
     response.json({ data: updated });
   })
+);
+
+friendsRouter.delete(
+  "/:friendshipId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const friendshipId = String(request.params.friendshipId);
+    const friendship = await prisma.friendship.findUniqueOrThrow({
+      where: { id: friendshipId },
+    });
+
+    if (![friendship.userAId, friendship.userBId].includes(request.userId!)) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    await prisma.friendship.delete({
+      where: { id: friendshipId },
+    });
+
+    response.json({ data: { ok: true } });
+  }),
 );

@@ -11,7 +11,12 @@ import { requireAuth } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { normalizeFriendPair } from "../../utils/friends.js";
 import { sendPushToUser } from "../notifications/push.service.js";
-import { broadcastDirectChatInboxRefresh, broadcastDirectChatMessage } from "../sockets/socket.server.js";
+import {
+  broadcastDirectChatInboxRefresh,
+  broadcastDirectChatMessage,
+  broadcastDirectChatMessageDeleted,
+  broadcastDirectChatMessageUpdated,
+} from "../sockets/socket.server.js";
 
 const createDirectChatSchema = z.object({
   userId: z.string().min(1),
@@ -25,6 +30,10 @@ const createGroupChatSchema = z.object({
 const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(1000),
   type: z.nativeEnum(MessageType).optional(),
+});
+
+const updateMessageSchema = z.object({
+  text: z.string().trim().min(1).max(1000),
 });
 
 const participantUserSelect = {
@@ -114,6 +123,27 @@ const canAccessChat = async (chatId: string, userId: string) =>
     select: { id: true },
   });
 
+const getChatForUser = async (chatId: string, userId: string) =>
+  prisma.directThread.findFirst({
+    where: {
+      id: chatId,
+      participants: {
+        some: {
+          userId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      type: true,
+      participants: {
+        select: {
+          userId: true,
+        },
+      },
+    },
+  });
+
 const markChatRead = async (chatId: string, userId: string) =>
   prisma.directThreadParticipant.update({
     where: {
@@ -146,11 +176,34 @@ const getAcceptedFriendIds = async (userId: string) => {
   );
 };
 
+const refreshDirectThreadMetadata = async (chatId: string) => {
+  const latestMessage = await prisma.directMessage.findFirst({
+    where: { threadId: chatId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      createdAt: true,
+      text: true,
+    },
+  });
+
+  await prisma.directThread.update({
+    where: { id: chatId },
+    data: {
+      lastMessageAt: latestMessage?.createdAt ?? null,
+      updatedAt: new Date(),
+    },
+  });
+
+  return latestMessage;
+};
+
 const GROUP_CHAT_IDEMPOTENCY_WINDOW_MS = 2 * 60 * 1000;
 const MAX_GROUP_FRIEND_PARTICIPANTS = 8;
 
 const buildParticipantSignature = (participantIds: string[]) =>
   [...participantIds].sort().join(":");
+
+const toChatType = (type: string): "direct" | "group" => (type === "group" ? "group" : "direct");
 
 export const chatsRouter = Router();
 
@@ -379,9 +432,9 @@ chatsRouter.post(
   asyncHandler(async (request, response) => {
     const chatId = String(request.params.chatId);
     const body = sendMessageSchema.parse(request.body);
-    const authorized = await canAccessChat(chatId, request.userId!);
+    const chat = await getChatForUser(chatId, request.userId!);
 
-    if (!authorized) {
+    if (!chat) {
       response.status(403).json({ error: "Forbidden" });
       return;
     }
@@ -434,6 +487,14 @@ chatsRouter.post(
     broadcastDirectChatMessage(chatId, message);
     broadcastDirectChatInboxRefresh(
       [request.userId!, ...recipients.map((recipient) => recipient.userId)],
+        {
+          actorId: request.userId!,
+          chatId,
+          chatType: toChatType(chat.type),
+          title: message.sender.name ?? "New message",
+          body: body.text,
+          screen: "chat",
+        },
     );
 
     await Promise.all(
@@ -447,6 +508,7 @@ chatsRouter.post(
           data: {
             screen: "chat",
             chatId,
+            chatType: toChatType(chat.type),
           },
         }),
       ),
@@ -469,6 +531,175 @@ chatsRouter.post(
     }
 
     await markChatRead(chatId, request.userId!);
+
+    response.json({ data: { ok: true } });
+  }),
+);
+
+chatsRouter.patch(
+  "/:chatId/messages/:messageId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const chatId = String(request.params.chatId);
+    const messageId = String(request.params.messageId);
+    const body = updateMessageSchema.parse(request.body);
+    const chat = await getChatForUser(chatId, request.userId!);
+
+    if (!chat) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const existingMessage = await prisma.directMessage.findFirst({
+      where: {
+        id: messageId,
+        threadId: chatId,
+      },
+      select: {
+        id: true,
+        senderId: true,
+      },
+    });
+
+    if (!existingMessage) {
+      response.status(404).json({ error: "Message not found." });
+      return;
+    }
+
+    if (existingMessage.senderId !== request.userId) {
+      response.status(403).json({ error: "You can only edit your own messages." });
+      return;
+    }
+
+    const message = await prisma.directMessage.update({
+      where: { id: messageId },
+      data: { text: body.text },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            photoUrl: true,
+          },
+        },
+      },
+    });
+
+    await refreshDirectThreadMetadata(chatId);
+    broadcastDirectChatMessageUpdated(chatId, message);
+    broadcastDirectChatInboxRefresh(
+      (
+        await prisma.directThreadParticipant.findMany({
+          where: { threadId: chatId },
+          select: { userId: true },
+        })
+      ).map((participant) => participant.userId),
+      {
+        actorId: request.userId!,
+        chatId,
+        chatType: toChatType(chat.type),
+        title: message.sender.name ?? "Message updated",
+        body: body.text,
+        screen: "chat",
+      },
+    );
+
+    response.json({ data: message });
+  }),
+);
+
+chatsRouter.delete(
+  "/:chatId/messages/:messageId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const chatId = String(request.params.chatId);
+    const messageId = String(request.params.messageId);
+    const chat = await getChatForUser(chatId, request.userId!);
+
+    if (!chat) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const existingMessage = await prisma.directMessage.findFirst({
+      where: {
+        id: messageId,
+        threadId: chatId,
+      },
+      select: {
+        id: true,
+        senderId: true,
+      },
+    });
+
+    if (!existingMessage) {
+      response.status(404).json({ error: "Message not found." });
+      return;
+    }
+
+    if (existingMessage.senderId !== request.userId) {
+      response.status(403).json({ error: "You can only delete your own messages." });
+      return;
+    }
+
+    await prisma.directMessage.delete({
+      where: { id: messageId },
+    });
+
+    const latestMessage = await refreshDirectThreadMetadata(chatId);
+    const participantIds = (
+      await prisma.directThreadParticipant.findMany({
+        where: { threadId: chatId },
+        select: { userId: true },
+      })
+    ).map((participant) => participant.userId);
+
+    broadcastDirectChatMessageDeleted(chatId, { chatId, messageId });
+    broadcastDirectChatInboxRefresh(participantIds, {
+      actorId: request.userId!,
+      chatId,
+      chatType: toChatType(chat.type),
+      title: "Message deleted",
+      body: latestMessage?.text ?? "Conversation cleared back a bit.",
+      screen: "chat",
+    });
+
+    response.json({ data: { ok: true } });
+  }),
+);
+
+chatsRouter.delete(
+  "/:chatId",
+  requireAuth,
+  asyncHandler(async (request, response) => {
+    const chatId = String(request.params.chatId);
+    const chat = await getChatForUser(chatId, request.userId!);
+
+    if (!chat) {
+      response.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    if (chat.type !== "direct") {
+      response.status(400).json({ error: "Only private one-on-one chats can be reset right now." });
+      return;
+    }
+
+    const affectedUserIds = chat.participants.map((participant) => participant.userId);
+
+    await prisma.$transaction([
+      prisma.directMessage.deleteMany({
+        where: { threadId: chatId },
+      }),
+      prisma.directThreadParticipant.deleteMany({
+        where: { threadId: chatId },
+      }),
+      prisma.directThread.delete({
+        where: { id: chatId },
+      }),
+    ]);
+
+    broadcastDirectChatInboxRefresh(affectedUserIds);
 
     response.json({ data: { ok: true } });
   }),

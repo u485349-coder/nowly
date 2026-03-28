@@ -66,6 +66,15 @@ export type MicroResponse = (typeof microResponses)[number];
 export const notificationIntensities = ["QUIET", "BALANCED", "LIVE"] as const;
 export type NotificationIntensity = (typeof notificationIntensities)[number];
 
+export type NotificationPreferences = {
+  pushNotificationsEnabled?: boolean;
+  inAppNotificationsEnabled?: boolean;
+  notificationSoundEnabled?: boolean;
+  messagePreviewEnabled?: boolean;
+  dmNotificationsEnabled?: boolean;
+  pingNotificationsEnabled?: boolean;
+};
+
 export type MatchReason = {
   sharedVibe?: Vibe | null;
   sharedIntent?: HangoutIntent | null;
@@ -123,6 +132,12 @@ export type MobileUser = {
   discordUsername?: string | null;
   sharedServerCount?: number;
   notificationIntensity?: NotificationIntensity;
+  pushNotificationsEnabled?: boolean;
+  inAppNotificationsEnabled?: boolean;
+  notificationSoundEnabled?: boolean;
+  messagePreviewEnabled?: boolean;
+  dmNotificationsEnabled?: boolean;
+  pingNotificationsEnabled?: boolean;
 };
 
 export type MobileAvailabilitySignal = {

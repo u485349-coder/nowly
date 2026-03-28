@@ -52,6 +52,7 @@ export default function FriendsScreen() {
   const suggestions = useAppStore((state) => state.suggestions);
   const radar = useAppStore((state) => state.radar);
   const directChats = useAppStore((state) => state.directChats);
+  const friendRequestUnreadCount = useAppStore((state) => state.unreadByEntity.friend_requests ?? 0);
   const setFriends = useAppStore((state) => state.setFriends);
   const setSuggestions = useAppStore((state) => state.setSuggestions);
   const setDirectChats = useAppStore((state) => state.setDirectChats);
@@ -259,6 +260,37 @@ export default function FriendsScreen() {
     router.push("/chat/new");
   };
 
+  const handleUnfriend = (friend: AppFriend) => {
+    Alert.alert(
+      `Remove ${friend.name}?`,
+      "This removes them from your crew. You can always add them again later.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            void api.unfriend(token, friend.friendshipId)
+              .then(() => {
+                removeFriend(friend.id);
+                setDirectChats(
+                  useAppStore.getState().directChats.filter(
+                    (chat) => !chat.participants.some((participant) => participant.id === friend.id),
+                  ),
+                );
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Could not remove friend",
+                  error instanceof Error ? error.message : "Try again.",
+                );
+              });
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <GradientMesh>
       <ScrollView
@@ -361,7 +393,16 @@ export default function FriendsScreen() {
 
           <View style={{ width: layout.rightColumnWidth, gap: layout.sectionGap }}>
             <View style={{ gap: 12 }}>
-              <Text style={styles.sectionLabel}>PENDING REQUESTS</Text>
+              <View style={styles.sectionLabelRow}>
+                <Text style={styles.sectionLabel}>PENDING REQUESTS</Text>
+                {friendRequestUnreadCount > 0 ? (
+                  <View style={styles.sectionBadge}>
+                    <Text style={styles.sectionBadgeText}>
+                      {friendRequestUnreadCount > 99 ? "99+" : friendRequestUnreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               {pendingRequests.length ? (
                 pendingRequests.map((friend) => {
                   const incoming =
@@ -440,7 +481,7 @@ export default function FriendsScreen() {
                           webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
                         ]}
                       >
-                        <MaterialCommunityIcons name="message-text-outline" size={20} color="#F8FAFC" />
+                        <MaterialCommunityIcons name="chat-processing-outline" size={20} color="#F8FAFC" />
                       </Pressable>
                       <Pressable
                         accessibilityLabel={`Share quick invite link with ${friend.name}`}
@@ -452,6 +493,17 @@ export default function FriendsScreen() {
                         ]}
                       >
                         <MaterialCommunityIcons name="share-variant-outline" size={18} color="#8BEAFF" />
+                      </Pressable>
+                      <Pressable
+                        accessibilityLabel={`Remove ${friend.name} from your crew`}
+                        accessibilityRole="button"
+                        onPress={() => handleUnfriend(friend)}
+                        style={({ pressed }) => [
+                          styles.iconButton,
+                          webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
+                        ]}
+                      >
+                        <MaterialCommunityIcons name="account-minus-outline" size={18} color="#F8FAFC" />
                       </Pressable>
                     </View>
                   </View>
@@ -773,6 +825,26 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
     letterSpacing: 2,
+  },
+  sectionLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139,234,255,0.94)",
+    paddingHorizontal: 5,
+  },
+  sectionBadgeText: {
+    color: "#081120",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 10,
+    lineHeight: 11,
   },
   suggestionRow: {
     flexDirection: "row",

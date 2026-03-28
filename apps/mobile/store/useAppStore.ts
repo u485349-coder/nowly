@@ -28,6 +28,7 @@ import {
   AppFriend,
   AppHangout,
   AppMatch,
+  AppNotification,
   AppRadar,
   AppUser,
   DateSpecificAvailabilityWindow,
@@ -103,6 +104,9 @@ type AppState = {
   onboardingComplete: boolean;
   notificationsEnabled: boolean;
   crewUnreadCount: number;
+  notifications: AppNotification[];
+  unreadByEntity: Record<string, number>;
+  globalUnreadCount: number;
   activeSignal: MobileAvailabilitySignal | null;
   recurringWindows: MobileRecurringAvailabilityWindow[];
   dateSpecificWindows: DateSpecificAvailabilityWindow[];
@@ -120,6 +124,13 @@ type AppState = {
   finishOnboarding: (user: AppUser) => void;
   setIntroSeen: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  hydrateNotificationState: (payload: {
+    notifications: AppNotification[];
+    unreadByEntity: Record<string, number>;
+    globalUnreadCount?: number;
+  }) => void;
+  addNotification: (notification: AppNotification, unreadDelta?: number) => void;
+  markEntityAsRead: (entityId: string) => void;
   incrementCrewUnread: (count?: number) => void;
   consumeCrewUnread: () => void;
   setCrewUnreadCount: (count: number) => void;
@@ -149,11 +160,16 @@ type AppState = {
   setThreadMessages: (threadId: string, messages: ThreadMessage[]) => void;
   clearThreadMessages: (threadId: string) => void;
   appendMessage: (threadId: string, message: ThreadMessage) => void;
+  updateThreadMessage: (threadId: string, message: ThreadMessage) => void;
+  deleteThreadMessage: (threadId: string, messageId: string) => void;
   setDirectChats: (chats: DirectChat[]) => void;
   upsertDirectChat: (chat: DirectChat) => void;
+  removeDirectChat: (chatId: string) => void;
   markDirectChatReadLocal: (chatId: string) => void;
   setDirectMessages: (chatId: string, messages: DirectMessage[]) => void;
   appendDirectMessage: (chatId: string, message: DirectMessage) => void;
+  updateDirectMessage: (chatId: string, message: DirectMessage) => void;
+  deleteDirectMessage: (chatId: string, messageId: string) => void;
   updateHangoutResponse: (
     hangoutId: string,
     userId: string,
@@ -178,6 +194,9 @@ export const useAppStore = create<AppState>()(
       onboardingComplete: false,
       notificationsEnabled: true,
       crewUnreadCount: 0,
+      notifications: [],
+      unreadByEntity: {},
+      globalUnreadCount: 0,
       activeSignal: null,
       recurringWindows: [],
       dateSpecificWindows: [],
@@ -198,6 +217,7 @@ export const useAppStore = create<AppState>()(
             token,
             user,
             onboardingComplete: user.onboardingCompleted ?? false,
+            notificationsEnabled: user.pushNotificationsEnabled ?? true,
           };
         }),
       finishOnboarding: (user) =>
@@ -207,6 +227,7 @@ export const useAppStore = create<AppState>()(
             onboardingCompleted: true,
           },
           onboardingComplete: true,
+          notificationsEnabled: user.pushNotificationsEnabled ?? true,
         })),
       setIntroSeen: () =>
         set(() => ({
@@ -216,17 +237,78 @@ export const useAppStore = create<AppState>()(
         set(() => ({
           notificationsEnabled: enabled,
         })),
+      hydrateNotificationState: (payload) =>
+        set(() => {
+          const globalUnreadCount =
+            typeof payload.globalUnreadCount === "number"
+              ? Math.max(0, Math.floor(payload.globalUnreadCount))
+              : Object.values(payload.unreadByEntity).reduce((sum, count) => sum + count, 0);
+
+          return {
+            notifications: payload.notifications,
+            unreadByEntity: payload.unreadByEntity,
+            globalUnreadCount,
+            crewUnreadCount: globalUnreadCount,
+          };
+        }),
+      addNotification: (notification, unreadDelta = 1) =>
+        set((state) => {
+          const nextUnreadByEntity = {
+            ...state.unreadByEntity,
+            [notification.entityId]:
+              Math.max(0, state.unreadByEntity[notification.entityId] ?? 0) + Math.max(1, unreadDelta),
+          };
+          const nextGlobalUnread = state.globalUnreadCount + Math.max(1, unreadDelta);
+          const dedupedNotifications = [
+            notification,
+            ...state.notifications.filter((item) => item.id !== notification.id),
+          ].slice(0, 100);
+
+          return {
+            notifications: dedupedNotifications,
+            unreadByEntity: nextUnreadByEntity,
+            globalUnreadCount: nextGlobalUnread,
+            crewUnreadCount: nextGlobalUnread,
+          };
+        }),
+      markEntityAsRead: (entityId) =>
+        set((state) => {
+          const currentCount = state.unreadByEntity[entityId] ?? 0;
+          if (!currentCount) {
+            return state;
+          }
+
+          const nextUnreadByEntity = { ...state.unreadByEntity };
+          delete nextUnreadByEntity[entityId];
+          const nextGlobalUnread = Math.max(0, state.globalUnreadCount - currentCount);
+
+          return {
+            unreadByEntity: nextUnreadByEntity,
+            notifications: state.notifications.map((notification) =>
+              notification.entityId === entityId
+                ? { ...notification, read: true }
+                : notification,
+            ),
+            globalUnreadCount: nextGlobalUnread,
+            crewUnreadCount: nextGlobalUnread,
+          };
+        }),
       incrementCrewUnread: (count = 1) =>
         set((state) => ({
           crewUnreadCount: Math.max(0, state.crewUnreadCount + Math.max(1, Math.floor(count))),
+          globalUnreadCount: Math.max(0, state.globalUnreadCount + Math.max(1, Math.floor(count))),
         })),
       consumeCrewUnread: () =>
         set(() => ({
           crewUnreadCount: 0,
+          globalUnreadCount: 0,
+          unreadByEntity: {},
+          notifications: [],
         })),
       setCrewUnreadCount: (count) =>
         set(() => ({
           crewUnreadCount: Math.max(0, Math.floor(count)),
+          globalUnreadCount: Math.max(0, Math.floor(count)),
         })),
       setBookingSetup: (payload) =>
         set((state) => ({
@@ -316,6 +398,10 @@ export const useAppStore = create<AppState>()(
             typeof payload.onboardingCompleted === "boolean"
               ? payload.onboardingCompleted
               : state.onboardingComplete,
+          notificationsEnabled:
+            typeof payload.pushNotificationsEnabled === "boolean"
+              ? payload.pushNotificationsEnabled
+              : state.notificationsEnabled,
         })),
       upsertHangout: (hangout) =>
         set((state) => ({
@@ -351,6 +437,24 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+      updateThreadMessage: (threadId, message) =>
+        set((state) => ({
+          threadMessages: {
+            ...state.threadMessages,
+            [threadId]: (state.threadMessages[threadId] ?? []).map((item) =>
+              item.id === message.id ? { ...item, ...message } : item,
+            ),
+          },
+        })),
+      deleteThreadMessage: (threadId, messageId) =>
+        set((state) => ({
+          threadMessages: {
+            ...state.threadMessages,
+            [threadId]: (state.threadMessages[threadId] ?? []).filter(
+              (item) => item.id !== messageId,
+            ),
+          },
+        })),
       setDirectChats: (chats) =>
         set(() => ({
           directChats: [...chats].sort((a, b) => {
@@ -368,6 +472,16 @@ export const useAppStore = create<AppState>()(
             return bTs - aTs;
           });
           return { directChats: merged };
+        }),
+      removeDirectChat: (chatId) =>
+        set((state) => {
+          const nextMessages = { ...state.directMessages };
+          delete nextMessages[chatId];
+
+          return {
+            directChats: state.directChats.filter((chat) => chat.id !== chatId),
+            directMessages: nextMessages,
+          };
         }),
       markDirectChatReadLocal: (chatId) =>
         set((state) => ({
@@ -401,6 +515,24 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+      updateDirectMessage: (chatId, message) =>
+        set((state) => ({
+          directMessages: {
+            ...state.directMessages,
+            [chatId]: (state.directMessages[chatId] ?? []).map((item) =>
+              item.id === message.id ? { ...item, ...message } : item,
+            ),
+          },
+        })),
+      deleteDirectMessage: (chatId, messageId) =>
+        set((state) => ({
+          directMessages: {
+            ...state.directMessages,
+            [chatId]: (state.directMessages[chatId] ?? []).filter(
+              (item) => item.id !== messageId,
+            ),
+          },
+        })),
       updateHangoutResponse: (hangoutId, userId, responseStatus, microResponse) =>
         set((state) => ({
           hangouts: state.hangouts.map((hangout) =>
@@ -490,6 +622,9 @@ export const useAppStore = create<AppState>()(
           introSeen: state.introSeen,
           notificationsEnabled: state.notificationsEnabled,
           crewUnreadCount: 0,
+          notifications: [],
+          unreadByEntity: {},
+          globalUnreadCount: 0,
           };
         }),
       bootstrapDemo: () =>
@@ -561,6 +696,9 @@ export const useAppStore = create<AppState>()(
         notificationsEnabled: state.notificationsEnabled,
         activeSignal: state.activeSignal,
         dateSpecificWindows: state.dateSpecificWindows,
+        notifications: state.notifications,
+        unreadByEntity: state.unreadByEntity,
+        globalUnreadCount: state.globalUnreadCount,
       }),
     },
   ),

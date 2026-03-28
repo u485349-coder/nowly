@@ -23,10 +23,41 @@ const getIsoWeekKey = (date: Date) => {
 const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
 
+const reminderWindows = [
+  { key: "24h", minutesBefore: 24 * 60, toleranceMinutes: 20 },
+  { key: "1h", minutesBefore: 60, toleranceMinutes: 12 },
+  { key: "10m", minutesBefore: 10, toleranceMinutes: 6 },
+] as const;
+
+const reminderCopy = (
+  key: (typeof reminderWindows)[number]["key"],
+  activity: string,
+  locationName: string,
+) => {
+  if (key === "24h") {
+    return {
+      title: "Your hang is tomorrow",
+      body: `${activity} at ${locationName} is coming up in about 24 hours.`,
+    };
+  }
+
+  if (key === "1h") {
+    return {
+      title: "Your hang starts in about an hour",
+      body: `${activity} at ${locationName} is about an hour away.`,
+    };
+  }
+
+  return {
+    title: "Your hang starts soon",
+    body: `${activity} at ${locationName} starts in about 10 minutes.`,
+  };
+};
+
 const sendUpcomingHangoutReminders = async () => {
   const now = new Date();
-  const reminderWindowStart = new Date(now.getTime() + 20 * 60 * 1000);
-  const reminderWindowEnd = new Date(now.getTime() + 55 * 60 * 1000);
+  const reminderWindowStart = new Date(now.getTime() + 4 * 60 * 1000);
+  const reminderWindowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000 + 30 * 60 * 1000);
 
   const hangouts = await prisma.hangout.findMany({
     where: {
@@ -63,52 +94,53 @@ const sendUpcomingHangoutReminders = async () => {
         1,
         Math.round((hangout.scheduledFor.getTime() - now.getTime()) / 60000),
       );
-      const dedupeKey = `hangout:${hangout.id}:reminder:${Math.floor(
-        hangout.scheduledFor.getTime() / (30 * 60 * 1000),
-      )}`;
+      const matchingWindows = reminderWindows.filter(
+        (window) =>
+          minutesAway <= window.minutesBefore + window.toleranceMinutes &&
+          minutesAway >= Math.max(1, window.minutesBefore - window.toleranceMinutes),
+      );
 
-      return hangout.participants
-        .filter((participant) => participant.responseStatus !== ParticipantResponse.DECLINED)
-        .map(async (participant) => {
-          const recentlySent = await wasRecentlySent(
-            participant.userId,
-            NotificationType.REMINDER,
-            dedupeKey,
-            120,
-          );
+      return matchingWindows.flatMap((window) =>
+        hangout.participants
+          .filter((participant) => participant.responseStatus !== ParticipantResponse.DECLINED)
+          .map(async (participant) => {
+            const dedupeKey = `hangout:${hangout.id}:reminder:${window.key}`;
+            const recentlySent = await wasRecentlySent(
+              participant.userId,
+              NotificationType.REMINDER,
+              dedupeKey,
+              26 * 60,
+            );
 
-          if (recentlySent) {
-            return;
-          }
+            if (recentlySent) {
+              return;
+            }
 
-          const screen =
-            hangout.status === "CONFIRMED" && hangout.thread?.id ? "thread" : "proposal";
+            const screen =
+              hangout.status === "CONFIRMED" && hangout.thread?.id ? "thread" : "proposal";
+            const copy = reminderCopy(window.key, hangout.activity, hangout.locationName);
 
-          await sendPushToUser({
-            userId: participant.userId,
-            type: NotificationType.REMINDER,
-            priority: NotificationPriority.HIGH,
-            dedupeKey,
-            title:
-              hangout.status === "CONFIRMED"
-                ? "Your crew link-up is coming up"
-                : "Your quick plan is still live",
-            body:
-              hangout.status === "CONFIRMED"
-                ? `${hangout.activity} at ${hangout.locationName} starts in about ${minutesAway} min.`
-                : `${hangout.activity} at ${hangout.locationName} is still on the table in about ${minutesAway} min.`,
-            data:
-              screen === "thread"
-                ? {
-                    screen: "thread",
-                    threadId: hangout.thread!.id,
-                  }
-                : {
-                    screen: "proposal",
-                    hangoutId: hangout.id,
-                  },
-          });
-        });
+            await sendPushToUser({
+              userId: participant.userId,
+              type: NotificationType.REMINDER,
+              priority: NotificationPriority.HIGH,
+              dedupeKey,
+              title: copy.title,
+              body: copy.body,
+              data:
+                screen === "thread"
+                  ? {
+                      screen: "thread",
+                      threadId: hangout.thread!.id,
+                      hangoutId: hangout.id,
+                    }
+                  : {
+                      screen: "proposal",
+                      hangoutId: hangout.id,
+                    },
+            });
+          }),
+      );
     }),
   );
 };

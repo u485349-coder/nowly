@@ -51,6 +51,12 @@ export const demoUser: AppUser = {
   premium: false,
   hasDiscordLinked: true,
   notificationIntensity: "BALANCED",
+  pushNotificationsEnabled: true,
+  inAppNotificationsEnabled: true,
+  notificationSoundEnabled: true,
+  messagePreviewEnabled: true,
+  dmNotificationsEnabled: true,
+  pingNotificationsEnabled: true,
 };
 
 export const demoFriends: AppFriend[] = [

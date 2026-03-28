@@ -56,22 +56,77 @@ let realtimeServer: Server | null = null;
 
 const getSchedulingRoom = (shareCode: string) => `schedule:${shareCode}`;
 const getUserRoom = (userId: string) => `user:${userId}`;
+const toChatType = (type: string): "direct" | "group" => (type === "group" ? "group" : "direct");
 
 export const broadcastDirectChatMessage = (chatId: string, message: unknown) => {
   realtimeServer?.to(chatId).emit("chat:message", message);
 };
 
-export const broadcastDirectChatInboxRefresh = (userIds: string[]) => {
+export const broadcastDirectChatMessageUpdated = (chatId: string, message: unknown) => {
+  realtimeServer?.to(chatId).emit("chat:message-updated", message);
+};
+
+export const broadcastDirectChatMessageDeleted = (
+  chatId: string,
+  payload: { chatId: string; messageId: string },
+) => {
+  realtimeServer?.to(chatId).emit("chat:message-deleted", payload);
+};
+
+export const broadcastDirectChatInboxRefresh = (
+  userIds: string[],
+  payload?: {
+    actorId?: string;
+    chatId?: string;
+    chatType?: "direct" | "group";
+    title?: string;
+    body?: string;
+    screen?: "chat";
+  },
+) => {
   userIds.forEach((userId) => {
     realtimeServer?.to(getUserRoom(userId)).emit("chat:inbox-update", {
       userId,
       at: new Date().toISOString(),
+      ...payload,
+    });
+  });
+};
+
+export const broadcastCrewActivity = (
+  userIds: string[],
+  payload: {
+    actorId?: string;
+    screen: "chat" | "thread" | "proposal" | "friends";
+    title?: string;
+    body?: string;
+    chatId?: string;
+    threadId?: string;
+    hangoutId?: string;
+  },
+) => {
+  userIds.forEach((userId) => {
+    realtimeServer?.to(getUserRoom(userId)).emit("crew:activity", {
+      userId,
+      at: new Date().toISOString(),
+      ...payload,
     });
   });
 };
 
 export const broadcastSchedulingSessionUpdate = (shareCode: string, session: unknown) => {
   realtimeServer?.to(getSchedulingRoom(shareCode)).emit("schedule:update", session);
+};
+
+export const broadcastThreadMessageUpdated = (threadId: string, message: unknown) => {
+  realtimeServer?.to(threadId).emit("thread:message-updated", message);
+};
+
+export const broadcastThreadMessageDeleted = (
+  threadId: string,
+  payload: { threadId: string; messageId: string },
+) => {
+  realtimeServer?.to(threadId).emit("thread:message-deleted", payload);
 };
 
 const getParticipantIds = async (hangoutId: string) => {
@@ -113,7 +168,7 @@ const canAccessDirectChat = async (chatId: string, userId: string) =>
         },
       },
     },
-    select: { id: true },
+    select: { id: true, type: true },
   });
 
 export const createSocketServer = (server: HttpServer) => {
@@ -163,6 +218,24 @@ export const createSocketServer = (server: HttpServer) => {
 
       socket.join(chatId);
     });
+
+    socket.on(
+      "chat:typing",
+      async (payload: { chatId: string; isTyping: boolean; userName?: string }) => {
+        const chat = await canAccessDirectChat(payload.chatId, socket.data.userId);
+
+        if (!chat) {
+          return;
+        }
+
+        socket.to(payload.chatId).emit("chat:typing", {
+          chatId: payload.chatId,
+          userId: socket.data.userId,
+          userName: payload.userName,
+          isTyping: payload.isTyping,
+        });
+      },
+    );
 
     socket.on("schedule:join", async ({ shareCode }: SchedulingJoinPayload) => {
       const session = await prisma.schedulingSession.findUnique({
@@ -223,25 +296,56 @@ export const createSocketServer = (server: HttpServer) => {
 
       if (thread) {
         const participantIds = await getParticipantIds(thread.hangoutId);
+        const recipientIds = participantIds.filter((userId) => userId !== socket.data.userId);
+
+        broadcastCrewActivity(recipientIds, {
+          actorId: socket.data.userId,
+          screen: "thread",
+          threadId: payload.threadId,
+          hangoutId: thread.hangoutId,
+          title: message.sender.name
+            ? `${message.sender.name} replied`
+            : "Crew thread update",
+          body: payload.text,
+        });
+
         await Promise.all(
-          participantIds
-            .filter((userId) => userId !== socket.data.userId)
-            .map((userId) =>
+          recipientIds.map((userId) =>
               sendPushToUser({
                 userId,
                 type: NotificationType.GROUP_UPDATE,
                 dedupeKey: `thread:${payload.threadId}:message:${message.id}`,
-                title: "Crew chat moving",
+                title: message.sender.name
+                  ? `${message.sender.name} replied`
+                  : "Crew thread update",
                 body: payload.text,
                 data: {
                   screen: "thread",
-                  threadId: payload.threadId
+                  threadId: payload.threadId,
+                  hangoutId: thread.hangoutId,
                 }
               })
             )
         );
       }
     });
+
+    socket.on(
+      "thread:typing",
+      async (payload: { threadId: string; isTyping: boolean; userName?: string }) => {
+        const thread = await canAccessThread(payload.threadId, socket.data.userId);
+        if (!thread) {
+          return;
+        }
+
+        socket.to(payload.threadId).emit("thread:typing", {
+          threadId: payload.threadId,
+          userId: socket.data.userId,
+          userName: payload.userName,
+          isTyping: payload.isTyping,
+        });
+      },
+    );
 
     socket.on("chat:message", async (payload: DirectChatMessagePayload) => {
       const chatAccess = await canAccessDirectChat(payload.chatId, socket.data.userId);
@@ -297,6 +401,14 @@ export const createSocketServer = (server: HttpServer) => {
 
       broadcastDirectChatInboxRefresh(
         [socket.data.userId, ...recipients.map((recipient) => recipient.userId)],
+        {
+          actorId: socket.data.userId,
+          chatId: payload.chatId,
+          chatType: toChatType(chatAccess.type),
+          title: message.sender.name ?? "New message",
+          body: payload.text,
+          screen: "chat",
+        },
       );
 
       await Promise.all(
@@ -310,6 +422,7 @@ export const createSocketServer = (server: HttpServer) => {
             data: {
               screen: "chat",
               chatId: payload.chatId,
+              chatType: toChatType(chatAccess.type),
             },
           }),
         ),

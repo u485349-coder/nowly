@@ -36,6 +36,34 @@ const Text = (props: ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[styles.defaultText, props.style]} />
 );
 
+const notificationIntensityOptions = [
+  { key: "QUIET", label: "Quiet" },
+  { key: "BALANCED", label: "Balanced" },
+  { key: "LIVE", label: "Live" },
+] as const;
+
+const ToggleRow = ({
+  label,
+  detail,
+  value,
+  onPress,
+}: {
+  label: string;
+  detail: string;
+  value: boolean;
+  onPress: () => void;
+}) => (
+  <Pressable onPress={onPress} style={({ pressed }) => [styles.toggleRow, pressed ? styles.toggleRowPressed : null]}>
+    <View style={{ flex: 1, gap: 4 }}>
+      <Text style={styles.toggleLabel}>{label}</Text>
+      <Text style={styles.toggleDetail}>{detail}</Text>
+    </View>
+    <View style={[styles.togglePill, value ? styles.togglePillActive : null]}>
+      <View style={[styles.toggleKnob, value ? styles.toggleKnobActive : null]} />
+    </View>
+  </Pressable>
+);
+
 export default function ProfileScreen() {
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
@@ -51,6 +79,7 @@ export default function ProfileScreen() {
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel>(mockUser.energy);
   const [isLive, setIsLive] = useState(false);
   const [friendsLiveCount, setFriendsLiveCount] = useState(0);
+  const [savingPreferenceKey, setSavingPreferenceKey] = useState<string | null>(null);
 
   const sliderProgress = useSharedValue(progressForEnergy(energyLevel));
   const rippleOpacity = useSharedValue(0);
@@ -151,6 +180,25 @@ export default function ProfileScreen() {
     disconnectSocket();
     clearSession();
     router.replace("/onboarding");
+  };
+
+  const handlePreferenceUpdate = async (
+    key: string,
+    payload: Parameters<typeof api.updateNotificationPreference>[1],
+  ) => {
+    try {
+      setSavingPreferenceKey(key);
+      const nextUser = await api.updateNotificationPreference(token, payload);
+      updateUser(nextUser);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't update that notification setting right now.";
+      Alert.alert("Notification update failed", message);
+    } finally {
+      setSavingPreferenceKey(null);
+    }
   };
 
   return (
@@ -359,6 +407,38 @@ export default function ProfileScreen() {
             </LinearGradient>
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(270).duration(420)}>
+            <LinearGradient colors={["rgba(10,14,28,0.94)", "rgba(11,24,40,0.88)", "rgba(8,12,24,0.96)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.preferencesShell}>
+              <Text style={styles.preferencesEyebrow}>NOTIFICATIONS</Text>
+              <Text style={styles.preferencesTitle}>Tune pings, DMs, sounds, and previews</Text>
+              <Text style={styles.preferencesCopy}>Messages can ping with sender + preview, crew activity can stack on the badge, and sounds can stay on or off in and out of app.</Text>
+
+              <View style={styles.intensityRow}>
+                {notificationIntensityOptions.map((option) => {
+                  const active = (user?.notificationIntensity ?? "BALANCED") === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => void handlePreferenceUpdate("notificationIntensity", { notificationIntensity: option.key })}
+                      style={({ pressed }) => [styles.intensityChip, active ? styles.intensityChipActive : null, pressed ? styles.intensityChipPressed : null, savingPreferenceKey === "notificationIntensity" ? styles.preferenceDisabled : null]}
+                    >
+                      <Text style={[styles.intensityChipText, active ? styles.intensityChipTextActive : null]}>{option.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={{ gap: 10 }}>
+                <ToggleRow label="Push notifications" detail="Allow outside-the-app notifications when messages and pings land." value={user?.pushNotificationsEnabled ?? true} onPress={() => void handlePreferenceUpdate("pushNotificationsEnabled", { pushNotificationsEnabled: !(user?.pushNotificationsEnabled ?? true) })} />
+                <ToggleRow label="In-app notifications" detail="Show live banners and toasts while you are already inside Nowly." value={user?.inAppNotificationsEnabled ?? true} onPress={() => void handlePreferenceUpdate("inAppNotificationsEnabled", { inAppNotificationsEnabled: !(user?.inAppNotificationsEnabled ?? true) })} />
+                <ToggleRow label="Notification sound" detail="Play the ping sound for banners and push notifications when allowed." value={user?.notificationSoundEnabled ?? true} onPress={() => void handlePreferenceUpdate("notificationSoundEnabled", { notificationSoundEnabled: !(user?.notificationSoundEnabled ?? true) })} />
+                <ToggleRow label="Message previews" detail="Show the sender and message preview inside notifications." value={user?.messagePreviewEnabled ?? true} onPress={() => void handlePreferenceUpdate("messagePreviewEnabled", { messagePreviewEnabled: !(user?.messagePreviewEnabled ?? true) })} />
+                <ToggleRow label="DM notifications" detail="Let private and group chat messages trigger alerts and badge activity." value={user?.dmNotificationsEnabled ?? true} onPress={() => void handlePreferenceUpdate("dmNotificationsEnabled", { dmNotificationsEnabled: !(user?.dmNotificationsEnabled ?? true) })} />
+                <ToggleRow label="Ping notifications" detail="Let prompts, proposals, thread updates, and crew movement trigger alerts." value={user?.pingNotificationsEnabled ?? true} onPress={() => void handlePreferenceUpdate("pingNotificationsEnabled", { pingNotificationsEnabled: !(user?.pingNotificationsEnabled ?? true) })} />
+              </View>
+            </LinearGradient>
+          </Animated.View>
+
           <Animated.View entering={FadeInDown.delay(300).duration(420)} className="pt-2">
             <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logoutAction, pressed ? styles.logoutActionPressed : null]}>
               <LinearGradient colors={["rgba(74,29,150,0.28)", "rgba(22,49,122,0.24)", "rgba(7,17,37,0.92)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoutGradient}>
@@ -461,6 +541,25 @@ const styles = StyleSheet.create({
   snapshotAmbient: { position: "absolute", bottom: 8, left: 3, right: 3, height: 10, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)" },
   optimizeCta: { marginTop: 14, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: "rgba(103,232,249,0.16)", borderWidth: 1, borderColor: "rgba(186,230,253,0.34)" },
   optimizeCtaText: { color: "#E2E8F0", fontFamily: "SpaceGrotesk_700Bold", fontSize: 13 },
+  preferencesShell: { overflow: "hidden", borderRadius: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)", paddingHorizontal: 18, paddingTop: 18, paddingBottom: 16, gap: 14, shadowColor: "#67E8F9", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+  preferencesEyebrow: { color: "rgba(34,211,238,0.76)", fontFamily: "SpaceGrotesk_500Medium", fontSize: 12, letterSpacing: 2 },
+  preferencesTitle: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 22, lineHeight: 28 },
+  preferencesCopy: { color: "rgba(248,250,252,0.66)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 14, lineHeight: 22 },
+  intensityRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  intensityChip: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", paddingHorizontal: 14, paddingVertical: 8 },
+  intensityChipActive: { backgroundColor: "rgba(34,211,238,0.16)", borderColor: "rgba(103,232,249,0.34)" },
+  intensityChipPressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
+  intensityChipText: { color: "rgba(248,250,252,0.76)", fontFamily: "SpaceGrotesk_700Bold", fontSize: 13 },
+  intensityChipTextActive: { color: "#F8FAFC" },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", paddingHorizontal: 14, paddingVertical: 13 },
+  toggleRowPressed: { opacity: 0.94, transform: [{ scale: 0.99 }] },
+  toggleLabel: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 15, lineHeight: 20 },
+  toggleDetail: { color: "rgba(248,250,252,0.62)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 13, lineHeight: 20 },
+  togglePill: { width: 52, height: 30, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", padding: 3, justifyContent: "center" },
+  togglePillActive: { backgroundColor: "rgba(34,211,238,0.32)" },
+  toggleKnob: { width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(248,250,252,0.82)" },
+  toggleKnobActive: { alignSelf: "flex-end", backgroundColor: "#BAE6FD" },
+  preferenceDisabled: { opacity: 0.55 },
   logoutAction: { overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", shadowColor: "#60A5FA", shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
   logoutActionPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   logoutGradient: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },

@@ -52,6 +52,20 @@ const shouldDeliver = (
   return true;
 };
 
+const resolveNotificationCategory = (data?: Record<string, unknown>) => {
+  const screen = typeof data?.screen === "string" ? data.screen : null;
+
+  if (screen === "chat") {
+    return "dm";
+  }
+
+  if (screen === "proposal" || screen === "thread" || screen === "friends") {
+    return "ping";
+  }
+
+  return "system";
+};
+
 const deactivateDeviceTokens = async (deviceTokenIds: string[]) => {
   if (!deviceTokenIds.length) {
     return;
@@ -118,9 +132,42 @@ export const sendPushToUser = async ({
     where: { id: userId },
     select: {
       notificationIntensity: true,
+      pushNotificationsEnabled: true,
+      notificationSoundEnabled: true,
+      messagePreviewEnabled: true,
+      dmNotificationsEnabled: true,
+      pingNotificationsEnabled: true,
     },
   });
   const intensity = user?.notificationIntensity ?? NotificationIntensity.BALANCED;
+  const pushNotificationsEnabled = user?.pushNotificationsEnabled ?? true;
+  const notificationSoundEnabled = user?.notificationSoundEnabled ?? true;
+  const messagePreviewEnabled = user?.messagePreviewEnabled ?? true;
+  const dmNotificationsEnabled = user?.dmNotificationsEnabled ?? true;
+  const pingNotificationsEnabled = user?.pingNotificationsEnabled ?? true;
+  const category = resolveNotificationCategory(data);
+  const resolvedTitle = messagePreviewEnabled
+    ? title
+    : category === "dm"
+      ? "New message"
+      : "Nowly update";
+  const resolvedBody = messagePreviewEnabled
+    ? body
+    : category === "dm"
+      ? "Open Nowly to read it."
+      : "Open Nowly to check it.";
+
+  if (!pushNotificationsEnabled) {
+    return { delivered: false, suppressedByPreference: true };
+  }
+
+  if (category === "dm" && !dmNotificationsEnabled) {
+    return { delivered: false, suppressedByPreference: true };
+  }
+
+  if (category === "ping" && !pingNotificationsEnabled) {
+    return { delivered: false, suppressedByPreference: true };
+  }
 
   if (!shouldDeliver(intensity, type, priority)) {
     return { delivered: false, suppressedByPreference: true };
@@ -147,15 +194,18 @@ export const sendPushToUser = async ({
     .filter((item) => Expo.isExpoPushToken(item.token))
     .map((token) => ({
       deviceTokenId: token.id,
-      token: token.token,
-      message: {
-        to: token.token,
-        sound: priority === NotificationPriority.HIGH ? "default" : undefined,
-        title,
-        body,
-        data,
-        priority: priority === NotificationPriority.HIGH ? "high" : "normal",
-      } satisfies ExpoPushMessage,
+        token: token.token,
+        message: {
+          to: token.token,
+          sound:
+            notificationSoundEnabled && priority === NotificationPriority.HIGH
+              ? "default"
+              : undefined,
+          title: resolvedTitle,
+          body: resolvedBody,
+          data,
+          priority: priority === NotificationPriority.HIGH ? "high" : "normal",
+        } satisfies ExpoPushMessage,
     }));
 
   if (!messageEntries.length) {

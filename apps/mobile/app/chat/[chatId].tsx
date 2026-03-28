@@ -24,6 +24,20 @@ import { useAppStore } from "../../store/useAppStore";
 import type { DirectChat, DirectMessage } from "../../types";
 
 const EMPTY_DIRECT_MESSAGES: DirectMessage[] = [];
+const EMOJI_CHOICES = [
+  "\u{1F600}",
+  "\u{1F602}",
+  "\u{1F62D}",
+  "\u{1F525}",
+  "\u{2764}\u{FE0F}",
+  "\u{1F64F}",
+  "\u{1F440}",
+  "\u{1F62E}",
+  "\u{1F60E}",
+  "\u{1F972}",
+  "\u{1F91D}",
+  "\u{1F389}",
+];
 
 const normalizeIncomingMessage = (message: {
   id: string;
@@ -32,6 +46,7 @@ const normalizeIncomingMessage = (message: {
   text: string;
   type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
   createdAt: string;
+  updatedAt?: string;
   sender?: { name?: string | null };
 }): DirectMessage => ({
   id: message.id,
@@ -41,7 +56,24 @@ const normalizeIncomingMessage = (message: {
   text: message.text,
   type: message.type,
   createdAt: message.createdAt,
+  updatedAt: message.updatedAt,
 });
+
+const typingLabelForNames = (names: string[]) => {
+  if (names.length === 0) {
+    return "";
+  }
+
+  if (names.length === 1) {
+    return `${names[0]} is responding`;
+  }
+
+  if (names.length === 2) {
+    return `${names[0]}, ${names[1]} are responding`;
+  }
+
+  return "Multiple people are responding";
+};
 
 const chatDisplayName = (chat?: {
   title?: string | null;
@@ -171,21 +203,31 @@ export default function DirectChatScreen() {
   const chatId = Array.isArray(rawChatId) ? rawChatId[0] : rawChatId ?? "";
   const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
+  const friends = useAppStore((state) => state.friends);
   const directChats = useAppStore((state) => state.directChats);
   const directMessages = useAppStore((state) => state.directMessages[chatId] ?? EMPTY_DIRECT_MESSAGES);
   const setDirectMessages = useAppStore((state) => state.setDirectMessages);
   const appendDirectMessage = useAppStore((state) => state.appendDirectMessage);
+  const updateDirectMessageLocal = useAppStore((state) => state.updateDirectMessage);
+  const deleteDirectMessageLocal = useAppStore((state) => state.deleteDirectMessage);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
+  const removeDirectChat = useAppStore((state) => state.removeDirectChat);
   const markDirectChatReadLocal = useAppStore((state) => state.markDirectChatReadLocal);
+  const removeFriend = useAppStore((state) => state.removeFriend);
   const layout = useResponsiveLayout();
   const inputRef = useRef<TextInput | null>(null);
   const fetchedChatIdRef = useRef<string | null>(null);
   const fetchedMessagesChatIdRef = useRef<string | null>(null);
   const joinedChatIdRef = useRef<string | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingPeopleTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [text, setText] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(true);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [typingPeople, setTypingPeople] = useState<Array<{ id: string; name: string }>>([]);
 
   const chat = directChats.find((item) => item.id === chatId);
   const otherParticipants = useMemo(() => {
@@ -212,6 +254,17 @@ export default function DirectChatScreen() {
         ? ["Who's around?", "Pull up?", "Tonight?", "Drop a pin"]
         : ["Pull up?", "10 min", "Coffee?", "On my way"],
     [chat?.isGroup],
+  );
+  const relatedFriend = useMemo(
+    () =>
+      primaryParticipant
+        ? friends.find((friend) => friend.id === primaryParticipant.id) ?? null
+        : null,
+    [friends, primaryParticipant],
+  );
+  const typingLabel = useMemo(
+    () => typingLabelForNames(typingPeople.map((entry) => entry.name)),
+    [typingPeople],
   );
 
   useEffect(() => {
@@ -280,6 +333,7 @@ export default function DirectChatScreen() {
       text: string;
       type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
       createdAt: string;
+      updatedAt?: string;
       sender?: { name?: string | null };
     }) => {
       if (message.threadId !== chatId) {
@@ -300,15 +354,111 @@ export default function DirectChatScreen() {
       }
     };
 
+    const handleUpdated = (message: {
+      id: string;
+      threadId: string;
+      senderId: string;
+      text: string;
+      type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
+      createdAt: string;
+      updatedAt?: string;
+      sender?: { name?: string | null };
+    }) => {
+      if (message.threadId !== chatId) {
+        return;
+      }
+
+      const nextMessage = normalizeIncomingMessage(message);
+      updateDirectMessageLocal(chatId, nextMessage);
+    };
+
+    const handleDeleted = (payload: { chatId: string; messageId: string }) => {
+      if (payload.chatId !== chatId) {
+        return;
+      }
+
+      deleteDirectMessageLocal(chatId, payload.messageId);
+      if (editingMessageId === payload.messageId) {
+        setEditingMessageId(null);
+        setText("");
+      }
+    };
+
+    const handleTyping = (payload: {
+      chatId: string;
+      userId: string;
+      userName?: string;
+      isTyping: boolean;
+    }) => {
+      if (payload.chatId !== chatId || payload.userId === user?.id) {
+        return;
+      }
+
+      const timeoutKey = payload.userId;
+      const existingTimeout = typingPeopleTimeoutsRef.current[timeoutKey];
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      if (!payload.isTyping) {
+        delete typingPeopleTimeoutsRef.current[timeoutKey];
+        setTypingPeople((current) => current.filter((entry) => entry.id !== payload.userId));
+        return;
+      }
+
+      setTypingPeople((current) => {
+        const nextName = payload.userName?.trim() || "Someone";
+        const withoutCurrent = current.filter((entry) => entry.id !== payload.userId);
+        return [...withoutCurrent, { id: payload.userId, name: nextName }];
+      });
+
+      typingPeopleTimeoutsRef.current[timeoutKey] = setTimeout(() => {
+        setTypingPeople((current) => current.filter((entry) => entry.id !== payload.userId));
+        delete typingPeopleTimeoutsRef.current[timeoutKey];
+      }, 1800);
+    };
+
     socket.on("chat:message", handleIncoming);
+    socket.on("chat:message-updated", handleUpdated);
+    socket.on("chat:message-deleted", handleDeleted);
+    socket.on("chat:typing", handleTyping);
 
     return () => {
+      socket.emit("chat:typing", {
+        chatId,
+        isTyping: false,
+        userName: user?.name,
+      });
       socket.off("chat:message", handleIncoming);
+      socket.off("chat:message-updated", handleUpdated);
+      socket.off("chat:message-deleted", handleDeleted);
+      socket.off("chat:typing", handleTyping);
       if (joinedChatIdRef.current === chatId) {
         joinedChatIdRef.current = null;
       }
     };
-  }, [appendDirectMessage, chatId, token, upsertDirectChat, user?.id]);
+  }, [
+    appendDirectMessage,
+    chatId,
+    deleteDirectMessageLocal,
+    editingMessageId,
+    token,
+    updateDirectMessageLocal,
+    upsertDirectChat,
+    user?.id,
+    user?.name,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      Object.values(typingPeopleTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
+    },
+    [],
+  );
 
   const handleSend = async (presetText?: string) => {
     const nextText = (presetText ?? text).trim();
@@ -321,24 +471,48 @@ export default function DirectChatScreen() {
       setIsSending(true);
       const socket = getSocket(token);
 
-      if (socket) {
-        socket.emit("chat:message", { chatId, text: nextText });
+      if (editingMessageId) {
+        const updatedMessage = await api.updateDirectMessage(token, chatId, editingMessageId, nextText);
+        updateDirectMessageLocal(chatId, updatedMessage);
+
+        if (directMessages[directMessages.length - 1]?.id === editingMessageId && chat) {
+          upsertDirectChat({
+            ...chat,
+            lastMessageText: nextText,
+          });
+        }
       } else {
-        const message = await api.sendDirectMessage(token, chatId, nextText);
-        appendDirectMessage(chatId, message);
+        if (socket) {
+          socket.emit("chat:message", { chatId, text: nextText });
+        } else {
+          const message = await api.sendDirectMessage(token, chatId, nextText);
+          appendDirectMessage(chatId, message);
+        }
+
+        if (chat) {
+          upsertDirectChat({
+            ...chat,
+            lastMessageAt: new Date().toISOString(),
+            lastMessageText: nextText,
+            unreadCount: 0,
+          });
+        }
       }
 
-      if (chat) {
-        upsertDirectChat({
-          ...chat,
-          lastMessageAt: new Date().toISOString(),
-          lastMessageText: nextText,
-          unreadCount: 0,
-        });
+      if (!editingMessageId) {
+        void track(token, "message_sent", { threadKind: "direct", chatId });
       }
-
-      void track(token, "message_sent", { threadKind: "direct", chatId });
+      socket?.emit("chat:typing", {
+        chatId,
+        isTyping: false,
+        userName: user.name,
+      });
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
       setText("");
+      setEditingMessageId(null);
     } catch (error) {
       Alert.alert(
         "Message failed",
@@ -349,8 +523,181 @@ export default function DirectChatScreen() {
     }
   };
 
+  const emitTyping = (isTyping: boolean) => {
+    const socket = getSocket(token);
+    if (!socket || !chatId || !user) {
+      return;
+    }
+
+    socket.emit("chat:typing", {
+      chatId,
+      isTyping,
+      userName: user.name,
+    });
+  };
+
+  const handleTextChange = (value: string) => {
+    setText(value);
+
+    if (!value.trim()) {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      emitTyping(false);
+      return;
+    }
+
+    emitTyping(true);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      emitTyping(false);
+      typingTimeoutRef.current = null;
+    }, 1200);
+  };
+
+  const handleMessageOptions = (message: DirectMessage) => {
+    if (message.senderId !== user?.id) {
+      return;
+    }
+
+    Alert.alert(
+      "Your message",
+      "Choose what to do with this message.",
+      [
+        {
+          text: "Edit",
+          onPress: () => {
+            setEditingMessageId(message.id);
+            setText(message.text);
+            inputRef.current?.focus();
+          },
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void api.deleteDirectMessage(token, chatId, message.id)
+              .then(() => {
+                const nextMessages = directMessages.filter((entry) => entry.id !== message.id);
+                deleteDirectMessageLocal(chatId, message.id);
+
+                if (chat) {
+                  const latestMessage = nextMessages[nextMessages.length - 1];
+                  upsertDirectChat({
+                    ...chat,
+                    lastMessageAt: latestMessage?.createdAt ?? null,
+                    lastMessageText: latestMessage?.text ?? null,
+                  });
+                }
+
+                if (editingMessageId === message.id) {
+                  setEditingMessageId(null);
+                  setText("");
+                }
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Could not delete message",
+                  error instanceof Error ? error.message : "Try again.",
+                );
+              });
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
+  };
+
   const openCrewSurface = () => {
     router.push("/friends");
+  };
+
+  const handleDeleteThread = () => {
+    if (chat.isGroup) {
+      Alert.alert("Group chat stays", "Group chat reset is not available yet.");
+      return;
+    }
+
+    Alert.alert(
+      "Delete this private thread?",
+      "This resets the conversation so a future DM starts clean from the beginning.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void api.deleteDirectChat(token, chatId)
+              .then(() => {
+                removeDirectChat(chatId);
+                router.replace("/friends");
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Could not delete thread",
+                  error instanceof Error ? error.message : "Try again.",
+                );
+              });
+          },
+        },
+      ],
+    );
+  };
+
+  const handleUnfriend = () => {
+    if (!relatedFriend) {
+      return;
+    }
+
+    Alert.alert(
+      `Remove ${relatedFriend.name}?`,
+      "This removes them from your crew and closes the current private thread.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            void api.unfriend(token, relatedFriend.friendshipId)
+              .then(() => {
+                removeFriend(relatedFriend.id);
+                removeDirectChat(chatId);
+                router.replace("/friends");
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Could not remove friend",
+                  error instanceof Error ? error.message : "Try again.",
+                );
+              });
+          },
+        },
+      ],
+    );
+  };
+
+  const handleChatOptions = () => {
+    const actions = [
+      { label: "View crew", onPress: openCrewSurface },
+      { label: "Delete thread", onPress: handleDeleteThread },
+    ];
+
+    if (!chat.isGroup && relatedFriend) {
+      actions.push({ label: "Unfriend", onPress: handleUnfriend });
+    }
+
+    Alert.alert(
+      title,
+      chat.isGroup ? "Group chat actions" : "Private thread actions",
+      [
+        ...actions.map((action) => ({ text: action.label, onPress: action.onPress })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
   };
 
   const contentWidth = layout.isDesktop ? Math.min(layout.shellWidth, 720) : layout.shellWidth;
@@ -426,7 +773,7 @@ export default function DirectChatScreen() {
               </View>
 
               <Pressable
-                onPress={openCrewSurface}
+                onPress={handleChatOptions}
                 style={({ pressed }) => [
                   styles.iconButton,
                   webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
@@ -477,10 +824,14 @@ export default function DirectChatScreen() {
               {directMessages.length ? (
                 directMessages.map((message) => {
                   const mine = message.senderId === user?.id;
+                  const wasEdited =
+                    Boolean(message.updatedAt) &&
+                    message.updatedAt !== message.createdAt;
 
                   return (
-                    <View
+                    <Pressable
                       key={message.id}
+                      onLongPress={mine ? () => handleMessageOptions(message) : undefined}
                       style={[
                         styles.messageRow,
                         mine ? styles.messageRowMine : styles.messageRowTheirs,
@@ -505,10 +856,13 @@ export default function DirectChatScreen() {
                         </View>
                       )}
 
-                      <Text style={[styles.messageTime, mine ? styles.messageTimeMine : null]}>
-                        {formatTime(message.createdAt)}
-                      </Text>
-                    </View>
+                      <View style={styles.messageMetaRow}>
+                        <Text style={[styles.messageTime, mine ? styles.messageTimeMine : null]}>
+                          {formatTime(message.createdAt)}
+                        </Text>
+                        {wasEdited ? <Text style={styles.editedLabel}>edited</Text> : null}
+                      </View>
+                    </Pressable>
                   );
                 })
               ) : (
@@ -531,6 +885,26 @@ export default function DirectChatScreen() {
           pointerEvents="box-none"
         >
           <View style={{ width: contentWidth, alignSelf: "center", gap: 12 }}>
+            {typingLabel ? (
+              <View style={styles.typingRow}>
+                <Text style={styles.typingLabel}>{typingLabel}</Text>
+              </View>
+            ) : null}
+
+            {editingMessageId ? (
+              <View style={styles.editingRow}>
+                <Text style={styles.editingLabel}>Editing your message</Text>
+                <Pressable
+                  onPress={() => {
+                    setEditingMessageId(null);
+                    setText("");
+                  }}
+                >
+                  <Text style={styles.editingCancel}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {showShortcuts ? (
               <ScrollView
                 horizontal
@@ -571,22 +945,24 @@ export default function DirectChatScreen() {
                 <TextInput
                   ref={inputRef}
                   value={text}
-                  onChangeText={setText}
-                  placeholder={`Message ${chat.isGroup ? "the group" : primaryParticipant?.name ?? "them"}`}
+                  onChangeText={handleTextChange}
+                  onBlur={() => emitTyping(false)}
+                  placeholder={
+                    editingMessageId
+                      ? "Edit your message"
+                      : `Message ${chat.isGroup ? "the group" : primaryParticipant?.name ?? "them"}`
+                  }
                   placeholderTextColor="rgba(247,251,255,0.42)"
                   style={styles.input}
                 />
                 <Pressable
-                  onPress={() => {
-                    setText((current) => `${current}${current ? " " : ""}:)`);
-                    inputRef.current?.focus();
-                  }}
+                  onPress={() => setShowEmojiPicker((current) => !current)}
                   style={({ pressed }) => [
                     styles.inlineComposerAction,
                     webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
                   ]}
                 >
-                  <MaterialCommunityIcons name="emoticon-outline" size={20} color="#C9D8FF" />
+                  <MaterialCommunityIcons name={showEmojiPicker ? "keyboard-close-outline" : "emoticon-outline"} size={20} color="#C9D8FF" />
                 </Pressable>
               </View>
 
@@ -603,9 +979,29 @@ export default function DirectChatScreen() {
                   }),
                 ]}
               >
-                <MaterialCommunityIcons name="arrow-up" size={22} color="#081120" />
+                <MaterialCommunityIcons name={editingMessageId ? "check" : "arrow-up"} size={22} color="#081120" />
               </Pressable>
             </View>
+
+            {showEmojiPicker ? (
+              <View style={styles.emojiTray}>
+                {EMOJI_CHOICES.map((emoji) => (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => {
+                      setText((current) => `${current}${emoji}`);
+                      inputRef.current?.focus();
+                    }}
+                    style={({ pressed }) => [
+                      styles.emojiChip,
+                      webPressableStyle(pressed, { pressedOpacity: 0.88, pressedScale: 0.96 }),
+                    ]}
+                  >
+                    <Text style={styles.emojiChipText}>{emoji}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
         </LinearGradient>
       </View>
@@ -684,6 +1080,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  editedLabel: {
+    color: "rgba(139,234,255,0.68)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+  },
+  editingCancel: {
+    color: "rgba(139,234,255,0.92)",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
+  },
+  editingLabel: {
+    color: nowlyColors.cloud,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  editingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  emojiChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  emojiChipText: {
+    fontSize: 22,
+    lineHeight: 24,
+  },
+  emojiTray: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   dayDivider: {
     alignSelf: "center",
@@ -873,6 +1314,11 @@ const styles = StyleSheet.create({
   messageList: {
     gap: 14,
   },
+  messageMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   messageRow: {
     gap: 6,
   },
@@ -967,5 +1413,14 @@ const styles = StyleSheet.create({
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
+  },
+  typingLabel: {
+    color: "rgba(139,234,255,0.9)",
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  typingRow: {
+    minHeight: 16,
+    paddingHorizontal: 4,
   },
 });

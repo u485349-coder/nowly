@@ -197,6 +197,14 @@ model User {
   discordPresence     DiscordPresence?
   sharedServerCount   Int                       @default(0)
   notificationIntensity NotificationIntensity   @default(BALANCED)
+  pushNotificationsEnabled Boolean              @default(true)
+  inAppNotificationsEnabled Boolean             @default(true)
+  notificationSoundEnabled Boolean              @default(true)
+  messagePreviewEnabled Boolean                 @default(true)
+  dmNotificationsEnabled Boolean                @default(true)
+  pingNotificationsEnabled Boolean              @default(true)
+  lastCrewSeenAt       DateTime?
+  lastFriendRequestsSeenAt DateTime?
   inactiveSince       DateTime?
   referredById        String?
   createdAt           DateTime                  @default(now())
@@ -402,6 +410,8 @@ model HangoutParticipant {
   responseStatus ParticipantResponse @default(PENDING)
   microResponse  MicroResponse?
   respondedAt    DateTime?
+  lastProposalReadAt DateTime?
+  lastThreadReadAt DateTime?
   etaMinutes     Int?
   lastSharedLat  Float?
   lastSharedLng  Float?
@@ -421,6 +431,7 @@ model Message {
   type      MessageType  @default(TEXT)
   metadata  Json?
   createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
   thread    HangoutThread @relation(fields: [threadId], references: [id])
   sender    User         @relation(fields: [senderId], references: [id])
 

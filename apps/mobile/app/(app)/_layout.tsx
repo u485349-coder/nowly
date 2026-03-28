@@ -1,7 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Tabs, usePathname, useRouter } from "expo-router";
-import { useEffect } from "react";
 import { FloatingNavBar } from "../../components/navigation/FloatingNavBar";
 import { nowlyColors } from "../../constants/theme";
 import { useAppStore } from "../../store/useAppStore";
@@ -17,22 +16,7 @@ const tabIcons: Record<"home" | "friends" | "profile", IconName> = {
 export default function AppLayout() {
   const pathname = usePathname();
   const router = useRouter();
-  const crewUnreadCount = useAppStore((state) => state.crewUnreadCount);
-  const consumeCrewUnread = useAppStore((state) => state.consumeCrewUnread);
-
-  useEffect(() => {
-    if (
-      crewUnreadCount > 0 &&
-      (
-        pathname.startsWith("/friends") ||
-        pathname.startsWith("/chat") ||
-        pathname.startsWith("/proposal") ||
-        pathname.startsWith("/thread")
-      )
-    ) {
-      consumeCrewUnread();
-    }
-  }, [consumeCrewUnread, crewUnreadCount, pathname]);
+  const crewUnreadCount = useAppStore((state) => state.globalUnreadCount || state.crewUnreadCount);
 
   return (
     <Tabs

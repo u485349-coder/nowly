@@ -26,6 +26,12 @@ export type AppUser = MobileUser & {
   premium: boolean;
   hasDiscordLinked: boolean;
   notificationIntensity: NotificationIntensity;
+  pushNotificationsEnabled: boolean;
+  inAppNotificationsEnabled: boolean;
+  notificationSoundEnabled: boolean;
+  messagePreviewEnabled: boolean;
+  dmNotificationsEnabled: boolean;
+  pingNotificationsEnabled: boolean;
 };
 
 export type AppFriend = MobileUser & {
@@ -60,6 +66,7 @@ export type ThreadMessage = {
   text: string;
   type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
   createdAt: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -85,7 +92,16 @@ export type DirectMessage = {
   text: string;
   type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
   createdAt: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
+};
+
+export type AppNotification = {
+  id: string;
+  type: "dm" | "group_dm" | "friend_request" | "hangout_invite" | "thread";
+  entityId: string;
+  createdAt: number;
+  read: boolean;
 };
 
 export type RecapCard = {

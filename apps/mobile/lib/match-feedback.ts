@@ -2,7 +2,7 @@ import { Platform, Vibration } from "react-native";
 
 let cachedAudioContext: AudioContext | null = null;
 
-const playBrowserChime = () => {
+const playBrowserChime = (notes = [622.25, 880]) => {
   if (typeof window === "undefined") {
     return;
   }
@@ -22,8 +22,6 @@ const playBrowserChime = () => {
     if (cachedAudioContext.state === "suspended") {
       void cachedAudioContext.resume().catch(() => undefined);
     }
-
-    const notes = [622.25, 880];
 
     notes.forEach((frequency, index) => {
       if (!cachedAudioContext) {
@@ -60,5 +58,17 @@ export const playMatchFeedback = () => {
 
   if (Platform.OS === "web") {
     playBrowserChime();
+  }
+};
+
+export const playNowlyPingSound = () => {
+  try {
+    Vibration.vibrate([0, 28, 32, 48]);
+  } catch (_error) {
+    // Ignore vibration failures on unsupported devices.
+  }
+
+  if (Platform.OS === "web") {
+    playBrowserChime([659.25, 783.99]);
   }
 };

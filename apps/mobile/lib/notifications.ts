@@ -2,6 +2,11 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 let notificationHandlerConfigured = false;
+let foregroundSoundEnabled = true;
+
+export const setForegroundNotificationSoundEnabled = (enabled: boolean) => {
+  foregroundSoundEnabled = enabled;
+};
 
 const ensureNotificationHandlerConfigured = async () => {
   if (Platform.OS === "web" || notificationHandlerConfigured) {
@@ -12,7 +17,7 @@ const ensureNotificationHandlerConfigured = async () => {
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldPlaySound: true,
+      shouldPlaySound: foregroundSoundEnabled,
       shouldSetBadge: false,
       shouldShowBanner: true,
       shouldShowList: true,

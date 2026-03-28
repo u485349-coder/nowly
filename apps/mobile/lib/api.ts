@@ -41,7 +41,7 @@ import {
 } from "./demo-data";
 import { createSmartOpenUrl, createSmartOpenUrlForTargets } from "./smart-links";
 import { AppFriend, AppHangout, AppMatch, AppUser, RecapCard, ThreadMessage } from "../types";
-import { DirectChat, DirectMessage } from "../types";
+import { AppNotification, DirectChat, DirectMessage } from "../types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
 const demoMode = !API_URL || process.env.EXPO_PUBLIC_DEMO_MODE === "true";
@@ -94,6 +94,12 @@ const normalizeUser = (
     discordUsername: user.discordUsername ?? null,
     sharedServerCount: user.sharedServerCount ?? 0,
     notificationIntensity: user.notificationIntensity ?? "BALANCED",
+    pushNotificationsEnabled: user.pushNotificationsEnabled ?? true,
+    inAppNotificationsEnabled: user.inAppNotificationsEnabled ?? true,
+    notificationSoundEnabled: user.notificationSoundEnabled ?? true,
+    messagePreviewEnabled: user.messagePreviewEnabled ?? true,
+    dmNotificationsEnabled: user.dmNotificationsEnabled ?? true,
+    pingNotificationsEnabled: user.pingNotificationsEnabled ?? true,
     streakCount: (user as AppUser).streakCount ?? 1,
     invitesSent: (user as AppUser).invitesSent ?? 0,
     premium: (user as AppUser).premium ?? false,
@@ -219,6 +225,7 @@ const normalizeMessage = (message: {
   text: string;
   type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
   createdAt: string;
+  updatedAt?: string;
   sender?: { name?: string | null } | null;
 }): ThreadMessage => ({
   id: message.id,
@@ -228,6 +235,7 @@ const normalizeMessage = (message: {
   text: message.text,
   type: message.type,
   createdAt: message.createdAt,
+  updatedAt: message.updatedAt,
 });
 
 const normalizeDirectChat = (
@@ -280,6 +288,7 @@ const normalizeDirectMessage = (message: {
   text: string;
   type: "TEXT" | "SYSTEM" | "REACTION" | "POLL";
   createdAt: string;
+  updatedAt?: string;
   sender?: { name?: string | null } | null;
 }): DirectMessage => ({
   id: message.id,
@@ -289,6 +298,7 @@ const normalizeDirectMessage = (message: {
   text: message.text,
   type: message.type,
   createdAt: message.createdAt,
+  updatedAt: message.updatedAt,
 });
 
 const localHangout = (input: {
@@ -677,6 +687,43 @@ export const api = {
     );
 
     return normalizeDirectMessage(response.data);
+  },
+
+  async updateDirectMessage(token: string | null, chatId: string, messageId: string, text: string) {
+    if (demoMode) {
+      return {
+        id: messageId,
+        chatId,
+        senderId: demoUser.id,
+        senderName: demoUser.name,
+        text,
+        type: "TEXT" as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeDirectMessage>[0] }>(
+      `/chats/${chatId}/messages/${messageId}`,
+      {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ text }),
+      },
+    );
+
+    return normalizeDirectMessage(response.data);
+  },
+
+  async deleteDirectMessage(token: string | null, chatId: string, messageId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>(`/chats/${chatId}/messages/${messageId}`, {
+      method: "DELETE",
+      token,
+    });
   },
 
   async markDirectChatRead(token: string | null, chatId: string) {
@@ -1156,6 +1203,43 @@ export const api = {
     );
   },
 
+  async updateThreadMessage(token: string | null, threadId: string, messageId: string, text: string) {
+    if (demoMode) {
+      return {
+        id: messageId,
+        threadId,
+        senderId: demoUser.id,
+        senderName: demoUser.name,
+        text,
+        type: "TEXT" as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const response = await request<{ data: Parameters<typeof normalizeMessage>[0] }>(
+      `/hangouts/threads/${threadId}/messages/${messageId}`,
+      {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ text }),
+      },
+    );
+
+    return normalizeMessage(response.data);
+  },
+
+  async deleteThreadMessage(token: string | null, threadId: string, messageId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>(`/hangouts/threads/${threadId}/messages/${messageId}`, {
+      method: "DELETE",
+      token,
+    });
+  },
+
   async createRecap(token: string | null, hangoutId: string) {
     if (demoMode) {
       return demoRecaps[0] as RecapCard;
@@ -1180,22 +1264,97 @@ export const api = {
 
   async updateNotificationPreference(
     token: string | null,
-    notificationIntensity: NotificationIntensity,
+    payload: {
+      notificationIntensity?: NotificationIntensity;
+      pushNotificationsEnabled?: boolean;
+      inAppNotificationsEnabled?: boolean;
+      notificationSoundEnabled?: boolean;
+      messagePreviewEnabled?: boolean;
+      dmNotificationsEnabled?: boolean;
+      pingNotificationsEnabled?: boolean;
+    },
   ) {
     if (demoMode) {
       return normalizeUser({
         ...demoUser,
-        notificationIntensity,
+        ...payload,
       });
     }
 
     const response = await request<{ data: AppUser }>("/users/me/preferences", {
       method: "PATCH",
       token,
-      body: JSON.stringify({ notificationIntensity }),
+      body: JSON.stringify(payload),
     });
 
     return normalizeUser(response.data);
+  },
+
+  async fetchCrewActivityCounts(token: string | null) {
+    if (demoMode) {
+      return {
+        crewUnreadCount: 0,
+        chatActivityCount: 0,
+        pingActivityCount: 0,
+      };
+    }
+
+    const response = await request<{
+      data: {
+        crewUnreadCount: number;
+        chatActivityCount: number;
+        pingActivityCount: number;
+      };
+    }>("/users/me/activity-counts", {
+      token,
+    });
+
+    return response.data;
+  },
+
+  async fetchNotificationState(token: string | null) {
+    if (demoMode) {
+      return {
+        notifications: [] as AppNotification[],
+        unreadByEntity: {} as Record<string, number>,
+        globalUnreadCount: 0,
+      };
+    }
+
+    const response = await request<{
+      data: {
+        notifications: AppNotification[];
+        unreadByEntity: Record<string, number>;
+        globalUnreadCount: number;
+      };
+    }>("/users/me/notification-state", {
+      token,
+    });
+
+    return response.data;
+  },
+
+  async markNotificationEntityRead(token: string | null, entityId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>("/users/me/notifications/read", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ entityId }),
+    });
+  },
+
+  async markCrewActivitySeen(token: string | null) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>("/users/me/activity/read", {
+      method: "POST",
+      token,
+    });
   },
 
   async updateProfile(
@@ -1232,6 +1391,28 @@ export const api = {
         token: pushToken,
         platform: "expo",
       }),
+    });
+  },
+
+  async deleteDirectChat(token: string | null, chatId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>(`/chats/${chatId}`, {
+      method: "DELETE",
+      token,
+    });
+  },
+
+  async unfriend(token: string | null, friendshipId: string) {
+    if (demoMode) {
+      return { ok: true };
+    }
+
+    return request<{ data: { ok: boolean } }>(`/friends/${friendshipId}`, {
+      method: "DELETE",
+      token,
     });
   },
 
