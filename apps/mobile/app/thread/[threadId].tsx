@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
@@ -75,6 +76,7 @@ export default function ThreadScreen() {
   const appendMessage = useAppStore((state) => state.appendMessage);
   const updateThreadMessageLocal = useAppStore((state) => state.updateThreadMessage);
   const deleteThreadMessageLocal = useAppStore((state) => state.deleteThreadMessage);
+  const layout = useResponsiveLayout();
   const fetchedThreadIdRef = useRef<string | null>(null);
   const joinedThreadIdRef = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -436,9 +438,19 @@ export default function ThreadScreen() {
 
   return (
     <GradientMesh>
-      <View className="flex-1 px-5 pb-8 pt-16">
+      <View
+        className="flex-1 pb-8"
+        style={{
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 18,
+        }}
+      >
+        <View style={{ width: layout.shellWidth, alignSelf: "center", flex: 1 }}>
         <GlassCard className="mb-4 p-5">
-          <Text className="font-display text-2xl text-cloud">
+          <Text
+            className="font-display text-cloud"
+            style={{ fontSize: layout.isCompactPhone ? 24 : 28, lineHeight: layout.isCompactPhone ? 28 : 32 }}
+          >
             {hangout?.activity ?? "Crew thread"}
           </Text>
           <Text className="mt-1 font-body text-sm text-white/60">
@@ -480,7 +492,7 @@ export default function ThreadScreen() {
           </View>
         ) : null}
 
-        <View className="mb-3 flex-row gap-2">
+        <View className="mb-3 flex-row gap-2" style={{ flexWrap: "wrap" }}>
           {quickReactions.map((emoji) => (
             <Pressable
               key={emoji}
@@ -532,6 +544,7 @@ export default function ThreadScreen() {
             ))}
           </View>
         ) : null}
+        </View>
       </View>
     </GradientMesh>
   );

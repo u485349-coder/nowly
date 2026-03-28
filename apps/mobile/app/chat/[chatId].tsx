@@ -731,7 +731,7 @@ export default function DirectChatScreen() {
           contentContainerStyle={{
             alignItems: "center",
             paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.isDesktop ? 34 : 18,
+            paddingTop: layout.topPadding,
             paddingBottom: 170,
           }}
           keyboardShouldPersistTaps="handled"
@@ -783,7 +783,16 @@ export default function DirectChatScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.identityHero}>
+            <View
+              style={[
+                styles.identityHero,
+                {
+                  borderRadius: layout.cardRadius + 6,
+                  paddingHorizontal: layout.isCompactPhone ? 18 : 24,
+                  paddingVertical: layout.isCompactPhone ? 22 : 28,
+                },
+              ]}
+            >
               <View style={styles.heroGlowPrimary} pointerEvents="none" />
               <View style={styles.heroGlowSecondary} pointerEvents="none" />
 
@@ -799,9 +808,39 @@ export default function DirectChatScreen() {
                 />
               ) : null}
 
-              <Text style={styles.heroTitle}>{title}</Text>
-              <Text style={styles.heroSubtitle}>{subtitle}</Text>
-              <Text style={styles.heroCopy}>{heroMeta}</Text>
+              <Text
+                style={[
+                  styles.heroTitle,
+                  {
+                    fontSize: layout.isCompactPhone ? 24 : 28,
+                    lineHeight: layout.isCompactPhone ? 28 : 32,
+                  },
+                ]}
+              >
+                {title}
+              </Text>
+              <Text
+                style={[
+                  styles.heroSubtitle,
+                  {
+                    fontSize: layout.isCompactPhone ? 13 : 14,
+                    lineHeight: layout.isCompactPhone ? 20 : 22,
+                  },
+                ]}
+              >
+                {subtitle}
+              </Text>
+              <Text
+                style={[
+                  styles.heroCopy,
+                  {
+                    fontSize: layout.isCompactPhone ? 13 : 14,
+                    lineHeight: layout.isCompactPhone ? 20 : 22,
+                  },
+                ]}
+              >
+                {heroMeta}
+              </Text>
 
               <Pressable
                 onPress={openCrewSurface}
@@ -881,7 +920,13 @@ export default function DirectChatScreen() {
           colors={["rgba(4,8,20,0.00)", "rgba(4,8,20,0.88)", "rgba(4,8,20,0.98)"]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={styles.composerFade}
+          style={[
+            styles.composerFade,
+            {
+              paddingHorizontal: layout.screenPadding,
+              paddingTop: layout.isCompactPhone ? 18 : 26,
+            },
+          ]}
           pointerEvents="box-none"
         >
           <View style={{ width: contentWidth, alignSelf: "center", gap: 12 }}>

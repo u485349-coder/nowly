@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { formatDayTime } from "../../lib/format";
 import {
   hangoutIntentLabel,
@@ -44,6 +45,7 @@ export default function ProposalScreen() {
   const hangouts = useAppStore((state) => state.hangouts);
   const recaps = useAppStore((state) => state.recaps);
   const updateHangoutResponse = useAppStore((state) => state.updateHangoutResponse);
+  const layout = useResponsiveLayout();
 
   const hangout = hangouts.find((item) => item.id === hangoutId);
   const recap = recaps.find((item) => item.hangoutId === hangoutId);
@@ -96,8 +98,8 @@ export default function ProposalScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 20,
           paddingBottom: 40,
           gap: 18,
         }}
@@ -106,7 +108,10 @@ export default function ProposalScreen() {
         <GlassCard className="p-6">
           <View className="flex-row items-start justify-between gap-4">
             <View className="max-w-[76%]">
-              <Text className="font-display text-[34px] leading-[38px] text-cloud">
+              <Text
+                className="font-display text-cloud"
+                style={{ fontSize: layout.pageTitleSize, lineHeight: layout.pageTitleLineHeight }}
+              >
                 {hangout.activity}
               </Text>
               <Text className="mt-3 font-body text-base leading-6 text-white/60">

@@ -14,6 +14,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { findPromptAction } from "../../features/prompts/prompt-actions";
 import { api } from "../../lib/api";
 import { availabilityLabel } from "../../lib/labels";
@@ -42,6 +43,7 @@ export default function PromptPickerScreen() {
   const matches = useAppStore((state) => state.matches);
   const friends = useAppStore((state) => state.friends);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
+  const layout = useResponsiveLayout();
   const prompt = findPromptAction(promptKey);
   const [customLabel, setCustomLabel] = useState(prompt?.label ?? "");
   const [customDetail, setCustomDetail] = useState(prompt?.detail ?? "");
@@ -177,8 +179,8 @@ export default function PromptPickerScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 20,
           paddingBottom: 48,
           gap: 18,
         }}
@@ -189,7 +191,10 @@ export default function PromptPickerScreen() {
             <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">
               Send prompt
             </Text>
-            <Text className="font-display text-[34px] leading-[38px] text-cloud">
+            <Text
+              className="font-display text-cloud"
+              style={{ fontSize: layout.pageTitleSize, lineHeight: layout.pageTitleLineHeight }}
+            >
               Choose who should get this nudge.
             </Text>
             <Text className="font-body text-sm leading-6 text-white/60">
@@ -264,7 +269,12 @@ export default function PromptPickerScreen() {
         </GlassCard>
 
         <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">Who should see it?</Text>
+          <Text
+            className="font-display text-cloud"
+            style={{ fontSize: layout.isCompactPhone ? 24 : 28, lineHeight: layout.isCompactPhone ? 28 : 32 }}
+          >
+            Who should see it?
+          </Text>
 
           {recipients.length ? (
             recipients.map((recipient) => {

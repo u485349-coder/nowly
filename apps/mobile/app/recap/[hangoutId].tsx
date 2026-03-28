@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { useAppStore } from "../../store/useAppStore";
@@ -15,6 +16,7 @@ export default function RecapScreen() {
   const recaps = useAppStore((state) => state.recaps);
   const addRecap = useAppStore((state) => state.addRecap);
   const setHangoutStatus = useAppStore((state) => state.setHangoutStatus);
+  const layout = useResponsiveLayout();
 
   const hangout = hangouts.find((item) => item.id === hangoutId);
   const recap = recaps.find((item) => item.hangoutId === hangoutId);
@@ -30,8 +32,8 @@ export default function RecapScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 20,
           paddingBottom: 40,
           gap: 18,
         }}
@@ -41,7 +43,10 @@ export default function RecapScreen() {
           <Text className="font-body text-sm uppercase tracking-[2px] text-cloud/75">
             {recap?.badge ?? "Did you hang?"}
           </Text>
-          <Text className="mt-4 font-display text-[36px] leading-[40px] text-cloud">
+          <Text
+            className="mt-4 font-display text-cloud"
+            style={{ fontSize: layout.isCompactPhone ? 30 : 36, lineHeight: layout.isCompactPhone ? 34 : 40 }}
+          >
             {recap?.title ?? hangout?.activity ?? "Spontaneous win"}
           </Text>
           <Text className="mt-3 font-body text-base leading-6 text-cloud/85">

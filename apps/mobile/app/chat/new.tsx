@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { api } from "../../lib/api";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
@@ -13,6 +14,7 @@ export default function NewGroupChatScreen() {
   const token = useAppStore((state) => state.token);
   const friends = useAppStore((state) => state.friends);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
+  const layout = useResponsiveLayout();
   const acceptedFriends = useMemo(
     () => friends.filter((friend) => friend.status === "ACCEPTED"),
     [friends],
@@ -63,8 +65,8 @@ export default function NewGroupChatScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 20,
           paddingBottom: 48,
           gap: 18,
         }}
@@ -75,7 +77,10 @@ export default function NewGroupChatScreen() {
             <Text className="font-body text-sm uppercase tracking-[2px] text-aqua/80">
               New group chat
             </Text>
-            <Text className="font-display text-[34px] leading-[38px] text-cloud">
+            <Text
+              className="font-display text-cloud"
+              style={{ fontSize: layout.pageTitleSize, lineHeight: layout.pageTitleLineHeight }}
+            >
               Start a private thread with a few friends.
             </Text>
             <Text className="font-body text-sm leading-6 text-white/60">
@@ -110,7 +115,12 @@ export default function NewGroupChatScreen() {
         </GlassCard>
 
         <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">Pick at least 2 friends</Text>
+          <Text
+            className="font-display text-cloud"
+            style={{ fontSize: layout.isCompactPhone ? 24 : 28, lineHeight: layout.isCompactPhone ? 28 : 32 }}
+          >
+            Pick at least 2 friends
+          </Text>
           {acceptedFriends.map((friend) => {
             const selected = selectedIds.includes(friend.id);
 

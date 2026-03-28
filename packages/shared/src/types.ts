@@ -125,7 +125,8 @@ export type MobileUser = {
   city: string;
   communityTag?: string | null;
   photoUrl?: string | null;
-  phone: string;
+  phone?: string | null;
+  email?: string | null;
   onboardingCompleted?: boolean;
   inviteCode?: string;
   responsivenessScore: number;

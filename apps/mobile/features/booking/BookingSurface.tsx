@@ -391,8 +391,11 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
     return cells;
   }, [selectedMonthDate, selectedMonthKey, visibleDays]);
 
-  const timePillWidth =
-    ((layout.isDesktop ? layout.rightColumnWidth : layout.shellWidth) - 12) / 2;
+  const timePillWidth = layout.isDesktop
+    ? (layout.rightColumnWidth - 12) / 2
+    : layout.isCompactPhone
+      ? layout.shellWidth
+      : (layout.shellWidth - 12) / 2;
 
   const handleSignIn = () => {
     if (!inviteCode) {
@@ -570,7 +573,7 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
             alignItems: "center",
             paddingBottom: emptyState ? 120 : 210,
             paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.isDesktop ? 28 : 16,
+            paddingTop: layout.topPadding,
           }}
           showsVerticalScrollIndicator={false}
         >
@@ -582,7 +585,12 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                 </Pressable>
 
                 <View className="flex-1 items-center">
-                  <Text className="font-display text-2xl text-cloud">Find a time to hang</Text>
+                  <Text
+                    className="font-display text-cloud"
+                    style={{ fontSize: layout.isCompactPhone ? 22 : 24, lineHeight: layout.isCompactPhone ? 26 : 30 }}
+                  >
+                    Find a time to hang
+                  </Text>
                   <Text className="mt-1 font-body text-[13px] text-white/60">
                     {emptyState
                       ? isPreview
@@ -633,7 +641,12 @@ export const BookingSurface = ({ inviteCode, mode, sharedSetup }: BookingSurface
                     <Text className="font-body text-xs tracking-[2px] text-violet/85">
                       {isPreview ? "BOOKING PREVIEW" : "HANGOUT PROPOSAL"}
                     </Text>
-                    <Text className="font-display text-[30px] leading-[34px] text-cloud">{title}</Text>
+                    <Text
+                      className="font-display text-cloud"
+                      style={{ fontSize: layout.isCompactPhone ? 26 : 30, lineHeight: layout.isCompactPhone ? 30 : 34 }}
+                    >
+                      {title}
+                    </Text>
                     <Text className="font-body text-sm leading-6 text-white/72">{description}</Text>
                     <Text className="font-body text-[12px] leading-5 text-aqua/78">
                       {formatSupportLine}

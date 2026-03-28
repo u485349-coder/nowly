@@ -205,10 +205,10 @@ export default function ProfileScreen() {
     <GradientMesh>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ alignItems: "center", paddingHorizontal: layout.screenPadding, paddingTop: layout.isDesktop ? 44 : 64, paddingBottom: 136 }}
+        contentContainerStyle={{ alignItems: "center", paddingHorizontal: layout.screenPadding, paddingTop: layout.topPadding + (layout.isDesktop ? 4 : 22), paddingBottom: 136 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ width: shellWidth, gap: 30 }}>
+        <View style={{ width: shellWidth, gap: layout.isCompactPhone ? 22 : 30 }}>
           <Animated.View entering={FadeInDown.delay(60).duration(420)}>
             <View style={[styles.heroGrid, layout.isDesktop ? styles.heroGridDesktop : null]}>
               <LinearGradient colors={["rgba(10,15,30,0.9)", "rgba(13,30,47,0.8)", "rgba(8,12,23,0.92)"]} start={{ x: 0.1, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.heroShell, styles.heroIdentityPanel]}>
@@ -228,8 +228,18 @@ export default function ProfileScreen() {
                   </View>
                 </Pressable>
 
-                <Text className="mt-5 font-display text-[32px] leading-[34px] text-cloud">{user?.name ?? mockUser.name}</Text>
-                <Text className="mt-2 font-body text-[15px] text-white/68">{rhythmSubtitle}</Text>
+                <Text
+                  className="mt-5 font-display text-cloud"
+                  style={{ fontSize: layout.isCompactPhone ? 28 : 32, lineHeight: layout.isCompactPhone ? 30 : 34 }}
+                >
+                  {user?.name ?? mockUser.name}
+                </Text>
+                <Text
+                  className="mt-2 font-body text-white/68"
+                  style={{ fontSize: layout.isCompactPhone ? 14 : 15 }}
+                >
+                  {rhythmSubtitle}
+                </Text>
                 <View className="mt-4 flex-row flex-wrap gap-2">
                   {user?.communityTag || user?.city ? <View style={styles.identityChip}><Text className="font-body text-[12px] text-cloud/88">{user?.communityTag || user?.city}</Text></View> : null}
                   {user?.discordUsername ? <View style={styles.identityChip}><Text className="font-body text-[12px] text-cloud/88">@{user.discordUsername}</Text></View> : null}
@@ -245,7 +255,12 @@ export default function ProfileScreen() {
               <LinearGradient colors={["rgba(9,16,34,0.84)", "rgba(13,28,50,0.74)", "rgba(8,12,24,0.88)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.heroShell, styles.profileSignalPanel]}>
                 <View style={styles.profileSignalOrb} pointerEvents="none" />
                 <Text className="font-body text-[12px] uppercase tracking-[2px] text-aqua/76">PROFILE SIGNAL</Text>
-                <Text className="mt-2 font-display text-[23px] leading-[28px] text-cloud">{energyLabel(activeEnergy)} energy right now</Text>
+                <Text
+                  className="mt-2 font-display text-cloud"
+                  style={{ fontSize: layout.isCompactPhone ? 20 : 23, lineHeight: layout.isCompactPhone ? 24 : 28 }}
+                >
+                  {energyLabel(activeEnergy)} energy right now
+                </Text>
                 <Text className="mt-2 font-body text-sm leading-6 text-white/66">Your page is your social pulse. Keep this tuned and everything downstream feels cleaner.</Text>
                 <View className="mt-6 gap-3">
                   <View style={styles.signalRow}><Text className="font-body text-[11px] uppercase tracking-[1.6px] text-cloud/52">NOW MODE</Text><Text className="font-body text-[13px] text-cloud/86">{isLive ? "LIVE" : "FREE_LATER"}</Text></View>
@@ -287,7 +302,12 @@ export default function ProfileScreen() {
             <LinearGradient colors={["rgba(10,14,28,0.92)", "rgba(14,30,50,0.86)", "rgba(8,12,24,0.94)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.energyShell}>
               <View style={styles.energyGlow} pointerEvents="none" />
               <Text className="font-body text-[12px] uppercase tracking-[2px] text-aqua/76">SOCIAL ENERGY</Text>
-              <Text className="mt-2 font-display text-[22px] leading-[26px] text-cloud">Tune how live Nowly feels around you</Text>
+              <Text
+                className="mt-2 font-display text-cloud"
+                style={{ fontSize: layout.isCompactPhone ? 20 : 22, lineHeight: layout.isCompactPhone ? 24 : 26 }}
+              >
+                Tune how live Nowly feels around you
+              </Text>
               <Text className="mt-2 font-body text-sm leading-6 text-white/66">{energyFeedback[activeEnergy]}</Text>
 
               <View
@@ -321,7 +341,12 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.delay(180).duration(420)} style={{ gap: 14 }}>
             <View style={{ gap: 4 }}>
               <Text className="font-body text-[12px] uppercase tracking-[2px] text-cloud/54">MOMENTUM</Text>
-              <Text className="font-display text-[24px] leading-[28px] text-cloud">The line feels best when it stays moving</Text>
+              <Text
+                className="font-display text-cloud"
+                style={{ fontSize: layout.isCompactPhone ? 21 : 24, lineHeight: layout.isCompactPhone ? 25 : 28 }}
+              >
+                The line feels best when it stays moving
+              </Text>
             </View>
 
             <View style={[styles.momentumGrid, layout.isDesktop ? styles.momentumGridDesktop : null]}>
@@ -380,7 +405,12 @@ export default function ProfileScreen() {
               <View className="flex-row items-start justify-between gap-4">
                 <View className="max-w-[70%] gap-2">
                   <Text className="font-body text-[12px] uppercase tracking-[2px] text-aqua/74">RHYTHM SNAPSHOT</Text>
-                  <Text className="font-display text-[22px] leading-[26px] text-cloud">{recurringWindows.length ? `${recurringWindows.length} hang windows saved` : "Set your usual hang rhythm"}</Text>
+                  <Text
+                    className="font-display text-cloud"
+                    style={{ fontSize: layout.isCompactPhone ? 20 : 22, lineHeight: layout.isCompactPhone ? 24 : 26 }}
+                  >
+                    {recurringWindows.length ? `${recurringWindows.length} hang windows saved` : "Set your usual hang rhythm"}
+                  </Text>
                   <Text className="font-body text-sm leading-6 text-white/64">You're most active on Tue evenings</Text>
                 </View>
                 <View style={styles.snapshotArrow}><MaterialCommunityIcons name="arrow-top-right" size={18} color="#E2E8F0" /></View>

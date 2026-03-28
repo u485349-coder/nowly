@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { nowlyColors } from "../../constants/theme";
 import { webPressableStyle } from "../../lib/web-pressable";
@@ -19,8 +19,12 @@ export const PillButton = ({
   leftSlot,
   disabled = false,
 }: Props) => {
+  const { width } = useWindowDimensions();
+  const isCompactPhone = width < 390;
   const isWeb = Platform.OS === "web";
   const textColor = variant === "primary" ? styles.primaryText : styles.secondaryText;
+  const baseHeight = isCompactPhone ? 50 : 54;
+  const fontSize = isCompactPhone ? 15 : 16;
 
   return (
     <Pressable
@@ -28,6 +32,7 @@ export const PillButton = ({
       onPress={onPress}
       style={({ pressed }) => [
         styles.pressable,
+        { minHeight: baseHeight },
         variant === "ghost" ? styles.ghostPressable : styles.filledPressable,
         disabled ? styles.disabled : null,
         isWeb ? webPressableStyle(pressed, { disabled, pressedOpacity: 0.9, pressedScale: 0.986 }) : null,
@@ -49,12 +54,13 @@ export const PillButton = ({
       <View
         style={[
           styles.inner,
+          { minHeight: baseHeight, paddingHorizontal: isCompactPhone ? 18 : 22 },
           variant === "secondary" ? styles.secondaryInner : null,
           variant === "ghost" ? styles.ghostInner : null,
         ]}
       >
         {leftSlot}
-        <Text style={[styles.label, textColor]}>{label}</Text>
+        <Text style={[styles.label, textColor, { fontSize }]}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -62,7 +68,6 @@ export const PillButton = ({
 
 const styles = StyleSheet.create({
   pressable: {
-    minHeight: 54,
     overflow: "hidden",
     borderRadius: 999,
   },
@@ -91,12 +96,10 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   inner: {
-    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 22,
     paddingVertical: 14,
   },
   secondaryInner: {

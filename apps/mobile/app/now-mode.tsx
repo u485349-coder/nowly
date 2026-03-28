@@ -80,7 +80,20 @@ export default function NowModeScreen() {
     [matches],
   );
   const orderedScheduledOverlaps = useMemo(
-    () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
+    () => {
+      const dedupedByFriend = new Map<string, (typeof scheduledOverlaps)[number]>();
+
+      [...scheduledOverlaps]
+        .sort((left, right) => right.score - left.score)
+        .forEach((overlap) => {
+          const existing = dedupedByFriend.get(overlap.matchedUser.id);
+          if (!existing || overlap.score > existing.score) {
+            dedupedByFriend.set(overlap.matchedUser.id, overlap);
+          }
+        });
+
+      return [...dedupedByFriend.values()];
+    },
     [scheduledOverlaps],
   );
   const activeUntilLine = useMemo(() => liveUntilLine(activeSignal), [activeSignal]);
@@ -289,7 +302,7 @@ export default function NowModeScreen() {
           alignItems: "center",
           paddingBottom: 150,
           paddingHorizontal: layout.screenPadding,
-          paddingTop: layout.isDesktop ? 34 : 18,
+          paddingTop: layout.topPadding,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -314,7 +327,17 @@ export default function NowModeScreen() {
 
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.eyebrow}>NOW MODE</Text>
-                <Text style={styles.title}>Let people know you're open.</Text>
+                <Text
+                  style={[
+                    styles.title,
+                    {
+                      fontSize: layout.pageTitleSize,
+                      lineHeight: layout.pageTitleLineHeight,
+                    },
+                  ]}
+                >
+                  Let people know you're open.
+                </Text>
               </View>
             </View>
 
@@ -330,7 +353,15 @@ export default function NowModeScreen() {
 
                 <View style={{ gap: 8 }}>
                   <Text style={styles.heroLabel}>LIVE STATUS</Text>
-                  <Text style={styles.heroTitle}>
+                  <Text
+                    style={[
+                      styles.heroTitle,
+                      {
+                        fontSize: layout.isCompactPhone ? 26 : 30,
+                        lineHeight: layout.isCompactPhone ? 30 : 34,
+                      },
+                    ]}
+                  >
                     {activeUntilLine ?? "Set a live signal so Nowly can surface overlap."}
                   </Text>
                   <Text style={styles.heroSupport}>
@@ -426,7 +457,15 @@ export default function NowModeScreen() {
 
             <View style={styles.overlapShell}>
               <Text style={styles.sectionLabel}>LIVE MATCHES</Text>
-              <Text style={styles.sectionHeadline}>
+              <Text
+                style={[
+                  styles.sectionHeadline,
+                  {
+                    fontSize: layout.isCompactPhone ? 21 : 24,
+                    lineHeight: layout.isCompactPhone ? 26 : 30,
+                  },
+                ]}
+              >
                 {liveMatchRows.length
                   ? "Most compatible live people float to the top."
                   : "No live overlap yet. Once your signal is up, the strongest matches will stack here first."}
@@ -461,7 +500,15 @@ export default function NowModeScreen() {
 
             <View style={styles.overlapShell}>
               <Text style={styles.sectionLabel}>SUGGESTED TIMES</Text>
-              <Text style={styles.sectionHeadline}>
+              <Text
+                style={[
+                  styles.sectionHeadline,
+                  {
+                    fontSize: layout.isCompactPhone ? 21 : 24,
+                    lineHeight: layout.isCompactPhone ? 26 : 30,
+                  },
+                ]}
+              >
                 {suggestedTimeRows.length
                   ? "Friends' hangtimes still show up for softer planning."
                   : "Recurring overlap suggestions will show up here once your crew saves hang rhythm."}

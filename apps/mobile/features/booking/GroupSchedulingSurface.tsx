@@ -289,7 +289,7 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
           contentContainerStyle={{
             alignItems: "center",
             paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.isDesktop ? 28 : 16,
+            paddingTop: layout.topPadding,
             paddingBottom: 210,
           }}
           showsVerticalScrollIndicator={false}
@@ -308,7 +308,12 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
                 </Pressable>
 
                 <View className="flex-1 items-center">
-                  <Text className="font-display text-2xl text-cloud">Coordinate the group</Text>
+                  <Text
+                    className="font-display text-cloud"
+                    style={{ fontSize: layout.isCompactPhone ? 22 : 24, lineHeight: layout.isCompactPhone ? 26 : 30 }}
+                  >
+                    Coordinate the group
+                  </Text>
                   <Text className="mt-1 font-body text-[13px] text-white/60">
                     Collaborative scheduling stays separate from normal 1:1 booking.
                   </Text>
@@ -334,7 +339,10 @@ export const GroupSchedulingSurface = ({ inviteCode, profile }: Props) => {
                       <Text className="font-body text-xs tracking-[2px] text-violet/82">
                         GROUP SCHEDULING
                       </Text>
-                      <Text className="font-display text-[30px] leading-[34px] text-cloud">
+                      <Text
+                        className="font-display text-cloud"
+                        style={{ fontSize: layout.isCompactPhone ? 26 : 30, lineHeight: layout.isCompactPhone ? 30 : 34 }}
+                      >
                         {session.title}
                       </Text>
                       <Text className="font-body text-sm text-white/64">

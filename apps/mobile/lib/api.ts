@@ -78,12 +78,14 @@ const request = async <T>(
 const normalizeUser = (
   user: Partial<AppUser> & {
     id: string;
-    phone: string;
+    phone?: string | null;
+    email?: string | null;
   },
 ) =>
   ({
     id: user.id,
-    phone: user.phone,
+    phone: user.phone ?? null,
+    email: user.email ?? null,
     name: user.name ?? "Nowly user",
     city: user.city ?? "Somewhere nearby",
     onboardingCompleted: Boolean((user as Partial<AppUser>).onboardingCompleted),
@@ -347,7 +349,7 @@ const localHangout = (input: {
 });
 
 export const api = {
-  async requestOtp(phone: string) {
+  async requestAuthCode(payload: { channel: "phone" | "email"; value: string }) {
     if (demoMode) {
       return {
         ok: true,
@@ -356,32 +358,33 @@ export const api = {
     }
 
     const response = await request<{ data: { ok: boolean; devCode?: string } }>(
-      "/auth/request-otp",
+      "/auth/request-code",
       {
         method: "POST",
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify(payload),
       },
     );
 
     return response.data;
   },
 
-  async verifyOtp(phone: string, code: string) {
+  async verifyAuthCode(payload: { channel: "phone" | "email"; value: string; code: string }) {
     if (demoMode) {
       return {
         token: "demo-token",
         user: normalizeUser({
           ...demoUser,
-          phone,
+          phone: payload.channel === "phone" ? payload.value : demoUser.phone,
+          email: payload.channel === "email" ? payload.value : null,
         }),
       };
     }
 
     const response = await request<{ data: { token: string; user: AppUser } }>(
-      "/auth/verify-otp",
+      "/auth/verify-code",
       {
         method: "POST",
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify(payload),
       },
     );
 
@@ -389,6 +392,22 @@ export const api = {
       token: response.data.token,
       user: normalizeUser(response.data.user),
     };
+  },
+
+  async requestOtp(phone: string) {
+    return this.requestAuthCode({ channel: "phone", value: phone });
+  },
+
+  async verifyOtp(phone: string, code: string) {
+    return this.verifyAuthCode({ channel: "phone", value: phone, code });
+  },
+
+  async requestEmailCode(email: string) {
+    return this.requestAuthCode({ channel: "email", value: email });
+  },
+
+  async verifyEmailCode(email: string, code: string) {
+    return this.verifyAuthCode({ channel: "email", value: email, code });
   },
 
   async completeOnboarding(

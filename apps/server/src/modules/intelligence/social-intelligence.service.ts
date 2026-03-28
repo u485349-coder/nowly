@@ -411,7 +411,7 @@ export const deriveFriendInsight = (
     : sameCommunity
       ? `Strongest inside ${friend?.communityTag}`
       : lastSignal && lastSignal !== "BUSY"
-        ? `${friend?.name ?? "They"} look open right now`
+        ? `${friend?.name ?? "They"} looks open right now`
         : "Best with casual, low-pressure invites";
 
   const momentumLabel =
@@ -494,7 +494,10 @@ export const deriveSocialRadar = (context: SocialContext, userId: string) => {
     livePrompt = "Best hangout window is happening now.";
   } else if (activeNowCount >= 1) {
     headline = "A quick link is on the table";
-    detail = `${activeNowCount} friend${activeNowCount > 1 ? "s" : ""} look open right now.`;
+    detail =
+      activeNowCount === 1
+        ? "1 friend looks open right now."
+        : `${activeNowCount} friends look open right now.`;
     livePrompt = "Use a low-pressure prompt before the window fades.";
   } else if (cadenceDays !== null && cadenceDays >= 4) {
     headline = `You have been quiet for ${cadenceDays} day${cadenceDays > 1 ? "s" : ""}`;

@@ -499,10 +499,20 @@ export default function AvailabilityPreferencesScreen() {
         .slice(0, 3),
     [drafts, specificWindows],
   );
-  const sortedSuggestedTimes = useMemo(
-    () => [...scheduledOverlaps].sort((left, right) => right.score - left.score),
-    [scheduledOverlaps],
-  );
+  const sortedSuggestedTimes = useMemo(() => {
+    const dedupedByFriend = new Map<string, (typeof scheduledOverlaps)[number]>();
+
+    [...scheduledOverlaps]
+      .sort((left, right) => right.score - left.score)
+      .forEach((overlap) => {
+        const existing = dedupedByFriend.get(overlap.matchedUser.id);
+        if (!existing || overlap.score > existing.score) {
+          dedupedByFriend.set(overlap.matchedUser.id, overlap);
+        }
+      });
+
+    return [...dedupedByFriend.values()];
+  }, [scheduledOverlaps]);
   const specificCalendarDays = useMemo(() => {
     const year = specificMonth.getFullYear();
     const month = specificMonth.getMonth();
@@ -921,7 +931,7 @@ export default function AvailabilityPreferencesScreen() {
           contentContainerStyle={{
             alignItems: "center",
             paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.isDesktop ? 40 : 60,
+            paddingTop: layout.topPadding + (layout.isDesktop ? 0 : 20),
             paddingBottom: 190,
           }}
           keyboardShouldPersistTaps="handled"
@@ -940,7 +950,17 @@ export default function AvailabilityPreferencesScreen() {
               <View style={styles.headerRow}>
                 <View style={{ gap: 10, flex: 1 }}>
                   <Text style={styles.eyebrow}>HANG RHYTHM</Text>
-                  <Text style={styles.heroTitle}>Set your hang rhythm</Text>
+                  <Text
+                    style={[
+                      styles.heroTitle,
+                      {
+                        fontSize: layout.pageTitleSize,
+                        lineHeight: layout.pageTitleLineHeight,
+                      },
+                    ]}
+                  >
+                    Set your hang rhythm
+                  </Text>
                   <Text style={styles.heroHint}>Nowly will line people up around this.</Text>
                 </View>
 
@@ -2142,7 +2162,7 @@ const styles = StyleSheet.create({
   previewTimePill: {
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 9,
   },
   previewTimesRow: {

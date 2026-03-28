@@ -3,6 +3,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
+import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { api } from "../../lib/api";
 import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
 import { useAppStore } from "../../store/useAppStore";
@@ -45,6 +46,7 @@ export default function MatchDetailScreen() {
   const matches = useAppStore((state) => state.matches);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
+  const layout = useResponsiveLayout();
 
   const match = matches.find((item) => item.id === matchId);
   const isOnlineMatch = match?.reason.meetingStyle === "ONLINE";
@@ -122,15 +124,18 @@ export default function MatchDetailScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 62,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.topPadding + 20,
           paddingBottom: 40,
           gap: 18,
         }}
         showsVerticalScrollIndicator={false}
       >
         <GlassCard className="p-6">
-          <Text className="font-display text-[34px] leading-[38px] text-cloud">
+          <Text
+            className="font-display text-cloud"
+            style={{ fontSize: layout.pageTitleSize, lineHeight: layout.pageTitleLineHeight }}
+          >
             You and {match.matchedUser.name} overlap right now
           </Text>
           <Text className="mt-3 font-body text-base leading-6 text-white/60">
@@ -184,7 +189,12 @@ export default function MatchDetailScreen() {
         </GlassCard>
 
         <View className="gap-3">
-          <Text className="font-display text-2xl text-cloud">Pitch a low-stakes move</Text>
+          <Text
+            className="font-display text-cloud"
+            style={{ fontSize: layout.isCompactPhone ? 24 : 28, lineHeight: layout.isCompactPhone ? 28 : 32 }}
+          >
+            Pitch a low-stakes move
+          </Text>
           {fastPlans.map((plan) => (
             <GlassCard key={plan.title} className="p-4">
               <View className="gap-3">

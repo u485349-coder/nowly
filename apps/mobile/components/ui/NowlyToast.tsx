@@ -49,7 +49,7 @@ export const NowlyToast = ({ toast, top = 14 }: NowlyToastProps) => {
           ]}
         >
           <LinearGradient
-            colors={["rgba(14,22,43,0.96)", "rgba(24,42,62,0.9)", "rgba(15,21,39,0.96)"]}
+            colors={["rgba(20,30,56,0.98)", "rgba(32,54,80,0.94)", "rgba(20,28,49,0.98)"]}
             start={{ x: 0.05, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.card}
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.14)",
   },
   copy: {
     flex: 1,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   message: {
-    color: "rgba(248,250,252,0.76)",
+    color: "rgba(248,250,252,0.88)",
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
     lineHeight: 18,
@@ -127,8 +127,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     shadowColor: nowlyColors.glow,
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
   },
   title: {

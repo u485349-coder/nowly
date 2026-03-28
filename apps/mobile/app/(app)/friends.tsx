@@ -298,7 +298,7 @@ export default function FriendsScreen() {
         contentContainerStyle={{
           alignItems: "center",
           paddingHorizontal: layout.screenPadding,
-          paddingTop: layout.isDesktop ? 40 : 58,
+          paddingTop: layout.topPadding + (layout.isDesktop ? 0 : 18),
           paddingBottom: 160,
         }}
         showsVerticalScrollIndicator={false}
@@ -314,7 +314,17 @@ export default function FriendsScreen() {
             <View style={styles.heroHeader}>
               <View style={{ gap: 10, flex: 1 }}>
                 <Text style={styles.eyebrow}>YOUR PEOPLE</Text>
-                <Text style={styles.heroTitle}>Signals feel stronger together.</Text>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      fontSize: layout.heroTitleSize,
+                      lineHeight: layout.heroTitleLineHeight,
+                    },
+                  ]}
+                >
+                  Signals feel stronger together.
+                </Text>
                 <Text style={styles.heroHint}>
                   {(radar?.localDensity.activeNowCount ?? 0).toString()} active now -{" "}
                   {(radar?.localDensity.nearbyFriendsCount ?? acceptedFriends.length).toString()} nearby in
@@ -323,10 +333,27 @@ export default function FriendsScreen() {
               </View>
             </View>
 
-            <View style={styles.clusterShell}>
+            <View
+              style={[
+                styles.clusterShell,
+                {
+                  borderRadius: layout.cardRadius + 2,
+                  paddingHorizontal: layout.cardPadding,
+                  paddingVertical: layout.cardPadding,
+                },
+              ]}
+            >
               <View style={styles.clusterGlow} pointerEvents="none" />
               <Text style={styles.sectionLabel}>LIVE CLUSTER</Text>
-              <Text style={styles.clusterHeadline}>
+              <Text
+                style={[
+                  styles.clusterHeadline,
+                  {
+                    fontSize: layout.isCompactPhone ? 20 : 22,
+                    lineHeight: layout.isCompactPhone ? 25 : 28,
+                  },
+                ]}
+              >
                 {liveClusterPeople.length
                   ? `${liveClusterPeople.length} friends feel warm enough to nudge.`
                   : "Start adding people and the cluster will wake up here."}
@@ -471,7 +498,12 @@ export default function FriendsScreen() {
                       </Text>
                     </View>
 
-                    <View style={styles.friendActions}>
+                    <View
+                      style={[
+                        styles.friendActions,
+                        layout.isCompactPhone ? { marginTop: 6, width: "100%", justifyContent: "flex-end" } : null,
+                      ]}
+                    >
                       <Pressable
                         accessibilityLabel={`Open private chat with ${friend.name}`}
                         accessibilityRole="button"
@@ -538,7 +570,12 @@ export default function FriendsScreen() {
                       <Text style={styles.rowName}>{chatDisplayName(chat)}</Text>
                       <Text style={styles.rowInsight}>{chatSubline(chat)}</Text>
                     </View>
-                    <View style={styles.chatMeta}>
+                  <View
+                    style={[
+                      styles.chatMeta,
+                      layout.isCompactPhone ? { minWidth: 36 } : null,
+                    ]}
+                  >
                       <Text style={styles.chatTime}>
                         {chat.lastMessageAt ? formatTime(chat.lastMessageAt) : ""}
                       </Text>
@@ -618,12 +655,13 @@ const styles = StyleSheet.create({
   },
   chatRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
     borderRadius: 24,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 18,
     paddingVertical: 16,
+    flexWrap: "wrap",
   },
   chatMeta: {
     alignItems: "flex-end",
@@ -715,12 +753,13 @@ const styles = StyleSheet.create({
   },
   friendRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
     borderRadius: 26,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 16,
     paddingVertical: 16,
+    flexWrap: "wrap",
   },
   ghostInvite: {
     alignSelf: "flex-start",
@@ -774,12 +813,13 @@ const styles = StyleSheet.create({
   },
   requestRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
     borderRadius: 26,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 16,
     paddingVertical: 16,
+    flexWrap: "wrap",
   },
   rowAction: {
     borderRadius: 999,
@@ -848,12 +888,13 @@ const styles = StyleSheet.create({
   },
   suggestionRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
     borderRadius: 24,
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 16,
     paddingVertical: 14,
+    flexWrap: "wrap",
   },
   threadArrow: {
     width: 38,

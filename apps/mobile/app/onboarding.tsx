@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   Platform,
+  Pressable,
   ScrollView,
   Share,
   Text,
@@ -22,41 +23,15 @@ import { api } from "../lib/api";
 import { track } from "../lib/analytics";
 import { pickAvatarImage } from "../lib/avatar";
 import { NOWLY_DESCRIPTION, NOWLY_SLOGAN } from "../lib/branding";
+import { createSmartOpenUrl } from "../lib/smart-links";
 import { useAppStore } from "../store/useAppStore";
 
-type Stage = "phone" | "otp" | "profile";
+type Stage = "auth" | "code" | "profile";
+type AuthMethod = "phone" | "email";
 
 const HOME_ROUTE = "/home";
-const QR_GRID_SIZE = 23;
 const DESKTOP_AUTH_LAYOUT_MAX_WIDTH = 960;
 const DESKTOP_PROFILE_WIDTH = 820;
-
-const qrCells = Array.from({ length: QR_GRID_SIZE * QR_GRID_SIZE }, (_, index) => {
-  const x = index % QR_GRID_SIZE;
-  const y = Math.floor(index / QR_GRID_SIZE);
-
-  const inTopLeftFinder = x < 7 && y < 7;
-  const inTopRightFinder = x >= QR_GRID_SIZE - 7 && y < 7;
-  const inBottomLeftFinder = x < 7 && y >= QR_GRID_SIZE - 7;
-  const inFinder = inTopLeftFinder || inTopRightFinder || inBottomLeftFinder;
-
-  if (inFinder) {
-    const localX = inTopRightFinder ? x - (QR_GRID_SIZE - 7) : x;
-    const localY = inBottomLeftFinder ? y - (QR_GRID_SIZE - 7) : y;
-    const onOuterRing = localX === 0 || localX === 6 || localY === 0 || localY === 6;
-    const onInnerRing = localX === 2 || localX === 4 || localY === 2 || localY === 4;
-    const inCore = localX >= 2 && localX <= 4 && localY >= 2 && localY <= 4;
-    return onOuterRing || inCore || (onInnerRing && !(localX === 3 && localY === 3));
-  }
-
-  const onTimingRow = y === 6 && x > 7 && x < QR_GRID_SIZE - 8 && x % 2 === 0;
-  const onTimingColumn = x === 6 && y > 7 && y < QR_GRID_SIZE - 8 && y % 2 === 0;
-  if (onTimingRow || onTimingColumn) {
-    return true;
-  }
-
-  return ((x * 17 + y * 11) % 7 === 0) || ((x + y * 3) % 13 === 0);
-});
 
 const showMessage = (title: string, message: string) => {
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -86,8 +61,10 @@ export default function OnboardingScreen() {
   const token = useAppStore((state) => state.token);
   const { width } = useWindowDimensions();
 
-  const [stage, setStage] = useState<Stage>("phone");
+  const [stage, setStage] = useState<Stage>("auth");
+  const [authMethod, setAuthMethod] = useState<AuthMethod>("phone");
   const [phone, setPhone] = useState("+1");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("Avery");
   const [city, setCity] = useState("New York");
@@ -104,11 +81,30 @@ export default function OnboardingScreen() {
   const stageIndex = useMemo(
     () =>
       ({
-        phone: 1,
-        otp: 2,
+        auth: 1,
+        code: 2,
         profile: 3,
       })[stage],
     [stage],
+  );
+  const authValue = authMethod === "email" ? email.trim().toLowerCase() : phone.trim();
+  const qrPath = useMemo(() => {
+    const searchParams = new URLSearchParams();
+    if (bookingInviteCode) {
+      searchParams.set("bookingInviteCode", bookingInviteCode);
+    }
+    if (referralToken) {
+      searchParams.set("referralToken", referralToken);
+    }
+
+    const query = searchParams.toString();
+    return `/onboarding${query ? `?${query}` : ""}`;
+  }, [bookingInviteCode, referralToken]);
+  const qrTargetUrl = useMemo(() => createSmartOpenUrl(qrPath), [qrPath]);
+  const qrImageUrl = useMemo(
+    () =>
+      `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${encodeURIComponent(qrTargetUrl)}`,
+    [qrTargetUrl],
   );
   const isDesktopWeb = Platform.OS === "web" && width >= 1180;
   const desktopAuthLayoutWidth = Math.min(width - 96, DESKTOP_AUTH_LAYOUT_MAX_WIDTH);
@@ -195,13 +191,31 @@ export default function OnboardingScreen() {
   };
 
   const handleRequestOtp = async () => {
-    const response = await api.requestOtp(phone);
+    if (authMethod === "email") {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        showMessage("Use a valid email", "Enter the email address you want to sign in with.");
+        return;
+      }
+    } else if (phone.trim().length < 8) {
+      showMessage("Use a valid phone", "Enter the phone number you want to sign in with.");
+      return;
+    }
+
+    const response = await api.requestAuthCode({
+      channel: authMethod,
+      value: authValue,
+    });
     setDevCode(response.devCode ?? null);
-    setStage("otp");
+    setStage("code");
   };
 
   const handleVerifyOtp = async () => {
-    const session = await api.verifyOtp(phone, otp || devCode || "111111");
+    const session = await api.verifyAuthCode({
+      channel: authMethod,
+      value: authValue,
+      code: otp || devCode || "111111",
+    });
     setSession(session.token, session.user);
 
     if (referralToken) {
@@ -348,7 +362,7 @@ export default function OnboardingScreen() {
     }
   };
 
-  const renderPhoneStage = () => (
+  const renderAuthStage = () => (
     <View className="gap-5">
       {hasSavedSession && user ? (
         <View className="gap-3 rounded-[24px] border border-aqua/25 bg-aqua/10 p-4">
@@ -387,30 +401,50 @@ export default function OnboardingScreen() {
             Welcome back.
           </Text>
           <Text className="max-w-[360px] text-center font-body text-base leading-7 text-white/70">
-            Sign in with your phone and jump right back into your crew&apos;s live availability.
+            Sign in with your phone or email and jump right back into your crew&apos;s live availability.
           </Text>
         </View>
       ) : (
-        <Text className="font-display text-2xl text-cloud">Sign in with your phone</Text>
+        <Text className="font-display text-2xl text-cloud">Sign in to Nowly</Text>
       )}
-      <View className="gap-2">
-        {isDesktopWeb ? (
-          <Text className="font-body text-sm text-white/82">Phone number *</Text>
-        ) : null}
-        <TextInput
-          value={phone}
-          onChangeText={setPhone}
-          className="rounded-2xl border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
-          placeholder="+1 555 555 5555"
-          placeholderTextColor="rgba(248,250,252,0.4)"
-          keyboardType="phone-pad"
+      <View className="flex-row gap-2">
+        <SignalChip
+          label="Phone"
+          active={authMethod === "phone"}
+          onPress={() => setAuthMethod("phone")}
+        />
+        <SignalChip
+          label="Email"
+          active={authMethod === "email"}
+          onPress={() => setAuthMethod("email")}
         />
       </View>
-      <PillButton label="Send OTP" onPress={handleRequestOtp} />
+      <View className="gap-2">
+        {isDesktopWeb ? (
+          <Text className="font-body text-sm text-white/82">
+            {authMethod === "email" ? "Email address *" : "Phone number *"}
+          </Text>
+        ) : null}
+        <TextInput
+          value={authMethod === "email" ? email : phone}
+          onChangeText={authMethod === "email" ? setEmail : setPhone}
+          className="rounded-2xl border border-white/12 bg-white/8 px-4 py-4 font-body text-base text-cloud"
+          placeholder={authMethod === "email" ? "you@example.com" : "+1 555 555 5555"}
+          placeholderTextColor="rgba(248,250,252,0.4)"
+          keyboardType={authMethod === "email" ? "email-address" : "phone-pad"}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+      <PillButton
+        label={authMethod === "email" ? "Send code" : "Send OTP"}
+        onPress={handleRequestOtp}
+      />
       {isDesktopWeb ? (
         <Text className="font-body text-sm leading-6 text-white/52">
-          We text you a one-time code so private chats, booking links, and live signals stay tied
-          to real people.
+          {authMethod === "email"
+            ? "We email you a one-time code so your private chats, booking links, and live signals stay tied to one account."
+            : "We text you a one-time code so private chats, booking links, and live signals stay tied to real people."}
         </Text>
       ) : null}
     </View>
@@ -424,7 +458,8 @@ export default function OnboardingScreen() {
             Check your code.
           </Text>
           <Text className="max-w-[360px] text-center font-body text-base leading-7 text-white/70">
-            Drop in the OTP and we&apos;ll bring you straight into your live graph.
+            Drop in the code we sent to your {authMethod === "email" ? "email" : "phone"} and
+            we&apos;ll bring you straight into your live graph.
           </Text>
         </View>
       ) : (
@@ -444,8 +479,13 @@ export default function OnboardingScreen() {
           maxLength={6}
         />
       </View>
-      <Text className="font-body text-sm text-white/58">Dev shortcut: {devCode ?? "check your SMS"}</Text>
-      <PillButton label="Verify phone" onPress={handleVerifyOtp} />
+      <Text className="font-body text-sm text-white/58">
+        Dev shortcut: {devCode ?? (authMethod === "email" ? "check your inbox" : "check your SMS")}
+      </Text>
+      <PillButton
+        label={authMethod === "email" ? "Verify email" : "Verify phone"}
+        onPress={handleVerifyOtp}
+      />
       {isDesktopWeb ? (
         <Text className="font-body text-sm leading-6 text-white/52">
           Once you&apos;re in, your browser and phone stay synced around the same account.
@@ -581,42 +621,33 @@ export default function OnboardingScreen() {
   const renderDesktopAside = () => (
     <View className="gap-5">
       <View className="items-center gap-4">
-        <View className="rounded-[26px] border border-white/8 bg-white/[0.035] p-3">
+        <Pressable
+          onPress={() => {
+            void Linking.openURL(qrTargetUrl);
+          }}
+          className="rounded-[26px] border border-white/8 bg-white/[0.035] p-3"
+        >
           <View className="h-44 w-44 overflow-hidden rounded-[18px] bg-cloud p-3">
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                width: "100%",
-                height: "100%",
-              }}
-            >
-              {qrCells.map((filled, index) => (
-                <View
-                  key={index}
-                  style={{
-                    width: `${100 / QR_GRID_SIZE}%`,
-                    height: `${100 / QR_GRID_SIZE}%`,
-                    backgroundColor: filled ? "#060B16" : "transparent",
-                  }}
-                />
-              ))}
-            </View>
+            <Image
+              source={{ uri: qrImageUrl }}
+              resizeMode="cover"
+              className="h-full w-full"
+            />
             <View className="absolute inset-0 items-center justify-center">
               <View className="rounded-full border border-[#060B16]/10 bg-cloud p-2">
                 <NowlyMark variant="icon" size={34} />
               </View>
             </View>
           </View>
-        </View>
+        </Pressable>
 
         <View className="items-center gap-2">
           <Text className="text-center font-display text-[28px] leading-[32px] text-cloud">
             Keep Nowly in your pocket
           </Text>
           <Text className="max-w-[320px] text-center font-body text-sm leading-6 text-white/68">
-            Sign in with your phone here, then pick back up instantly on mobile when the moment goes
-            live.
+            Sign in with your phone or email here, then pick back up instantly on mobile when the
+            moment goes live.
           </Text>
         </View>
       </View>
@@ -714,7 +745,7 @@ export default function OnboardingScreen() {
                               ))}
                             </View>
 
-                            {stage === "phone" ? renderPhoneStage() : renderOtpStage()}
+                            {stage === "auth" ? renderAuthStage() : renderOtpStage()}
                           </View>
                         </View>
 
@@ -766,8 +797,8 @@ export default function OnboardingScreen() {
               </View>
 
               <GlassCard className="p-5">
-                {stage === "phone" ? renderPhoneStage() : null}
-                {stage === "otp" ? renderOtpStage() : null}
+                {stage === "auth" ? renderAuthStage() : null}
+                {stage === "code" ? renderOtpStage() : null}
                 {stage === "profile" ? renderProfileStage() : null}
               </GlassCard>
 

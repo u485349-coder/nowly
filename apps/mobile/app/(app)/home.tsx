@@ -207,7 +207,10 @@ export default function HomeScreen() {
     inputRange: [0, 0.24, 1],
     outputRange: [0, 0.36, 0],
   });
-  const heroHeight = Math.max(layout.height * 0.35, layout.isDesktop ? 360 : 320);
+  const heroHeight = Math.max(
+    layout.height * (layout.isCompactPhone ? 0.31 : 0.35),
+    layout.isDesktop ? 360 : layout.isCompactPhone ? 286 : 320,
+  );
   const shellStyle = layout.isDesktop
     ? {
         flexDirection: "row" as const,
@@ -223,16 +226,26 @@ export default function HomeScreen() {
           alignItems: "center",
           paddingBottom: 170,
           paddingHorizontal: layout.screenPadding,
-          paddingTop: layout.isDesktop ? 40 : 58,
+          paddingTop: layout.topPadding + (layout.isDesktop ? 0 : 18),
         }}
         showsVerticalScrollIndicator={false}
       >
         <View style={[{ width: layout.shellWidth, gap: layout.sectionGap }, shellStyle]}>
-          <View style={{ width: layout.leftColumnWidth, gap: 22 }}>
+          <View style={{ width: layout.leftColumnWidth, gap: layout.isCompactPhone ? 18 : 22 }}>
             <View style={styles.heroHeader}>
               <View style={{ gap: 10, maxWidth: layout.isDesktop ? 380 : undefined }}>
                 <Text style={styles.eyebrow}>LIVE RADAR</Text>
-                <Text style={styles.heroTitle}>Who can you catch right now?</Text>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      fontSize: layout.heroTitleSize,
+                      lineHeight: layout.heroTitleLineHeight,
+                    },
+                  ]}
+                >
+                  Who can you catch right now?
+                </Text>
               </View>
 
               <Pressable
@@ -246,19 +259,51 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            <View style={[styles.heroShell, { minHeight: heroHeight }]}>
+            <View
+              style={[
+                styles.heroShell,
+                { minHeight: heroHeight, borderRadius: layout.cardRadius + 4 },
+              ]}
+            >
               <LinearGradient
                 colors={["rgba(24,17,56,0.95)", "rgba(36,31,90,0.82)", "rgba(8,14,29,0.98)"]}
                 start={{ x: 0.08, y: 0.02 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.heroPanel}
+                style={[
+                  styles.heroPanel,
+                  {
+                    borderRadius: layout.cardRadius + 4,
+                    paddingHorizontal: layout.isCompactPhone ? 18 : 22,
+                    paddingVertical: layout.isCompactPhone ? 18 : 22,
+                  },
+                ]}
               >
                 <View style={styles.heroGlowA} pointerEvents="none" />
                 <View style={styles.heroGlowB} pointerEvents="none" />
 
                 <View style={{ gap: 14 }}>
-                  <Text style={styles.heroPanelTitle}>Who can you catch right now?</Text>
-                  <Text style={styles.heroSupport}>{heroSupport}</Text>
+                  <Text
+                    style={[
+                      styles.heroPanelTitle,
+                      {
+                        fontSize: layout.isCompactPhone ? 24 : 29,
+                        lineHeight: layout.isCompactPhone ? 29 : 34,
+                      },
+                    ]}
+                  >
+                    Who can you catch right now?
+                  </Text>
+                  <Text
+                    style={[
+                      styles.heroSupport,
+                      {
+                        fontSize: layout.isCompactPhone ? 14 : 15,
+                        lineHeight: layout.isCompactPhone ? 22 : 24,
+                      },
+                    ]}
+                  >
+                    {heroSupport}
+                  </Text>
 
                   <View style={styles.heroClusterRow}>
                     {warmPeople.length ? (
@@ -284,7 +329,16 @@ export default function HomeScreen() {
                   </Pressable>
                 </View>
 
-                <View style={styles.pulseField} pointerEvents="none">
+                <View
+                  style={[
+                    styles.pulseField,
+                    {
+                      right: layout.isCompactPhone ? 22 : 34,
+                      bottom: layout.isCompactPhone ? 18 : 26,
+                    },
+                  ]}
+                  pointerEvents="none"
+                >
                   <View style={styles.pulseCore} />
                   <Animated.View
                     style={[
@@ -505,8 +559,6 @@ const styles = StyleSheet.create({
   heroPanelTitle: {
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 29,
-    lineHeight: 34,
     maxWidth: 360,
   },
   heroShell: {
@@ -542,15 +594,11 @@ const styles = StyleSheet.create({
   heroSupport: {
     color: "rgba(247,251,255,0.72)",
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 15,
-    lineHeight: 24,
     maxWidth: 420,
   },
   heroTitle: {
     color: nowlyColors.cloud,
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 34,
-    lineHeight: 38,
   },
   heroUtility: {
     width: 40,

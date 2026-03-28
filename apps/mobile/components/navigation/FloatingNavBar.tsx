@@ -133,6 +133,7 @@ const FloatingNavBarComponent = ({
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const menuProgress = useSharedValue(0);
+  const isCompactPhone = width < 390;
 
   useEffect(() => {
     menuProgress.value = withSpring(open ? 1 : 0, {
@@ -147,9 +148,9 @@ const FloatingNavBarComponent = ({
   }, [state.index]);
 
   const barBottom = Math.max(22, insets.bottom + 10);
-  const barWidth = Math.min(width - 28, width >= 768 ? 430 : width * 0.9);
+  const barWidth = Math.min(width - (isCompactPhone ? 20 : 28), width >= 768 ? 430 : width * (isCompactPhone ? 0.94 : 0.9));
   const barLeft = (width - barWidth) / 2;
-  const toggleBottom = barBottom + 18;
+  const toggleBottom = barBottom + (isCompactPhone ? 14 : 18);
 
   const splitIndex = Math.max(1, Math.floor(state.routes.length / 2));
   const leftRoutes = useMemo(() => state.routes.slice(0, splitIndex), [splitIndex, state.routes]);
@@ -238,6 +239,7 @@ const FloatingNavBarComponent = ({
             bottom: barBottom,
             left: barLeft,
             width: barWidth,
+            height: isCompactPhone ? 60 : 64,
           },
         ]}
       >
@@ -245,7 +247,7 @@ const FloatingNavBarComponent = ({
 
         <Animated.View style={[styles.navRow, navContentStyle]}>
           <View style={styles.sideGroup}>{leftRoutes.map((route) => renderTab(route.key))}</View>
-          <View style={styles.centerGap} />
+          <View style={[styles.centerGap, isCompactPhone ? { width: 92 } : null]} />
           <View style={styles.sideGroup}>{rightRoutes.map((route) => renderTab(route.key))}</View>
         </Animated.View>
       </Animated.View>

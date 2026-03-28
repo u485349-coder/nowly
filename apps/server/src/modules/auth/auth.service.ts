@@ -16,18 +16,22 @@ const loadTwilioClient = async () => {
 };
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const normalizeRecipient = (channel: "phone" | "email", value: string) =>
+  channel === "email" ? normalizeEmail(value) : value.trim();
 
 const toAuthPayload = (user: User) => ({
   token: createAccessToken(user.id),
   user
 });
 
-export const requestOtp = async (phone: string) => {
+export const requestAuthCode = async (channel: "phone" | "email", value: string) => {
+  const recipient = normalizeRecipient(channel, value);
   const code = generateOtp();
 
   await prisma.otpCode.create({
     data: {
-      phone,
+      phone: recipient,
       code,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000)
     }
@@ -37,9 +41,9 @@ export const requestOtp = async (phone: string) => {
     const client = await loadTwilioClient();
     await client.verify.v2
       .services(env.TWILIO_VERIFY_SERVICE_SID!)
-      .verifications.create({ to: phone, channel: "sms" });
+      .verifications.create({ to: recipient, channel: channel === "email" ? "email" : "sms" });
   } else {
-    logger.info(`OTP for ${phone}: ${code}`);
+    logger.info(`Auth code for ${channel}:${recipient}: ${code}`);
   }
 
   return {
@@ -48,12 +52,18 @@ export const requestOtp = async (phone: string) => {
   };
 };
 
-export const verifyOtp = async (phone: string, code: string) => {
+export const verifyAuthCode = async (
+  channel: "phone" | "email",
+  value: string,
+  code: string,
+) => {
+  const recipient = normalizeRecipient(channel, value);
+
   if (twilioEnabled) {
     const client = await loadTwilioClient();
     const verification = await client.verify.v2
       .services(env.TWILIO_VERIFY_SERVICE_SID!)
-      .verificationChecks.create({ to: phone, code });
+      .verificationChecks.create({ to: recipient, code });
 
     if (verification.status !== "approved") {
       throw new Error("Invalid code");
@@ -61,7 +71,7 @@ export const verifyOtp = async (phone: string, code: string) => {
   } else {
     const localOtp = await prisma.otpCode.findFirst({
       where: {
-        phone,
+        phone: recipient,
         code,
         expiresAt: { gt: new Date() },
         consumedAt: null
@@ -79,23 +89,34 @@ export const verifyOtp = async (phone: string, code: string) => {
     });
   }
 
-  const existingUser = await prisma.user.findUnique({ where: { phone } });
+  const existingUser =
+    channel === "email"
+      ? await prisma.user.findUnique({ where: { email: recipient } })
+      : await prisma.user.findUnique({ where: { phone: recipient } });
   const created = !existingUser;
 
   const user =
     existingUser ??
     (await prisma.user.create({
       data: {
-        phone,
+        ...(channel === "email" ? { email: recipient } : { phone: recipient }),
         inactiveSince: null
       }
     }));
 
   if (created) {
     await trackEvent("account_created", user.id, {
-      phoneVerifiedAt: new Date().toISOString()
+      verifiedChannel: channel,
+      verifiedAt: new Date().toISOString()
     });
   }
 
   return toAuthPayload(user);
 };
+
+export const requestOtp = async (phone: string) => requestAuthCode("phone", phone);
+export const verifyOtp = async (phone: string, code: string) =>
+  verifyAuthCode("phone", phone, code);
+export const requestEmailCode = async (email: string) => requestAuthCode("email", email);
+export const verifyEmailCode = async (email: string, code: string) =>
+  verifyAuthCode("email", email, code);
