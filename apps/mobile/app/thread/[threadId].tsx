@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { ThreadMobileScreen } from "../../features/mobile/screens/ThreadMobileScreen";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
@@ -77,6 +78,7 @@ export default function ThreadScreen() {
   const updateThreadMessageLocal = useAppStore((state) => state.updateThreadMessage);
   const deleteThreadMessageLocal = useAppStore((state) => state.deleteThreadMessage);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const fetchedThreadIdRef = useRef<string | null>(null);
   const joinedThreadIdRef = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,6 +435,40 @@ export default function ThreadScreen() {
           <Text className="font-body text-base text-white/60">Opening recap...</Text>
         </View>
       </GradientMesh>
+    );
+  }
+
+  if (useMobileFrontend) {
+    return (
+      <ThreadMobileScreen
+        title={hangout?.activity ?? "Crew thread"}
+        subtitle="Quick chat, polls, ETA, and live location belong here."
+        onBack={() => router.back()}
+        messages={threadMessages.map((message) => ({
+          id: message.id,
+          senderName: message.senderName,
+          text: message.text,
+          time: formatTime(message.createdAt),
+          edited: Boolean(message.updatedAt) && message.updatedAt !== message.createdAt,
+        }))}
+        typingLabel={typingLabel}
+        editing={Boolean(editingMessageId)}
+        onCancelEdit={() => {
+          setEditingMessageId(null);
+          setText("");
+        }}
+        quickReactions={quickReactions}
+        onQuickReaction={handleReaction}
+        onEta={handleEta}
+        text={text}
+        onChangeText={handleTextChange}
+        placeholder={editingMessageId ? "Edit your message" : "Drop a quick update"}
+        onToggleEmoji={() => setShowEmojiPicker((current) => !current)}
+        showEmojiPicker={showEmojiPicker}
+        emojis={EMOJI_CHOICES}
+        onSelectEmoji={(emoji) => setText((current) => `${current}${emoji}`)}
+        onSend={() => void handleSend()}
+      />
     );
   }
 

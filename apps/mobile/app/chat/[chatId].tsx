@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { ChatMobileScreen } from "../../features/mobile/screens/ChatMobileScreen";
 import { nowlyColors } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
@@ -215,6 +217,7 @@ export default function DirectChatScreen() {
   const markDirectChatReadLocal = useAppStore((state) => state.markDirectChatReadLocal);
   const removeFriend = useAppStore((state) => state.removeFriend);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const inputRef = useRef<TextInput | null>(null);
   const fetchedChatIdRef = useRef<string | null>(null);
   const fetchedMessagesChatIdRef = useRef<string | null>(null);
@@ -721,6 +724,54 @@ export default function DirectChatScreen() {
           <Text style={styles.emptyCopy}>Pulling the thread into place.</Text>
         </View>
       </GradientMesh>
+    );
+  }
+
+  if (useMobileFrontend) {
+    return (
+      <ChatMobileScreen
+        title={title}
+        subtitle={chat.isGroup ? "Group line" : "Private line"}
+        isGroup={chat.isGroup}
+        onBack={() => router.back()}
+        onInfo={handleChatOptions}
+        messages={directMessages.map((message) => ({
+          id: message.id,
+          mine: message.senderId === user?.id,
+          senderName: message.senderName,
+          text: message.text,
+          time: formatTime(message.createdAt),
+          edited: Boolean(message.updatedAt) && message.updatedAt !== message.createdAt,
+        }))}
+        typingLabel={typingLabel}
+        editing={Boolean(editingMessageId)}
+        onCancelEdit={() => {
+          setEditingMessageId(null);
+          setText("");
+        }}
+        quickReplies={quickReplies}
+        showQuickReplies={showShortcuts}
+        onToggleQuickReplies={() => setShowShortcuts((current) => !current)}
+        onQuickReply={(reply) => void handleSend(reply)}
+        text={text}
+        onChangeText={handleTextChange}
+        placeholder={
+          editingMessageId
+            ? "Edit your message"
+            : `Message ${chat.isGroup ? "the group" : primaryParticipant?.name ?? "them"}`
+        }
+        onToggleEmoji={() => setShowEmojiPicker((current) => !current)}
+        showEmojiPicker={showEmojiPicker}
+        emojis={EMOJI_CHOICES}
+        onSelectEmoji={(emoji) => {
+          setText((current) => `${current}${emoji}`);
+          inputRef.current?.focus();
+        }}
+        onSend={() => void handleSend()}
+        sendDisabled={!text.trim() || isSending}
+        emptyTitle="No messages yet"
+        emptyCopy="Send one clean line and keep it low pressure."
+      />
     );
   }
 

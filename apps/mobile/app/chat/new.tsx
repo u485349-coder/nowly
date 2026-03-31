@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { NewGroupChatMobileScreen } from "../../features/mobile/screens/NewGroupChatMobileScreen";
 import { api } from "../../lib/api";
 import { webPressableStyle } from "../../lib/web-pressable";
 import { useAppStore } from "../../store/useAppStore";
@@ -15,13 +16,26 @@ export default function NewGroupChatScreen() {
   const friends = useAppStore((state) => state.friends);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const acceptedFriends = useMemo(
     () => friends.filter((friend) => friend.status === "ACCEPTED"),
     [friends],
   );
+  const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const filteredFriends = useMemo(
+    () =>
+      acceptedFriends.filter((friend) =>
+        !search.trim()
+          ? true
+          : `${friend.name} ${friend.communityTag ?? ""} ${friend.city ?? ""}`
+              .toLowerCase()
+              .includes(search.trim().toLowerCase()),
+      ),
+    [acceptedFriends, search],
+  );
 
   const toggleFriend = (friendId: string) => {
     setSelectedIds((current) =>
@@ -59,6 +73,38 @@ export default function NewGroupChatScreen() {
       setIsCreating(false);
     }
   };
+
+  if (useMobileFrontend) {
+    return (
+      <NewGroupChatMobileScreen
+        onBack={() => router.back()}
+        search={search}
+        onChangeSearch={setSearch}
+        title={title}
+        onChangeTitle={setTitle}
+        selectedFriends={acceptedFriends
+          .filter((friend) => selectedIds.includes(friend.id))
+          .map((friend) => ({ id: friend.id, name: friend.name }))}
+        friends={filteredFriends.map((friend) => ({
+          id: friend.id,
+          name: friend.name,
+          photoUrl: friend.photoUrl,
+          detail: friend.communityTag || friend.city,
+          selected: selectedIds.includes(friend.id),
+        }))}
+        onToggleFriend={toggleFriend}
+        createLabel={
+          selectedIds.length >= 2
+            ? isCreating
+              ? "Creating..."
+              : `Create chat with ${selectedIds.length} friends`
+            : "Pick 2 friends"
+        }
+        createDisabled={selectedIds.length < 2 || isCreating}
+        onCreate={() => void handleCreate()}
+      />
+    );
+  }
 
   return (
     <GradientMesh>

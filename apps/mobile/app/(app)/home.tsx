@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { GradientMesh } from "../../components/ui/GradientMesh";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../../constants/theme";
+import { HomeMobileScreen } from "../../features/mobile/screens/HomeMobileScreen";
 import { api } from "../../lib/api";
 import { formatDayTime } from "../../lib/format";
 import { availabilityLabel } from "../../lib/labels";
@@ -68,6 +70,7 @@ export default function HomeScreen() {
   const setDashboard = useAppStore((state) => state.setDashboard);
   const bootstrapDemo = useAppStore((state) => state.bootstrapDemo);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const pulse = useRef(new Animated.Value(0)).current;
   const orderedLiveMatches = useMemo(
     () => [...matches].sort((left, right) => right.score - left.score),
@@ -218,199 +221,69 @@ export default function HomeScreen() {
         gap: layout.splitGap,
       }
     : undefined;
+  const heroEyebrow = orderedLiveMatches.length
+    ? "Best match"
+    : orderedScheduledOverlaps.length
+      ? "Best overlap"
+      : activeSignal
+        ? "Live signal"
+        : "Live cluster";
+  const heroTitle = orderedLiveMatches.length
+    ? `${orderedLiveMatches[0].matchedUser.name} feels like the move right now.`
+    : orderedScheduledOverlaps.length
+      ? plannedWindowLine
+      : warmPeople.length
+        ? `${warmPeople.length} people could be worth nudging.`
+        : heroSupport;
+  const heroCopy = orderedLiveMatches.length
+    ? statusLine
+    : orderedScheduledOverlaps.length
+      ? orderedScheduledOverlaps[0].summary
+      : heroSupport;
 
-  if (layout.isMobile) {
+  if (useMobileFrontend) {
     return (
-      <GradientMesh>
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{
-            paddingBottom: 160,
-            paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.topPadding + 8,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={{ width: layout.shellWidth, alignSelf: "center", gap: 14 }}>
-            <View style={styles.heroHeader}>
-              <View style={{ flex: 1, gap: 10 }}>
-                <Text style={styles.eyebrow}>LIVE RADAR</Text>
-                <Text
-                  style={[
-                    styles.heroTitle,
-                    {
-                      fontSize: layout.isCompactPhone ? 30 : 34,
-                      lineHeight: layout.isCompactPhone ? 34 : 38,
-                    },
-                  ]}
-                >
-                  Who can you catch right now?
-                </Text>
-                <Text style={styles.mobileHeaderCopy}>
-                  {radar?.suggestionLine || "One light signal is enough to wake the crew up."}
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={() => router.push("/availability-preferences")}
-                style={({ pressed }) => [
-                  styles.heroUtility,
-                  webPressableStyle(pressed, { pressedOpacity: 0.9, pressedScale: 0.97 }),
-                ]}
-              >
-                <MaterialCommunityIcons name="cog-outline" size={20} color="#F7FBFF" />
-              </Pressable>
-            </View>
-
-            <View style={[styles.heroShell, { borderRadius: 28, minHeight: layout.isCompactPhone ? 330 : 350 }]}>
-              <LinearGradient
-                colors={["rgba(24,17,56,0.95)", "rgba(36,31,90,0.82)", "rgba(8,14,29,0.98)"]}
-                start={{ x: 0.08, y: 0.02 }}
-                end={{ x: 1, y: 1 }}
-                style={[
-                  styles.heroPanel,
-                  {
-                    borderRadius: 28,
-                    paddingHorizontal: layout.isCompactPhone ? 18 : 22,
-                    paddingVertical: layout.isCompactPhone ? 18 : 22,
-                  },
-                ]}
-              >
-                <View style={styles.heroGlowA} pointerEvents="none" />
-                <View style={styles.heroGlowB} pointerEvents="none" />
-                <View style={styles.mobileSignalPill}>
-                  <Text style={styles.mobileSignalPillText}>
-                    {orderedLiveMatches.length
-                      ? `${orderedLiveMatches.length} live ${orderedLiveMatches.length === 1 ? "match" : "matches"}`
-                      : activeSignal
-                        ? "Signal live now"
-                        : "Radar standing by"}
-                  </Text>
-                </View>
-                <View style={{ gap: 12 }}>
-                  <Text style={[styles.heroPanelTitle, styles.mobileHeroPanelTitle]}>
-                    {heroSupport}
-                  </Text>
-                  <Text style={styles.heroSupport}>
-                    {orderedScheduledOverlaps.length
-                      ? orderedScheduledOverlaps[0].summary
-                      : radar?.suggestionLine || "Wake the radar up and let timing do the rest."}
-                  </Text>
-                </View>
-                <View style={styles.mobilePulseWrap}>
-                  <View style={styles.pulseCore} />
-                </View>
-                <View style={styles.mobileHeroActions}>
-                  <PillButton label="Send light signal" onPress={() => router.push("/now-mode")} />
-                  <Pressable
-                    onPress={openBookingPreview}
-                    style={({ pressed }) => [
-                      styles.mobileSecondaryButton,
-                      webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
-                    ]}
-                  >
-                    <Text style={styles.mobileSecondaryButtonText}>View best windows</Text>
-                  </Pressable>
-                </View>
-              </LinearGradient>
-            </View>
-
-            <Pressable
-              onPress={openBookingPreview}
-              style={({ pressed }) => [
-                styles.teaserCard,
-                styles.mobilePanelCard,
-                webPressableStyle(pressed, { pressedOpacity: 0.92, pressedScale: 0.99 }),
-              ]}
-            >
-              <Text style={styles.sectionLabel}>BEST UPCOMING WINDOW</Text>
-              <Text style={styles.teaserTitle}>{plannedWindowLine}</Text>
-              <Text style={styles.teaserMeta}>Tap to open setup and tune your hang rhythm.</Text>
-            </Pressable>
-
-            <View style={styles.mobilePanelCard}>
-              <Text style={styles.sectionLabel}>LIVE RADAR</Text>
-              {liveRadarRows.length ? (
-                <View style={{ gap: 10 }}>
-                  {liveRadarRows.slice(0, 3).map((item) => (
-                    <Pressable
-                      key={item.id}
-                      onPress={item.onPress}
-                      style={({ pressed }) => [
-                        styles.mobileRadarRow,
-                        webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.99 }),
-                      ]}
-                    >
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Text style={styles.radarName}>{item.name}</Text>
-                        <Text style={styles.radarLine}>{item.line}</Text>
-                        <Text style={styles.radarDetail}>{item.detail}</Text>
-                      </View>
-                      <View style={styles.mobileActionChip}>
-                        <Text style={styles.mobileActionChipText}>{item.action}</Text>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <>
-                  <Text style={styles.mobileSectionTitle}>
-                    Once your signal is up, your best fits will start stacking here.
-                  </Text>
-                  <Text style={styles.radarEmpty}>
-                    Go live or save a hang rhythm and the radar feed will stack your best fits here.
-                  </Text>
-                </>
-              )}
-            </View>
-
-            <View style={styles.mobilePanelCard}>
-              <Text style={styles.sectionLabel}>LOW PRESSURE PROMPTS</Text>
-              <Text style={styles.mobileSectionTitle}>Start with one clean move.</Text>
-              <View style={styles.mobilePromptWrap}>
-                {quickPrompts.map((prompt) => (
-                  <Pressable
-                    key={prompt.key}
-                    onPress={() => router.push(prompt.route as never)}
-                    style={({ pressed }) => [
-                      styles.mobilePromptInline,
-                      webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.985 }),
-                    ]}
-                  >
-                    <Text style={styles.promptChipText}>{prompt.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.mobilePanelCard}>
-              <Text style={styles.sectionLabel}>PAST HANGS</Text>
-              {recaps.length ? (
-                <View style={{ gap: 10 }}>
-                  {recaps.slice(0, 2).map((recap) => (
-                    <Pressable
-                      key={recap.id}
-                      onPress={() => router.push(`/recap/${recap.hangoutId}`)}
-                      style={({ pressed }) => [
-                        styles.mobileRecapCard,
-                        webPressableStyle(pressed, { pressedOpacity: 0.94, pressedScale: 0.99 }),
-                      ]}
-                    >
-                      <Text style={styles.recapBadge}>{recap.badge}</Text>
-                      <Text style={styles.recapTitle}>{recap.title}</Text>
-                      <Text style={styles.recapSummary}>{recap.summary}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.recapSummary}>
-                  Your recent hangs will collect here as soft recaps.
-                </Text>
-              )}
-            </View>
-          </View>
-        </ScrollView>
-      </GradientMesh>
+      <HomeMobileScreen
+        heroEyebrow={heroEyebrow}
+        heroTitle={heroTitle}
+        heroCopy={heroCopy}
+        heroStatus={
+          orderedLiveMatches.length
+            ? `${orderedLiveMatches.length} live ${orderedLiveMatches.length === 1 ? "match" : "matches"}`
+            : activeSignal
+              ? "Signal live now"
+              : "Radar standing by"
+        }
+        warmPeople={warmPeople}
+        primaryActionLabel={orderedLiveMatches.length || orderedScheduledOverlaps.length ? "Start something" : "Send light signal"}
+        secondaryActionLabel="Best windows"
+        onPrimaryAction={() => {
+          if (orderedLiveMatches.length) {
+            router.push(`/match/${orderedLiveMatches[0].id}` as never);
+            return;
+          }
+          if (orderedScheduledOverlaps.length) {
+            openBookingPreview();
+            return;
+          }
+          router.push("/now-mode");
+        }}
+        onSecondaryAction={openBookingPreview}
+        prompts={quickPrompts.map((prompt) => ({
+          ...prompt,
+          onPress: () => router.push(prompt.route as never),
+        }))}
+        radarRows={liveRadarRows.slice(0, 4)}
+        recap={
+          recaps[0]
+            ? {
+                title: recaps[0].title,
+                detail: recaps[0].summary,
+                onPress: () => router.push(`/recap/${recaps[0].hangoutId}`),
+              }
+            : null
+        }
+      />
     );
   }
 

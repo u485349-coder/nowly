@@ -1,10 +1,11 @@
-import { Share, ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, Share, Text, View } from "react-native";
 import { useEffect } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { ProposalMobileScreen } from "../../features/mobile/screens/ProposalMobileScreen";
 import { formatDayTime } from "../../lib/format";
 import {
   hangoutIntentLabel,
@@ -46,6 +47,7 @@ export default function ProposalScreen() {
   const recaps = useAppStore((state) => state.recaps);
   const updateHangoutResponse = useAppStore((state) => state.updateHangoutResponse);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
 
   const hangout = hangouts.find((item) => item.id === hangoutId);
   const recap = recaps.find((item) => item.hangoutId === hangoutId);
@@ -90,6 +92,39 @@ export default function ProposalScreen() {
           <Text className="font-body text-base text-white/60">Opening recap...</Text>
         </View>
       </GradientMesh>
+    );
+  }
+
+  if (useMobileFrontend) {
+    return (
+      <ProposalMobileScreen
+        title={hangout.activity}
+        scheduleLine={`${hangout.locationName} • ${formatDayTime(hangout.scheduledFor)}`}
+        status={hangout.status}
+        chips={[
+          hangout.microType ? hangoutIntentLabel(hangout.microType) : "quick link",
+          microCommitmentLabel(hangout.commitmentLevel),
+        ]}
+        hint={confirmationHint}
+        onBack={() => router.back()}
+        responseActions={responseActions.map((action) => ({
+          label: action.label,
+          variant: action.label === "Pass" ? "ghost" : "secondary",
+          onPress: () => void handleRespond(action),
+        }))}
+        participants={hangout.participantsInfo.map((participant) => ({
+          id: participant.userId,
+          name: participant.name,
+          response: participant.microResponse ? microResponseLabel(participant.microResponse) : null,
+          status: participant.responseStatus,
+        }))}
+        onOpenThread={() => router.push(`/thread/${hangout.threadId}`)}
+        onShare={() =>
+          Share.share({
+            message: `Join our Nowly link-up -> ${createSmartOpenUrl(`/proposal/${hangout.id}`)}`,
+          })
+        }
+      />
     );
   }
 

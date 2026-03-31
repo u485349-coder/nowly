@@ -1,10 +1,11 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
 import { nowlyColors } from "../../constants/theme";
+import { CrewMobileScreen } from "../../features/mobile/screens/CrewMobileScreen";
 import { api } from "../../lib/api";
 import { track } from "../../lib/analytics";
 import { formatTime } from "../../lib/format";
@@ -61,6 +62,7 @@ export default function FriendsScreen() {
   const removeSuggestion = useAppStore((state) => state.removeSuggestion);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const inboxRefreshingRef = useRef(false);
   const openChatPromisesRef = useRef<Record<string, Promise<DirectChat>>>({});
   const [search, setSearch] = useState("");
@@ -290,6 +292,69 @@ export default function FriendsScreen() {
       ],
     );
   };
+
+  const conversationItems = filteredChats.map((chat) => ({
+    id: chat.id,
+    title: chatDisplayName(chat),
+    subtitle: chatSubline(chat),
+    timestamp: chat.lastMessageAt ? formatTime(chat.lastMessageAt) : undefined,
+    unreadCount: chat.unreadCount,
+    photoUrl: chat.participants[0]?.photoUrl ?? null,
+    onPress: () =>
+      router.push({
+        pathname: "/chat/[chatId]",
+        params: { chatId: chat.id },
+      }),
+  }));
+
+  const livePeopleItems = acceptedFriends.slice(0, 6).map((friend) => ({
+    id: friend.id,
+    name: friend.name,
+    subtitle: `${friend.communityTag || friend.city || "Crew friend"} • ${Math.round(friend.responsivenessScore * 100)}% response`,
+    detail:
+      friend.insight?.cadenceNote ||
+      friend.insight?.reliabilityLabel ||
+      friend.sharedLabel ||
+      "Easy person to catch on short notice.",
+    photoUrl: friend.photoUrl,
+    onMessage: () => void handleOpenChat(friend.id),
+    onNudge: () => void handleDiscordPing(friend.name),
+  }));
+
+  const socialEdges = [
+    ...pendingRequests.map((friend) => {
+      const incoming = friend.requestDirection === "INCOMING" && friend.status === "PENDING";
+      return {
+        id: `request-${friend.id}`,
+        name: friend.name,
+        subtitle: incoming ? "Wants in on your circle." : "Waiting on their reply.",
+        actionLabel: incoming ? "Accept" : "Pending",
+        onAction: incoming ? () => void handleRespond(friend, "ACCEPT") : () => undefined,
+        secondaryActionLabel: incoming ? "Ignore" : undefined,
+        onSecondaryAction: incoming ? () => void handleRespond(friend, "DECLINE") : undefined,
+      };
+    }),
+    ...filteredSuggestions.slice(0, 5).map((friend) => ({
+      id: `suggestion-${friend.id}`,
+      name: friend.name,
+      subtitle: friend.sharedLabel || friend.communityTag || friend.city || "Nearby on the graph",
+      actionLabel: "Add",
+      onAction: () => void handleQuickAdd(friend.id),
+    })),
+  ];
+
+  if (useMobileFrontend) {
+    return (
+      <CrewMobileScreen
+        search={search}
+        onChangeSearch={setSearch}
+        onCreateGroup={handleOpenGroupBuilder}
+        conversations={conversationItems}
+        livePeople={livePeopleItems}
+        socialEdges={socialEdges}
+      />
+    );
+  }
 
   return (
     <GradientMesh>

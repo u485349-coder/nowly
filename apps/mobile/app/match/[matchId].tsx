@@ -1,9 +1,10 @@
-import { ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { MatchMobileScreen } from "../../features/mobile/screens/MatchMobileScreen";
 import { api } from "../../lib/api";
 import { hangoutIntentLabel, vibeLabel } from "../../lib/labels";
 import { useAppStore } from "../../store/useAppStore";
@@ -47,6 +48,7 @@ export default function MatchDetailScreen() {
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const upsertDirectChat = useAppStore((state) => state.upsertDirectChat);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
 
   const match = matches.find((item) => item.id === matchId);
   const isOnlineMatch = match?.reason.meetingStyle === "ONLINE";
@@ -116,6 +118,35 @@ export default function MatchDetailScreen() {
           </Text>
         </View>
       </GradientMesh>
+    );
+  }
+
+  if (useMobileFrontend) {
+    return (
+      <MatchMobileScreen
+        title={`You and ${match.matchedUser.name} overlap right now`}
+        copy={liveFitLine}
+        insight={match.insightLabel ?? match.reason.momentumLabel ?? "Strong short-notice fit"}
+        chips={[
+          match.reason.sharedIntent ? hangoutIntentLabel(match.reason.sharedIntent) : "quick link",
+          match.reason.sharedVibe ? `shared vibe: ${vibeLabel(match.reason.sharedVibe)}` : "",
+          match.reason.timingLabel ? `strongest ${match.reason.timingLabel}` : "",
+          isOnlineMatch
+            ? match.reason.onlineVenue
+              ? `online via ${match.reason.onlineVenue}`
+              : "online hang"
+            : "",
+          match.reason.crowdMode === "GROUP" ? "group friendly" : "",
+        ].filter(Boolean)}
+        onBack={() => router.back()}
+        onStartSomething={handleSendPrompt}
+        onMessageFirst={() => void handleOpenChat()}
+        fastPlans={fastPlans.map((plan) => ({
+          title: plan.title,
+          hint: plan.hint,
+          onPress: () => void handlePropose(plan),
+        }))}
+      />
     );
   }
 

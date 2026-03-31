@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import { GradientMesh } from "../../components/ui/GradientMesh";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { PillButton } from "../../components/ui/PillButton";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { PromptMobileScreen } from "../../features/mobile/screens/PromptMobileScreen";
 import { findPromptAction } from "../../features/prompts/prompt-actions";
 import { api } from "../../lib/api";
 import { availabilityLabel } from "../../lib/labels";
@@ -44,6 +46,7 @@ export default function PromptPickerScreen() {
   const friends = useAppStore((state) => state.friends);
   const upsertHangout = useAppStore((state) => state.upsertHangout);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const prompt = findPromptAction(promptKey);
   const [customLabel, setCustomLabel] = useState(prompt?.label ?? "");
   const [customDetail, setCustomDetail] = useState(prompt?.detail ?? "");
@@ -171,6 +174,31 @@ export default function PromptPickerScreen() {
           </Text>
         </View>
       </GradientMesh>
+    );
+  }
+
+  if (useMobileFrontend) {
+    return (
+      <PromptMobileScreen
+        title={customLabel.trim() || prompt.label}
+        detail={customDetail.trim() || prompt.detail}
+        activityPreview={`This turns into: ${customActivity.trim() || prompt.activity}`}
+        onBack={() => router.back()}
+        customLabel={customLabel}
+        onChangeLabel={setCustomLabel}
+        customDetail={customDetail}
+        onChangeDetail={setCustomDetail}
+        customActivity={customActivity}
+        onChangeActivity={setCustomActivity}
+        recipients={recipients.map((recipient) => ({
+          ...recipient,
+          selected: recipient.id === selectedRecipientId,
+        }))}
+        onSelectRecipient={setSelectedRecipientId}
+        onSend={() => void handleSendPrompt()}
+        sendLabel={selectedRecipient ? `Send to ${selectedRecipient.name}` : "Pick someone first"}
+        sendDisabled={!selectedRecipient}
+      />
     );
   }
 

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text as RNText, View } from "react-native";
+﻿import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text as RNText, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { GradientMesh } from "../../components/ui/GradientMesh";
 import { useResponsiveLayout } from "../../components/ui/useResponsiveLayout";
+import { ProfileMobileScreen } from "../../features/mobile/screens/ProfileMobileScreen";
 import { api } from "../../lib/api";
 import { pickAvatarImage } from "../../lib/avatar";
 import { disconnectSocket } from "../../lib/socket";
@@ -72,6 +73,7 @@ export default function ProfileScreen() {
   const clearSession = useAppStore((state) => state.clearSession);
   const updateUser = useAppStore((state) => state.updateUser);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const shellWidth = Math.min(layout.shellWidth, layout.isDesktop ? 980 : layout.shellWidth);
 
   const [sliderWidth, setSliderWidth] = useState(0);
@@ -201,6 +203,102 @@ export default function ProfileScreen() {
     }
   };
 
+  const notificationSection = (
+    <View style={{ gap: 12 }}>
+      <View style={styles.intensityRow}>
+        {notificationIntensityOptions.map((option) => {
+          const active = (user?.notificationIntensity ?? "BALANCED") === option.key;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => void handlePreferenceUpdate("notificationIntensity", { notificationIntensity: option.key })}
+              style={({ pressed }) => [
+                styles.intensityChip,
+                active ? styles.intensityChipActive : null,
+                pressed ? styles.intensityChipPressed : null,
+                savingPreferenceKey === "notificationIntensity" ? styles.preferenceDisabled : null,
+              ]}
+            >
+              <Text style={[styles.intensityChipText, active ? styles.intensityChipTextActive : null]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={{ gap: 10 }}>
+        <ToggleRow
+          label="Push notifications"
+          detail="Allow outside-the-app notifications when messages and pings land."
+          value={user?.pushNotificationsEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("pushNotificationsEnabled", { pushNotificationsEnabled: !(user?.pushNotificationsEnabled ?? true) })}
+        />
+        <ToggleRow
+          label="In-app notifications"
+          detail="Show live banners and toasts while you are already inside Nowly."
+          value={user?.inAppNotificationsEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("inAppNotificationsEnabled", { inAppNotificationsEnabled: !(user?.inAppNotificationsEnabled ?? true) })}
+        />
+        <ToggleRow
+          label="Notification sound"
+          detail="Play the ping sound for banners and push notifications when allowed."
+          value={user?.notificationSoundEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("notificationSoundEnabled", { notificationSoundEnabled: !(user?.notificationSoundEnabled ?? true) })}
+        />
+        <ToggleRow
+          label="Message previews"
+          detail="Show the sender and message preview inside notifications."
+          value={user?.messagePreviewEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("messagePreviewEnabled", { messagePreviewEnabled: !(user?.messagePreviewEnabled ?? true) })}
+        />
+        <ToggleRow
+          label="DM notifications"
+          detail="Let private and group chat messages trigger alerts and badge activity."
+          value={user?.dmNotificationsEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("dmNotificationsEnabled", { dmNotificationsEnabled: !(user?.dmNotificationsEnabled ?? true) })}
+        />
+        <ToggleRow
+          label="Ping notifications"
+          detail="Let prompts, proposals, thread updates, and crew movement trigger alerts."
+          value={user?.pingNotificationsEnabled ?? true}
+          onPress={() => void handlePreferenceUpdate("pingNotificationsEnabled", { pingNotificationsEnabled: !(user?.pingNotificationsEnabled ?? true) })}
+        />
+      </View>
+    </View>
+  );
+
+  if (useMobileFrontend) {
+    return (
+      <ProfileMobileScreen
+        name={user?.name ?? mockUser.name}
+        photoUrl={user?.photoUrl}
+        subtitle={rhythmSubtitle}
+        communityTag={user?.communityTag || user?.city}
+        statusLine={`${isLive ? "Live now" : "Offline"} • ${scheduledOverlaps.length} overlaps ahead`}
+        onChangePhoto={() => void handleChangePhoto()}
+        onGoLive={handleToggleLive}
+        onStartHang={handleStartHang}
+        activeEnergyKey={activeEnergy}
+        activeEnergyLabel={energyLabel(activeEnergy)}
+        energyFeedback={energyFeedback[activeEnergy]}
+        energyOptions={energyOptions.map((option) => ({ key: option, label: energyLabel(option) }))}
+        onSelectEnergy={(key) => {
+          const nextEnergy = key as EnergyLevel;
+          sliderProgress.value = withTiming(progressForEnergy(nextEnergy), { duration: 180 });
+          setPreviewEnergy(null);
+          setEnergyLevel(nextEnergy);
+          triggerRipple();
+        }}
+        friendsLiveCount={friendsLiveCount}
+        overlapCount={scheduledOverlaps.length}
+        momentumTitle={`${tier} momentum`}
+        momentumDetail={`Last hang ${mockUser.lastHangDaysAgo} days ago. Keep the line moving and the next link gets easier.`}
+        rhythmDays={weeklyTracks.map((track) => ({ label: track.day, active: track.windows.length > 0 }))}
+        onOpenRhythm={handleStartHang}
+        notificationSection={notificationSection}
+        onLogout={handleLogout}
+      />
+    );
+  }
   return (
     <GradientMesh>
       <ScrollView
@@ -375,7 +473,7 @@ export default function ProfileScreen() {
                   <Text className="mt-3 font-display text-[17px] leading-[21px] text-cloud">friends live now</Text>
                   {friendsLiveCount === 0 ? (
                     <View className="mt-2 gap-2">
-                      <Text className="font-body text-sm leading-6 text-white/64">No one live yet � be the first</Text>
+                      <Text className="font-body text-sm leading-6 text-white/64">No one live yet — be the first</Text>
                       <Pressable onPress={handleToggleLive} style={styles.inlineLiveButton}><Text style={styles.inlineLiveButtonText}>Go Live</Text></Pressable>
                     </View>
                   ) : (
@@ -623,6 +721,9 @@ const styles = StyleSheet.create({
   logoutTitle: { color: "#F8FAFC", fontFamily: "SpaceGrotesk_700Bold", fontSize: 16, lineHeight: 20 },
   logoutSubtitle: { color: "rgba(248,250,252,0.66)", fontFamily: "SpaceGrotesk_400Regular", fontSize: 12, lineHeight: 16 },
 });
+
+
+
 
 
 

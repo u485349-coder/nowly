@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -8,6 +8,7 @@ import { GradientMesh } from "../components/ui/GradientMesh";
 import { NowlyToast, type NowlyToastPayload } from "../components/ui/NowlyToast";
 import { useResponsiveLayout } from "../components/ui/useResponsiveLayout";
 import { AvailabilityComposer } from "../features/availability/AvailabilityComposer";
+import { NowModeMobileScreen } from "../features/mobile/screens/NowModeMobileScreen";
 import { nowlyColors } from "../constants/theme";
 import { api } from "../lib/api";
 import { track } from "../lib/analytics";
@@ -59,6 +60,7 @@ export default function NowModeScreen() {
   const setActiveSignal = useAppStore((state) => state.setActiveSignal);
   const setLiveSignalPreferences = useAppStore((state) => state.setLiveSignalPreferences);
   const layout = useResponsiveLayout();
+  const useMobileFrontend = Platform.OS !== "web" && layout.isMobile;
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const safeLiveSignalPreferences = liveSignalPreferences ?? {
@@ -292,6 +294,46 @@ export default function NowModeScreen() {
   const openBookingPreview = () => {
     router.push("/availability-preferences");
   };
+
+  if (useMobileFrontend) {
+    return (
+      <>
+        <NowlyToast toast={actionToast} top={14} />
+        <NowModeMobileScreen
+          title={activeUntilLine ?? "Set a live signal so Nowly can surface overlap."}
+          copy={
+            activeSignal
+              ? liveInsight(activeSignal, scheduledOverlaps, matches)
+              : radar?.suggestionLine ||
+                "Free now, free later, busy, or weekend plans. This is the fast layer that helps overlap happen in the moment."
+          }
+          locationLabel={safeLiveSignalPreferences.showLocation ? locationShareLabel : null}
+          onBack={() => router.back()}
+          onOpenWindows={openBookingPreview}
+          onStopLive={activeSignal ? () => void handleClearStatus() : undefined}
+          stoppingLive={clearing}
+          composer={(
+            <AvailabilityComposer
+              activeSignal={activeSignal}
+              defaultLocationLabel={user?.communityTag || user?.city || null}
+              signalPreferences={safeLiveSignalPreferences}
+              onSignalPreferencesChange={setLiveSignalPreferences}
+              onSave={(payload) => void handleSaveStatus(payload)}
+            />
+          )}
+          liveMatches={liveMatchRows.map((item) => ({
+            id: item.id,
+            name: item.name,
+            line: item.line,
+            detail: item.detail,
+            action: item.action,
+            onPress: () => router.push(item.actionRoute as never),
+          }))}
+          suggestedTimes={suggestedTimeRows}
+        />
+      </>
+    );
+  }
 
   return (
     <GradientMesh>
