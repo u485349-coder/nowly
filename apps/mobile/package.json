@@ -17,6 +17,7 @@
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@nowly/shared": "file:../../packages/shared",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@tanstack/react-query": "^5.96.1",
     "expo": "~54.0.33",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",

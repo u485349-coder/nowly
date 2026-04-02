@@ -6,6 +6,7 @@ import {
   SpaceGrotesk_700Bold,
   useFonts,
 } from "@expo-google-fonts/space-grotesk";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack, usePathname, useRouter, type ErrorBoundaryProps } from "expo-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -14,6 +15,7 @@ import { api } from "../lib/api";
 import { playNowlyPingSound } from "../lib/match-feedback";
 import { setForegroundNotificationSoundEnabled } from "../lib/notifications";
 import { getSocket } from "../lib/socket";
+import { queryClient } from "../src/lib/query/client";
 import { useAppStore } from "../store/useAppStore";
 import type { AppNotification } from "../types";
 
@@ -554,17 +556,19 @@ export default function RootLayout() {
 
   return (
     <Suspense fallback={<LoadingShell />}>
-      <View style={styles.root}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: "#0B1020",
-            },
-          }}
-        />
-        <NowlyToast toast={inAppToast} top={Platform.OS === "web" ? 14 : 12} />
-      </View>
+      <QueryClientProvider client={queryClient}>
+        <View style={styles.root}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: {
+                backgroundColor: "#0B1020",
+              },
+            }}
+          />
+          <NowlyToast toast={inAppToast} top={Platform.OS === "web" ? 14 : 12} />
+        </View>
+      </QueryClientProvider>
     </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { BookingSurface } from "../../features/booking/BookingSurface";
+import { BookingScreen } from "../../src/screens/booking/BookingScreen";
 
 export default function BookingInviteScreen() {
   const params = useLocalSearchParams<{
@@ -11,10 +11,12 @@ export default function BookingInviteScreen() {
     description?: string | string[];
     location?: string | string[];
   }>();
+
   const inviteCode = useMemo(
-    () => (Array.isArray(params.inviteCode) ? params.inviteCode[0] : params.inviteCode),
+    () => (Array.isArray(params.inviteCode) ? params.inviteCode[0] : params.inviteCode ?? null),
     [params.inviteCode],
   );
+
   const sharedSetup = useMemo(
     () => ({
       sessionShareCode: Array.isArray(params.session) ? params.session[0] : params.session,
@@ -26,5 +28,5 @@ export default function BookingInviteScreen() {
     [params.description, params.format, params.location, params.session, params.title],
   );
 
-  return <BookingSurface inviteCode={inviteCode ?? null} mode="booking" sharedSetup={sharedSetup} />;
+  return <BookingScreen inviteCode={inviteCode} sharedSetup={sharedSetup} />;
 }
